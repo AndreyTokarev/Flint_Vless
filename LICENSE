@@ -1,9 +1,11 @@
 Required Notice: Copyright (c) 2026 Andrey Tokarev
 Required Notice: Based on Flint VPN - https://github.com/AndreyTokarev/Flint_Vless
 
-# PolyForm Noncommercial License 1.0.0
+# Flint VPN Noncommercial License 1.0
 
-<https://polyformproject.org/licenses/noncommercial/1.0.0>
+<https://github.com/AndreyTokarev/Flint_Vless/blob/main/LICENSE>
+
+This license is based on the PolyForm Noncommercial License 1.0.0 (<https://polyformproject.org/licenses/noncommercial/1.0.0>), modified to exclude use by government institutions and government-controlled companies. It is not the PolyForm Noncommercial License and is not endorsed by the PolyForm Project.
 
 ## Acceptance
 
@@ -33,7 +35,7 @@ The licensor grants you a patent license for the software that covers patent cla
 
 ## Noncommercial Purposes
 
-Any noncommercial purpose is a permitted purpose.
+Any noncommercial purpose is a permitted purpose, except as provided in [Government Use](#government-use).
 
 ## Personal Uses
 
@@ -41,7 +43,13 @@ Personal use for research, experiment, and testing for the benefit of public kno
 
 ## Noncommercial Organizations
 
-Use by any charitable organization, educational institution, public research organization, public safety or health organization, environmental protection organization, or government institution is use for a permitted purpose regardless of the source of funding or obligations resulting from the funding.
+Use by any charitable organization, educational institution, public research organization, public safety or health organization, or environmental protection organization is use for a permitted purpose regardless of the source of funding or obligations resulting from the funding, unless that organization is a government entity under [Government Use](#government-use).
+
+## Government Use
+
+Use by, for, or on behalf of any government entity is not a permitted purpose, whether or not it is commercial.  A **government entity** is any government, state, or municipal body, ministry, department, agency, authority, or institution, and any company or other organization that is owned or controlled by any of them.  **Controlled** has the meaning given to **control** in [Definitions](#definitions).
+
+This section does not limit personal use by an individual on their own behalf and not for a government entity.  A government entity may use the software only under a separate written license from the licensor.
 
 ## Fair Use
 
