@@ -208,7 +208,11 @@ grep -q gru-watchdog /etc/crontabs/root 2>/dev/null ||
 
 say "check"
 nslookup youtube.com 127.0.0.1 >/dev/null && echo "DNS: ok" || echo "DNS: FAIL"
-ip="$(curl -s -m 15 -x http://127.0.0.1:1087 https://ifconfig.me || true)"
+for try in 1 2 3; do
+	ip="$(curl -s -m 15 -x http://127.0.0.1:1087 https://ifconfig.me || true)"
+	[ -n "$ip" ] && break
+	sleep 5
+done
 [ -n "$ip" ] && echo "VPN exit IP: $ip" || echo "VPN: FAIL (check nodes.conf / VLESS_UUID)"
 [ "$(gru-node vpn)" = off ] && echo "NOTE: VPN is switched off in the panel (gru-node vpn on to enable)"
 echo "Panel: http://vpn.lan:81/  (PIN from gru.env)"
