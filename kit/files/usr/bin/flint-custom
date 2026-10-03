@@ -17,6 +17,7 @@ TAB="$(printf '\t')"
 # "code name address port uuid sni pbk sid net service" (TAB-separated) for every node in the given files.
 entries() {
 	for f in "$@"; do [ -f "$f" ] && cat "$f"; done | awk -v u="$VLESS_UUID" '
+		/^#@/ { next }
 		/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
 		/^[[:space:]]*$/ { next }
 		{ n = (name != "" && name !~ /^Generated/) ? name : $1

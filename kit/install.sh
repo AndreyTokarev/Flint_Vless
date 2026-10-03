@@ -6,6 +6,8 @@ set -e
 KIT="$(cd "$(dirname "$0")" && pwd)"
 say() { echo "== $*"; }
 die() { echo "!! $*" >&2; exit 1; }
+VERSION="$(cat "$KIT/VERSION" 2>/dev/null || echo dev)"
+echo "Flint VPN $VERSION (was: $(cat /usr/share/flint/version 2>/dev/null || echo none))"
 
 [ -f "$KIT/config/flint.env" ] || die "missing $KIT/config/flint.env"
 [ -f "$KIT/config/nodes.conf" ] || die "missing $KIT/config/nodes.conf"
@@ -95,6 +97,7 @@ say "files"
 mkdir -p /etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /www/flint/cgi-bin /usr/share/flint
 cp "$KIT/files/etc/xray/template.json" /etc/xray/
 cp "$KIT/files/usr/share/flint/vless.awk" /usr/share/flint/
+echo "$VERSION" > /usr/share/flint/version
 cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/flint-ui" "$KIT/files/etc/init.d/flint-doh" \
 	"$KIT/files/etc/init.d/flint-adblock" /etc/init.d/
 cp "$KIT/files/etc/dnscrypt-proxy2/flint-doh.toml" /etc/dnscrypt-proxy2/
@@ -107,9 +110,14 @@ chmod 755 /etc/init.d/xray /etc/init.d/flint-ui /etc/init.d/flint-doh /etc/init.
 	/usr/bin/flint-geo-update /usr/bin/flint-sub-update /usr/bin/flint-custom /usr/bin/flint-watchdog /usr/bin/flint-adblock \
 	/www/flint/cgi-bin/panel.cgi
 
-(umask 077; cp "$KIT/config/flint.env" /etc/xray/flint.env; cp "$KIT/config/nodes.conf" /etc/xray/nodes.conf)
-# Optional: own nodes, custom sites and ad blocking lists/rules saved by backup; without them the router's copies stay.
-for f in nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
+(umask 077; cp "$KIT/config/flint.env" /etc/xray/flint.env)
+# A router with subscriptions builds nodes.conf itself (all of them, see flint-sub-update): the PC copy
+# would drop the servers of subscriptions added in the panel, so it only seeds a router without them.
+if [ ! -s /etc/xray/nodes.conf ] || [ ! -s /etc/xray/subscriptions ]; then
+	(umask 077; cp "$KIT/config/nodes.conf" /etc/xray/nodes.conf)
+fi
+# Optional: own nodes, custom sites, subscriptions and ad blocking lists/rules saved by backup; without them the router's copies stay.
+for f in nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
 	if [ -f "$KIT/config/$f" ]; then (umask 077; cp "$KIT/config/$f" "/etc/xray/$f"); fi
 done
 case "${ROUTING:-ru}" in
@@ -196,7 +204,7 @@ else
 	/etc/init.d/flint-adblock disable 2>/dev/null || true
 fi
 /etc/init.d/xray enable
-flint-node use "$DEFAULT_NODE"
+flint-node use "$DEFAULT_NODE" || flint-node use "$(flint-node codes | head -n1)"
 /etc/init.d/flint-ui enable
 /etc/init.d/flint-ui restart
 /etc/init.d/firewall reload
@@ -226,4 +234,4 @@ for try in 1 2 3; do
 done
 [ -n "$ip" ] && echo "VPN exit IP: $ip" || echo "VPN: FAIL (check nodes.conf / VLESS_UUID)"
 [ "$(flint-node vpn)" = off ] && echo "NOTE: VPN is switched off in the panel (flint-node vpn on to enable)"
-echo "Panel: http://vpn.lan:81/  (PIN from flint.env)"
+echo "Flint VPN $VERSION. Panel: http://vpn.lan:81/  (PIN from flint.env)"

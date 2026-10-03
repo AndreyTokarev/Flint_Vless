@@ -25,7 +25,7 @@ if (-not $Backup) {
 $archive = Join-Path (Resolve-Path $Backup) "router-config.tar.gz"
 if (-not (Test-Path $archive)) { throw "Missing $archive" }
 
-$files = "flint.env", "nodes.conf", "nodes-custom.conf", "custom-sites", "adblock-lists", "adblock-rules", "adblock-exclude"
+$files = "flint.env", "nodes.conf", "nodes-custom.conf", "custom-sites", "subscriptions", "adblock-lists", "adblock-rules", "adblock-exclude"
 $tmp = Join-Path ([IO.Path]::GetTempPath()) "flint-restore"
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory $tmp | Out-Null

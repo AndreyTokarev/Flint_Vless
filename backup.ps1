@@ -19,7 +19,7 @@ cmd /c "ssh $target ""tar -czf - $paths 2>/dev/null"" > ""$dir\router-config.tar
 Write-Host "Saved $dir\router-config.tar.gz"
 
 New-Item -ItemType Directory (Join-Path $root "config") -Force | Out-Null
-foreach ($f in "flint.env", "nodes.conf", "nodes-custom.conf", "custom-sites", "adblock-lists", "adblock-rules", "adblock-exclude") {
+foreach ($f in "flint.env", "nodes.conf", "nodes-custom.conf", "custom-sites", "subscriptions", "adblock-lists", "adblock-rules", "adblock-exclude") {
     ssh $target "test -f /etc/xray/$f"
     if ($LASTEXITCODE -eq 0) {
         cmd /c "ssh $target ""cat /etc/xray/$f"" > ""$root\config\$f"""

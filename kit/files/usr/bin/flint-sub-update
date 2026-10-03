@@ -1,11 +1,20 @@
 #!/bin/sh
-# Rebuild /etc/xray/nodes.conf from the provider subscription (SUB_URL in /etc/xray/flint.env)
-# and re-apply the current node. Router-side twin of tools/sub2nodes.py: keeps REALITY links
-# over TCP (+ xtls-rprx-vision) or gRPC; the code comes from the flag in the name.
-# Own nodes in nodes-custom.conf (see flint-custom) are left alone.
-# Usage: flint-sub-update                 update now
+# VPN subscriptions from any providers, merged into /etc/xray/nodes.conf and re-applied.
+# A subscription is a base64 or plain list of vless:// links (the v2rayN / Happ / Hiddify format);
+# REALITY links over TCP (+ xtls-rprx-vision) or gRPC are kept, the code comes from the flag in the name.
+# Each subscription's servers follow a "#@ <id>" line in nodes.conf. A subscription that fails to
+# download keeps its previous servers. Own nodes in nodes-custom.conf (see flint-custom) are left alone.
+# Router-side twin of tools/sub2nodes.py. SUB_URL in flint.env seeds the list on the first run.
+# Usage: flint-sub-update                          update all subscriptions now
+#        flint-sub-update list                     id<TAB>name<TAB>host<TAB>last check
+#        flint-sub-update add <url> [name]
+#        flint-sub-update set <id> <url> [name]    change the link or the name
+#        flint-sub-update url <id>                 print the link
+#        flint-sub-update del <id>
 #        flint-sub-update interval [off|30m|1h|3h|6h|12h|24h]   show / set the auto-update schedule
 ENV=/etc/xray/flint.env
+SUBS=/etc/xray/subscriptions
+SUB_STATUS=/etc/xray/sub-status
 NODES=/etc/xray/nodes.conf
 CUSTOM=/etc/xray/nodes-custom.conf
 CUR=/etc/xray/current-node
@@ -13,46 +22,80 @@ STATUS=/etc/xray/sub-checked
 INTERVAL=/etc/xray/sub-interval
 CRON=/etc/crontabs/root
 TMP=/tmp/flint-sub
+TAB="$(printf '\t')"
 . "$ENV"
 # Message language: FLINT_LANG from the panel, else UI_LANG from flint.env, else Russian.
 t() { if [ "${FLINT_LANG:-${UI_LANG:-ru}}" = en ]; then echo "$2"; else echo "$1"; fi; }
+fail() { echo "$1"; exit 1; }
 
-if [ "$1" = interval ]; then
-	[ -n "$2" ] || { cat "$INTERVAL" 2>/dev/null || echo 24h; exit 0; }
-	case "$2" in
+host_of() { echo "$1" | sed -e 's|^[a-zA-Z]*://||' -e 's|[/:?#].*||'; }
+# id<TAB>url<TAB>name
+subs() {
+	if [ ! -f "$SUBS" ] && [ -n "$SUB_URL" ]; then
+		(umask 077; printf 's1\t%s\t%s\n' "$SUB_URL" "$(host_of "$SUB_URL")" > "$SUBS")
+	fi
+	[ -f "$SUBS" ] && grep -v '^$' "$SUBS"
+}
+field() { subs | awk -F '\t' -v i="$1" -v f="$2" '$1 == i { print $f; exit }'; }
+set_sub() {
+	subs | awk -F '\t' -v OFS='\t' -v i="$1" -v u="$2" -v n="$3" '$1 == i { $2 = u; $3 = n } { print }' > "$SUBS.new"
+	(umask 077; cp "$SUBS.new" "$SUBS"); rm -f "$SUBS.new"
+}
+clean_name() { printf '%s' "$1" | tr -d '\000-\037' | cut -c1-60; }
+check_url() {
+	echo "$1" | grep -qE '^https?://[^[:space:]]+$' || fail "$(t "Это не ссылка на подписку: $1" "Not a subscription link: $1")"
+	subs | awk -F '\t' -v u="$1" -v i="$2" '$2 == u && $1 != i { f = 1 } END { exit !f }' &&
+		fail "$(t "Эта подписка уже добавлена" "This subscription is already added")"
+}
+# Nodes that belonged to the first subscription before nodes.conf had "#@" groups.
+FIRST="$(subs | awk -F '\t' 'NR == 1 { print $1 }')"
+
+# sub-status: id<TAB>last check<TAB>"used total expire" from the provider (kept when a check fails).
+# sub_status <id> [text [info]]: no text = forget the subscription.
+sub_status() {
+	info="$3"
+	[ -n "$info" ] || info="$([ -f "$SUB_STATUS" ] && awk -F '\t' -v i="$1" '$1 == i { print $3 }' "$SUB_STATUS")"
+	{ [ -f "$SUB_STATUS" ] && awk -F '\t' -v i="$1" '$1 != i' "$SUB_STATUS"
+	  [ -n "$2" ] && printf '%s\t%s — %s\t%s\n' "$1" "$(date '+%Y-%m-%d %H:%M')" "$2" "$info"; } > "$SUB_STATUS.new"
+	mv "$SUB_STATUS.new" "$SUB_STATUS"
+}
+# "used total expire" -> "until 2026-11-03 · 12.3 / 100 GB"
+info_text() {
+	set -- $1
+	out=""
+	[ "${3:-0}" != 0 ] && out="$(t "до" "until") $(date -d "@$3" '+%Y-%m-%d' 2>/dev/null)"
+	[ "${2:-0}" != 0 ] && out="${out:+$out · }$(awk -v u="$1" -v n="$2" 'BEGIN { printf "%.1f / %.0f", u / 1073741824, n / 1073741824 }') $(t "ГБ" "GB")"
+	echo "$out"
+}
+status() { echo "$(date '+%Y-%m-%d %H:%M') — $1" > "$STATUS"; echo "$1"; }
+
+cron_apply() {
+	case "$(cat "$INTERVAL" 2>/dev/null || echo 24h)" in
 		off) line="" ;;
 		30m) line="*/30 * * * *" ;;
 		1h) line="5 * * * *" ;;
-		3h|6h|12h) line="5 */${2%h} * * *" ;;
-		24h) line="15 5 * * *" ;;
-		*) echo "Usage: flint-sub-update interval [off|30m|1h|3h|6h|12h|24h]"; exit 1 ;;
+		3h) line="5 */3 * * *" ;;
+		6h) line="5 */6 * * *" ;;
+		12h) line="5 */12 * * *" ;;
+		*) line="15 5 * * *" ;;
 	esac
-	[ -n "$SUB_URL" ] || line=""
+	[ -n "$(subs)" ] || line=""
 	touch "$CRON"
 	sed -i '/flint-sub-update/d' "$CRON"
 	[ -z "$line" ] || echo "$line /usr/bin/flint-sub-update >/tmp/flint-sub-update.log 2>&1" >> "$CRON"
-	echo "$2" > "$INTERVAL"
 	/etc/init.d/cron restart >/dev/null 2>&1 || true
-	t "Автообновление серверов: $2" "Server list auto-update: $2"
-	exit 0
-fi
+}
 
-status() { echo "$(date '+%Y-%m-%d %H:%M') — $1" > "$STATUS"; echo "$1"; }
-[ -n "$SUB_URL" ] || { echo "SUB_URL is not set in $ENV"; exit 1; }
-# Cron every 30 min plus the panel button must not run two updates at once.
-find /tmp -maxdepth 1 -name flint-sub.lock -mmin +10 -exec rm -rf {} + 2>/dev/null
-mkdir /tmp/flint-sub.lock 2>/dev/null || { t "Обновление уже идёт" "An update is already running"; exit 1; }
-trap 'rm -rf /tmp/flint-sub.lock "$TMP"' EXIT
+lock() {
+	# Cron, the watchdog and the panel must not change the list at the same time.
+	find /tmp -maxdepth 1 -name flint-sub.lock -mmin +10 -exec rm -rf {} + 2>/dev/null
+	mkdir /tmp/flint-sub.lock 2>/dev/null || fail "$(t "Обновление уже идёт" "An update is already running")"
+	trap 'rm -rf /tmp/flint-sub.lock "$TMP"' EXIT
+	rm -rf "$TMP"; mkdir -p "$TMP"
+}
 
-rm -rf "$TMP"; mkdir -p "$TMP"
-fetch() { curl -fsSL -m 25 -A "Happ/1.0" "$@" -o "$TMP/raw" "$SUB_URL"; }
-# Router traffic is not redirected into Xray, so try directly first; through the tunnel as a fallback.
-fetch || { sleep 3; fetch; } || fetch -x http://127.0.0.1:1087 || { status "$(t "ошибка: подписка не скачалась" "error: the subscription could not be downloaded")"; exit 1; }
-
-if grep -q 'vless://' "$TMP/raw"; then
-	cp "$TMP/raw" "$TMP/links"
-else
-	tr -d ' \r\n\t' < "$TMP/raw" | LC_ALL=C awk '
+b64d() {
+	tr -d ' \r\n\t' | LC_ALL=C awk '
 		BEGIN { a = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 			for (i = 0; i < 64; i++) v[substr(a, i + 1, 1)] = i
 			v["-"] = 62; v["_"] = 63 }
@@ -62,43 +105,191 @@ else
 				c = substr(s, i, 1); if (!(c in v)) continue
 				bits = bits * 64 + v[c]; n += 6
 				if (n >= 8) { n -= 8; b = int(bits / 2 ^ n); bits -= b * 2 ^ n; printf "%c", b }
-			} }' > "$TMP/links"
-fi
+			} }'
+}
+# Value of a response header (the last one, after redirects).
+header() {
+	tr -d '\r' < "$TMP/hdr" | awk -v h="$1" '{ i = index($0, ":"); if (i && tolower(substr($0, 1, i - 1)) == h) v = substr($0, i + 1) }
+		END { sub(/^[[:space:]]*/, "", v); print v }'
+}
+download() { curl -fsL -m 25 -A "Happ/1.0" -D "$TMP/hdr" -o "$TMP/raw" "$@"; }
+# fetch <url> <file>: the supported servers as "base host sni pbk sid uuid port net service name" (TAB);
+# base is the flag code or the first label of the host. Returns 1 if not downloaded, 2 if nothing supported.
+# <file>.title gets the provider's profile name, <file>.info "used total expire" (Happ headers).
+fetch() {
+	rm -f "$TMP/raw" "$TMP/hdr"
+	# Router traffic is not redirected into Xray, so try directly first; through the tunnel as a fallback.
+	download "$1" || { sleep 3; download "$1"; } || download -x http://127.0.0.1:1087 "$1" || return 1
+	title="$(header profile-title)"
+	case "$title" in base64:*) title="$(printf '%s' "${title#base64:}" | b64d)" ;; esac
+	clean_name "$title" > "$2.title"
+	header subscription-userinfo | tr ';' '\n' | awk -F '=' '{ gsub(/[[:space:]]/, ""); v[$1] = $2 + 0 }
+		END { if ("total" in v || "expire" in v) print v["upload"] + v["download"], v["total"] + 0, v["expire"] + 0 }' > "$2.info"
+	if grep -q 'vless://' "$TMP/raw"; then
+		cp "$TMP/raw" "$TMP/links"
+	else
+		b64d < "$TMP/raw" > "$TMP/links"
+	fi
+	# gRPC nodes are skipped unless SUB_GRPC=1: with Xray 1.8.7 some providers' gRPC REALITY servers fail the handshake.
+	grep '^vless://' "$TMP/links" | tr -d '\r' | LC_ALL=C awk -f /usr/share/flint/vless.awk | awk -F '\t' -v grpc="${SUB_GRPC:-0}" '
+		$1 != "ok" || ($9 == "grpc" && grpc != 1) { next }
+		{ base = $8; if (base == "-") { base = $2; sub(/[.-].*/, "", base) }
+		  print base "\t" $2 "\t" $5 "\t" $6 "\t" $7 "\t" $4 "\t" $3 "\t" $9 "\t" $10 "\t" $11 }' > "$2"
+	[ -s "$2" ] || return 2
+}
+fetch_error() {
+	if [ "$1" = 1 ]; then t "подписка не скачалась" "the subscription could not be downloaded"
+	else t "в подписке нет поддерживаемых серверов" "no supported servers in the subscription"; fi
+}
 
-# gRPC nodes are skipped unless SUB_GRPC=1: with Xray 1.8.7 the provider's gRPC REALITY servers fail the handshake.
-grep '^vless://' "$TMP/links" | tr -d '\r' | LC_ALL=C awk -f /usr/share/flint/vless.awk | awk -F '\t' -v grpc="${SUB_GRPC:-0}" '
-	$1 != "ok" || ($9 == "grpc" && grpc != 1) { next }
+# The servers group $1 has in nodes.conf now, in fetch format. Nodes from before the "#@" groups
+# belong to the first subscription, or to "-" when there was none.
+old_block() {
+	[ -f "$NODES" ] || return 0
+	awk -v id="$1" -v g="${FIRST:--}" -v u="${VLESS_UUID:--}" '
+		/^#@/ { g = $2; name = ""; next }
+		/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
+		/^[[:space:]]*$/ { next }
+		g == id { print $1 "\t" $2 "\t" $3 "\t" $4 "\t" ($5 ? $5 : "-") "\t" ($6 ? $6 : u) "\t" ($7 ? $7 : 443) "\t" ($8 ? $8 : "tcp") "\t" ($9 ? $9 : "-") "\t" (name ~ /^Generated/ ? "" : name) }
+		{ name = "" }' "$NODES"
+}
+# $TMP/nodes.conf from $TMP/<id>.tsv of every subscription fetched now, else from its servers in nodes.conf.
+build() {
+	: > "$TMP/all"
+	for id in - $(subs | cut -f1); do
+		src="$TMP/$id.tsv"
+		[ -f "$src" ] || { old_block "$id" > "$TMP/$id.old"; src="$TMP/$id.old"; }
+		sed "s/^/$id$TAB/" "$src" >> "$TMP/all"
+	done
+	own="$([ -f "$CUSTOM" ] && grep -v -E '^[[:space:]]*(#|$)' "$CUSTOM" | awk '{ print $1 }' | tr '\n' ' ')"
 	{
-		base = $8; if (base == "-") { base = $2; sub(/[.-].*/, "", base) }
-		code = base; k = 2; while (code in used) code = base k++
-		used[code] = 1
-		print code "\t" $2 "\t" $5 "\t" $6 "\t" $7 "\t" $4 "\t" $3 "\t" $9 "\t" $10 "\t" $11
-	}' > "$TMP/nodes.tsv"
+		echo "# Generated by flint-sub-update. Columns: code address sni pbk sid uuid port net service"
+		awk -F '\t' -v own="$own" '
+			BEGIN { n = split(own, o, " "); for (i = 1; i <= n; i++) used[o[i]] = 1 }
+			$1 != g { g = $1; print "#@\t" g }
+			{ code = $2; k = 2; while (code in used) code = $2 k++
+			  used[code] = 1
+			  print code "\t" $3 "\t" $4 "\t" $5 "\t" $6 "\t" $7 "\t" $8 "\t" $9 "\t" $10 "\t" $11 }' "$TMP/all" |
+		while IFS="$TAB" read -r code host sni pbk sid uuid port net svc name; do
+			if [ "$code" = "#@" ]; then echo "#@ $host"; continue; fi
+			printf '# %b\n' "$name"
+			echo "$code  $host  $sni  $pbk  $sid  $uuid  $port  $net  $svc"
+		done
+	} > "$TMP/nodes.conf"
+}
+count() { grep -c -v -E '^[[:space:]]*(#|$)' "${1:-$TMP/nodes.conf}"; }
+own_count() { cat "$CUSTOM" 2>/dev/null | grep -c -v -E '^[[:space:]]*(#|$)'; }
+# Some providers hand out a random SNI from a pool on every request: SNI-only changes are ignored.
+same() { strip() { grep -v -E '^[[:space:]]*(#|$)' "$1" | awk '{ $3 = ""; print }'; }; [ -f "$NODES" ] && [ "$(strip "$TMP/nodes.conf")" = "$(strip "$NODES")" ]; }
+# Install $TMP/nodes.conf and re-apply the current node (or the first one if it is gone).
+commit() {
+	cp "$NODES" "$NODES.bak" 2>/dev/null
+	(umask 077; cp "$TMP/nodes.conf" "$NODES")
+	cur="$(cat "$CUR" 2>/dev/null)"
+	if ! cat "$NODES" "$CUSTOM" 2>/dev/null | awk -v c="$cur" '$1 == c { f = 1 } END { exit !f }'; then
+		cur="$(cat "$NODES" "$CUSTOM" 2>/dev/null | grep -v -E '^[[:space:]]*(#|$)' | awk 'NR == 1 { print $1 }')"
+		t "Текущего сервера больше нет, переключаюсь на $cur" "The current server is gone, switching to $cur"
+	fi
+	flint-node "$cur"
+}
 
-count="$(wc -l < "$TMP/nodes.tsv")"
-[ "$count" -gt 0 ] || { status "$(t "ошибка: в подписке нет поддерживаемых серверов, список не изменён" "error: no supported servers in the subscription, list unchanged")"; exit 1; }
-
-{
-	echo "# Generated by flint-sub-update. Columns: code address sni pbk sid uuid port net service"
-	while IFS="$(printf '\t')" read -r code host sni pbk sid uuid port net svc name; do
-		printf '# %b\n' "$name"
-		echo "$code  $host  $sni  $pbk  $sid  $uuid  $port  $net  $svc"
-	done < "$TMP/nodes.tsv"
-} > "$TMP/nodes.conf"
-
-# The provider hands out a random SNI from its pool on every request: ignore SNI-only changes.
-strip_sni() { grep -v -E '^[[:space:]]*(#|$)' "$1" | awk '{ $3 = ""; print }'; }
-if [ -f "$NODES" ] && [ "$(strip_sni "$TMP/nodes.conf")" = "$(strip_sni "$NODES")" ]; then
-	status "$(t "без изменений ($count серверов)" "no changes ($count servers)")"
-	exit 0
-fi
-cp "$NODES" "$NODES.bak" 2>/dev/null
-(umask 077; cp "$TMP/nodes.conf" "$NODES")
-status "$(t "список обновлён: $count серверов" "list updated: $count servers")"
-
-cur="$(cat "$CUR" 2>/dev/null)"
-if ! cat "$NODES" "$CUSTOM" 2>/dev/null | awk -v c="$cur" '$1 == c { f = 1 } END { exit !f }'; then
-	cur="$(grep -v -E '^[[:space:]]*(#|$)' "$NODES" | awk 'NR == 1 {print $1}')"
-	t "Текущего сервера больше нет, переключаюсь на $cur" "The current server is gone, switching to $cur"
-fi
-flint-node "$cur"
+case "$1" in
+	list)
+		subs | while IFS="$TAB" read -r id url name; do
+			st="$([ -f "$SUB_STATUS" ] && awk -F '\t' -v i="$id" '$1 == i { print $2 }' "$SUB_STATUS")"
+			info="$([ -f "$SUB_STATUS" ] && awk -F '\t' -v i="$id" '$1 == i { print $3 }' "$SUB_STATUS")"
+			info="$(info_text "$info")"
+			printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$name" "$(host_of "$url")" "${st:--}" "${info:--}"
+		done
+		;;
+	url)
+		field "$2" 2
+		;;
+	interval)
+		[ -n "$2" ] || { cat "$INTERVAL" 2>/dev/null || echo 24h; exit 0; }
+		case "$2" in off|30m|1h|3h|6h|12h|24h) ;; *) fail "Usage: flint-sub-update interval [off|30m|1h|3h|6h|12h|24h]" ;; esac
+		echo "$2" > "$INTERVAL"
+		cron_apply
+		t "Автообновление серверов: $2" "Server list auto-update: $2"
+		;;
+	add)
+		check_url "$2"
+		lock
+		id="s$(( $(subs | cut -f1 | sed 's/^s//' | grep -E '^[0-9]+$' | sort -n | tail -n1) + 1 ))"
+		fetch "$2" "$TMP/$id.tsv" || fail "$(t "Подписка не добавлена" "Subscription not added"): $(fetch_error $?)"
+		name="$(clean_name "$3")"
+		[ -n "$name" ] || name="$(cat "$TMP/$id.tsv.title")"
+		[ -n "$name" ] || name="$(host_of "$2")"
+		n="$(count "$TMP/$id.tsv")"
+		(umask 077; printf '%s\t%s\t%s\n' "$id" "$2" "$name" >> "$SUBS")
+		sub_status "$id" "$(t "серверов: $n" "servers: $n")" "$(cat "$TMP/$id.tsv.info")"
+		cron_apply
+		build
+		status "$(t "подписка «$name» добавлена, серверов: $n" "subscription \"$name\" added, servers: $n")"
+		commit
+		;;
+	set)
+		old="$(field "$2" 2)"
+		[ -n "$old" ] || fail "$(t "Нет такой подписки" "No such subscription")"
+		check_url "$3" "$2"
+		name="$(clean_name "$4")"; [ -n "$name" ] || name="$(field "$2" 3)"
+		lock
+		if [ "$3" != "$old" ]; then
+			fetch "$3" "$TMP/$2.tsv" || fail "$(t "Ссылка не изменена" "Link not changed"): $(fetch_error $?)"
+		fi
+		set_sub "$2" "$3" "$name"
+		if [ "$3" = "$old" ]; then t "Подписка сохранена: $name" "Subscription saved: $name"; exit 0; fi
+		n="$(count "$TMP/$2.tsv")"
+		sub_status "$2" "$(t "серверов: $n" "servers: $n")" "$(cat "$TMP/$2.tsv.info")"
+		build
+		status "$(t "ссылка подписки «$name» изменена, серверов: $n" "subscription \"$name\" link changed, servers: $n")"
+		same || commit
+		;;
+	del)
+		name="$(field "$2" 3)"
+		[ -n "$(field "$2" 1)" ] || fail "$(t "Нет такой подписки" "No such subscription")"
+		lock
+		cp "$SUBS" "$TMP/subs.bak"
+		subs | awk -F '\t' -v i="$2" '$1 != i' > "$SUBS.new"
+		(umask 077; cp "$SUBS.new" "$SUBS"); rm -f "$SUBS.new"
+		build
+		if [ "$(count)" = 0 ] && [ "$(own_count)" = 0 ]; then
+			cp "$TMP/subs.bak" "$SUBS"
+			fail "$(t "Это единственный источник серверов: сначала добавьте другую подписку или свой сервер" \
+				"This is the only source of servers: add another subscription or an own server first")"
+		fi
+		sub_status "$2" ""
+		cron_apply
+		status "$(t "подписка «$name» удалена" "subscription \"$name\" deleted")"
+		commit
+		;;
+	"")
+		[ -n "$(subs)" ] || fail "$(t "Подписок нет: добавьте её на вкладке «Подписки»" "No subscriptions: add one on the Subscriptions tab")"
+		lock
+		good=0; bad=""; err=""
+		while IFS="$TAB" read -r id url name; do
+			if fetch "$url" "$TMP/$id.tsv"; then
+				good=$((good + 1)); n="$(count "$TMP/$id.tsv")"
+				sub_status "$id" "$(t "серверов: $n" "servers: $n")" "$(cat "$TMP/$id.tsv.info")"
+				# A name that is still the default (the host) becomes the provider's profile name.
+				title="$(cat "$TMP/$id.tsv.title")"
+				[ -n "$title" ] && [ "$name" = "$(host_of "$url")" ] && set_sub "$id" "$url" "$title"
+			else
+				err="$(fetch_error $?)"; rm -f "$TMP/$id.tsv"
+				bad="${bad:+$bad, }$name"; sub_status "$id" "$(t "ошибка" "error"): $err"
+			fi
+		done <<EOF
+$(subs)
+EOF
+		[ "$good" -gt 0 ] || { status "$(t "ошибка" "error"): $err$([ "$(subs | wc -l)" -gt 1 ] && echo " ($bad)")"; exit 1; }
+		build
+		n="$(count)"
+		note=""; [ -z "$bad" ] || note="; $(t "не обновились" "not updated"): $bad"
+		if same; then status "$(t "без изменений (серверов: $n)" "no changes ($n servers)")$note"; exit 0; fi
+		status "$(t "список обновлён, серверов: $n" "list updated, servers: $n")$note"
+		commit
+		;;
+	*)
+		sed -n '8,14s/^# \{0,1\}//p' "$0"; exit 1
+		;;
+esac

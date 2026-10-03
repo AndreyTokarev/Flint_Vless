@@ -39,11 +39,12 @@ pass="$(get pass)"; node="$(get node)"; routing="$(get routing)"; vpn="$(get vpn
 add="$(param add)"; to="$(get to)"; del="$(param del)"
 link="$(param link)"; edit="$(get edit)"; copy="$(get copy)"; newnode="$(get newnode)"; save="$(get save)"; ndel="$(get ndel)"
 subint="$(get subint)"; wd="$(get wd)"
+subadd="$(param subadd)"; subname="$(param subname)"; subedit="$(get subedit)"; subsave="$(get subsave)"; subdel="$(get subdel)"
 adblock="$(get adblock)"; ablist="$(param ablist)"; abname="$(param abname)"; abpreset="$(get abpreset)"; abldel="$(param abldel)"
 abrule="$(param abrule)"; abto="$(get abto)"; abrdel="$(param abrdel)"; abint="$(get abint)"; abref="$(get abref)"
 abxadd="$(param abxadd)"; abxname="$(param abxname)"; abxdel="$(param abxdel)"
 tab="$(get tab)"
-case "$tab" in status|servers|own|routing|adblock) ;; *) tab=status ;; esac
+case "$tab" in status|servers|own|subs|routing|adblock) ;; *) tab=status ;; esac
 # Ready-made lists from AdGuard's registry of DNS blocklists: id:name.
 PRESET_URL=https://adguardteam.github.io/HostlistsRegistry/assets/filter_
 PRESETS="1:AdGuard DNS filter
@@ -56,6 +57,8 @@ PRESETS="1:AdGuard DNS filter
 TITLE="$(echo "${UI_TITLE:-Flint VPN}" | esc)"
 TAGLINE="$(echo "${UI_TAGLINE-Sail the internet}" | esc)"
 FOOTER='<footer><span>YOUR NETWORK. <b>YOUR RULES.</b></span></footer>'
+VER="$(cat /usr/share/flint/version 2>/dev/null | esc)"
+[ -n "$VER" ] && VER="<div class=ver>Flint VPN v$VER</div>"
 logo() {
   last="${TITLE##* }"; first="${TITLE% *}"
   [ "$first" = "$TITLE" ] && last=""
@@ -113,6 +116,8 @@ small{color:#9ca3af}
 .lang a{color:#93c5fd;text-decoration:none}
 .lang b{color:#e5e7eb}
 main>.lang{text-align:center;margin-top:4px}
+.ver{font-size:12px;color:#6b7280;padding:6px 12px}
+main>.ver{text-align:center}
 .login{max-width:340px;margin-left:auto;margin-right:auto;padding:28px 24px;text-align:center}
 .login{margin-top:16px}
 .lock{font-size:40px}
@@ -144,7 +149,7 @@ nav{flex:none;position:static;display:grid;grid-template-columns:1fr 1fr;gap:6px
 nav .brand{grid-column:1/-1;margin:0 4px 4px}
 nav a{margin:0;padding:10px;background:#1f2937;text-align:center}
 nav a.logout{grid-column:1/-1;background:none;padding:2px;margin:0;font-size:14px}
-nav .lang{grid-column:1/-1;text-align:center;padding:0}
+nav .lang,nav .ver{grid-column:1/-1;text-align:center;padding:0}
 .stat{flex-wrap:wrap}
 }
 </style></head><body>
@@ -155,7 +160,7 @@ if [ -z "$UI_PIN" ] || [ "$pass" != "$UI_PIN" ]; then
 <main>$(logo big)<div class="card login"><div class=lock>🔒</div>
 <p class=login-hint>$(T "Введите PIN, чтобы управлять VPN" "Enter the PIN to manage the VPN")</p>$err
 <form method=get><input type=password name=pass placeholder=PIN autocomplete=current-password autofocus required>
-<button class=on>$(T "Войти" "Sign in")</button></form></div>$(langs "?")</main>$FOOTER</body></html>
+<button class=on>$(T "Войти" "Sign in")</button></form></div>$(langs "?")$VER</main>$FOOTER</body></html>
 HTML
   exit 0
 fi
@@ -171,6 +176,12 @@ elif [ "$sub" = 1 ]; then
   msg="$(flint-sub-update 2>&1)"
 elif [ -n "$subint" ]; then
   msg="$(flint-sub-update interval "$subint" 2>&1)"
+elif [ -n "$subadd" ]; then
+  msg="$(flint-sub-update add "$subadd" "$subname" 2>&1)"
+elif [ -n "$subsave" ]; then
+  msg="$(flint-sub-update set "$subsave" "$(param subu)" "$(param subn)" 2>&1)" || subedit="$subsave"
+elif [ -n "$subdel" ]; then
+  msg="$(flint-sub-update del "$subdel" 2>&1)"
 elif [ "$wd" = on ] || [ "$wd" = off ]; then
   msg="$(flint-watchdog "$wd" 2>&1)"
 elif [ "$adblock" = on ] || [ "$adblock" = off ]; then
@@ -226,6 +237,7 @@ TAB="$(printf '\t')"
 hidden() { echo "<input type=hidden name=pass value='$pass'><input type=hidden name=tab value='$tab'>"; }
 btn() { echo "<form method=get class=act>$(hidden)<input type=hidden name=$1 value='$2'><button$3>$4</button></form>"; }
 field() { echo "<label>$1<input type=text name=$2 value='$(printf '%s' "$3" | esc)'$4></label>"; }
+SUBLIST="$(flint-sub-update list | esc)"
 NAMES="$(flint-node names | esc)"
 CUR_NAME="$(echo "$NAMES" | awk -F "$TAB" -v c="$CUR" '$1 == c {print $2}')"
 SITES="$(flint-node site list)"
@@ -234,11 +246,11 @@ NEVER="$(T "ещё не было" "never")"
 
 echo "<div class=layout><nav>$(logo brand)"
 for t in "status:🏠 $(T "Статус" "Status")" "servers:🌍 $(T "Серверы" "Servers")" "own:⭐ $(T "Свои серверы" "Own servers")" \
-  "routing:🔀 $(T "Маршрутизация" "Routing")" "adblock:🛡️ $(T "Реклама" "Ad blocking")"; do
+  "subs:🔗 $(T "Подписки" "Subscriptions")" "routing:🔀 $(T "Маршрутизация" "Routing")" "adblock:🛡️ $(T "Реклама" "Ad blocking")"; do
   cur=""; [ "${t%%:*}" = "$tab" ] && cur=" class=cur"
   echo "<a href='?pass=$pass&amp;tab=${t%%:*}'$cur>${t#*:}</a>"
 done
-echo "<a href='?' class=logout>$(T "Выйти" "Sign out")</a>$(langs "?pass=$pass&amp;tab=$tab&amp;")</nav><div class=content>"
+echo "<a href='?' class=logout>$(T "Выйти" "Sign out")</a>$(langs "?pass=$pass&amp;tab=$tab&amp;")$VER</nav><div class=content>"
 [ -n "$msg" ] && echo "<div class=card><pre class=ok>$(echo "$msg" | esc)</pre></div>"
 
 case "$tab" in
@@ -264,7 +276,7 @@ status)
   echo "<div class=stat><span>$(T "Гео-фильтр РФ" "Russia geo filter")</span><span>$geo</span></div>"
   echo "<div class=stat><span>$(T "Свои сайты" "Own sites")</span><a href='?pass=$pass&amp;tab=routing'>$(T "$ndirect напрямую, $nproxy через VPN" "$ndirect direct, $nproxy via VPN")</a></div>"
   echo "<div class=stat><span>$(T "Серверов" "Servers")</span><a href='?pass=$pass&amp;tab=servers'>$(T "$total, из них своих $own" "$total, $own of them own")</a></div>"
-  echo "<div class=stat><span>$(T "Проверка подписки" "Subscription check")</span><span>${CHECKED:-$NEVER}</span></div>"
+  echo "<div class=stat><span>$(T "Проверка подписок" "Subscription check")</span><a href='?pass=$pass&amp;tab=subs'>${CHECKED:-$NEVER}</a></div>"
   echo "<div class=stat><span>$(T "Автопереключение при сбое" "Failover")</span><a href='?pass=$pass&amp;tab=servers'>$wds</a></div>"
   [ "$(flint-adblock state)" = on ] && abs="$ON" || abs="$OFF"
   echo "<div class=stat><span>$(T "Блокировка рекламы" "Ad blocking")</span><a href='?pass=$pass&amp;tab=adblock'>$abs</a></div>"
@@ -272,34 +284,31 @@ status)
   echo "</div>"
   ;;
 servers)
+  # grid <ip|domain> [group]: server buttons; group "*" = servers of no current subscription.
+  SUBIDS="$(echo "$SUBLIST" | cut -f1 | tr '\n' ' ')"
   grid() {
-    echo "$NAMES" | while IFS="$TAB" read -r code name kind; do
-      [ -n "$code" ] && [ "$kind" = "$1" ] || continue
+    echo "$NAMES" | awk -F "$TAB" -v k="$1" -v g="$2" -v ids=" $SUBIDS own " \
+      '$3 == k && (g == "" || $4 == g || (g == "*" && index(ids, " " $4 " ") == 0)) { print $1 "\t" $2 }' |
+    while IFS="$TAB" read -r code name; do
       on=""; [ "$code" = "$CUR" ] && on=" on"
       echo "<form method=get>$(hidden)<input type=hidden name=node value='$code'><button class='$on'>$name</button></form>"
     done
   }
-  echo "<div class=card><h2>$(T "Серверы" "Servers")</h2><div class=grid>$(grid domain)</div></div>"
+  card() { [ -n "$2" ] && echo "<div class=card><h2>$1</h2><div class=grid>$2</div></div>"; }
+  SERVERS="$(T "Серверы" "Servers")"
+  if [ "$(echo "$SUBLIST" | grep -c .)" -gt 1 ]; then
+    echo "$SUBLIST" | while IFS="$TAB" read -r id sname host st info; do card "$sname" "$(grid domain "$id")"; done
+  elif [ -n "$SUBLIST" ]; then
+    card "$SERVERS" "$(grid domain "$(echo "$SUBLIST" | cut -f1)")"
+  fi
+  card "$SERVERS" "$(grid domain "*")"
+  card "$(T "Свои серверы" "Own servers")" "$(grid domain own)"
   WL="$(grid ip)"
   if [ -n "$WL" ]; then
     open=""; echo "$NAMES" | awk -F "$TAB" -v c="$CUR" '$1 == c && $3 == "ip" { f = 1 } END { exit !f }' && open=" open"
     echo "<details class=card$open><summary><b>$(T "Белые списки" "White lists")</b> <small>— $(T "серверы по IP-адресу, для сетей, где открыт только белый список" "servers by IP address, for networks where only a white list is open")</small></summary>"
     echo "<div class=grid style='margin-top:10px'>$WL</div></details>"
   fi
-  echo "<div class=card><h2>$(T "Подписка" "Subscription")</h2>"
-  btn sub 1 "" "$(T "Обновить список серверов сейчас" "Refresh the server list now")"
-  CHECKED="$(cat /etc/xray/sub-checked 2>/dev/null | esc)"
-  echo "<small>$(T "Последняя проверка" "Last check"): ${CHECKED:-$NEVER}</small>"
-  SI="$(flint-sub-update interval)"
-  echo "<form method=get class=row>$(hidden)<select name=subint>"
-  for v in "off:$(T "Автообновление выключено" "Auto-update off")" "30m:$(T "Обновлять каждые 30 минут" "Update every 30 minutes")" \
-    "1h:$(T "Обновлять каждый час" "Update every hour")" "3h:$(T "Обновлять каждые 3 часа" "Update every 3 hours")" \
-    "6h:$(T "Обновлять каждые 6 часов" "Update every 6 hours")" "12h:$(T "Обновлять каждые 12 часов" "Update every 12 hours")" \
-    "24h:$(T "Обновлять раз в сутки" "Update once a day")"; do
-    sel=""; [ "${v%%:*}" = "$SI" ] && sel=" selected"
-    echo "<option value='${v%%:*}'$sel>${v#*:}</option>"
-  done
-  echo "</select><button>$(T "Сохранить" "Save")</button></form></div>"
   echo "<div class=card><h2>$(T "Автопереключение при сбое" "Failover")</h2>"
   if [ "$(flint-watchdog state)" = on ]; then
     echo "$ON — $(T "каждые 2 минуты роутер проверяет VPN. Если сервер не отвечает, а интернет есть, он обновляет подписку и при необходимости переходит на первый рабочий сервер." \
@@ -343,10 +352,58 @@ own)
   echo "</div><div class=card><h2>$(T "Добавить" "Add")</h2>"
   echo "<form method=get class=row>$(hidden)<input type=text name=link placeholder='vless://...' required><button>$(T "Добавить по ссылке" "Add by link")</button></form>"
   echo "<form method=get class=row>$(hidden)<select name=copy>"
-  echo "$NAMES" | while IFS="$TAB" read -r code name kind; do [ -n "$code" ] && echo "<option value='$code'>$name</option>"; done
+  echo "$NAMES" | while IFS="$TAB" read -r code name kind group; do [ -n "$code" ] && echo "<option value='$code'>$name</option>"; done
   echo "</select><button>$(T "Скопировать и изменить" "Copy and edit")</button></form>"
   btn newnode 1 "" "$(T "Ввести вручную" "Enter manually")"
   echo "</div>"
+  ;;
+subs)
+  if [ -n "$subedit" ]; then
+    IFS="$TAB" read -r s_id s_name s_host s_st s_info <<EOF
+$(flint-sub-update list | awk -F "$TAB" -v i="$subedit" '$1 == i')
+EOF
+    if [ -n "$s_id" ]; then
+      s_url="$(flint-sub-update url "$s_id")"
+      # After a failed save keep what was typed.
+      [ -n "$subsave" ] && { s_url="$(param subu)"; s_name="$(param subn)"; }
+      echo "<div class=card><h2>$(T "Изменить подписку" "Edit subscription")</h2>"
+      echo "<form method=get>$(hidden)<input type=hidden name=subsave value='$s_id'>"
+      field "$(T "Ссылка" "Link")" subu "$s_url" " required"
+      field "$(T "Название" "Name")" subn "$s_name" " maxlength=60"
+      echo "<button class=on style='margin-top:12px'>$(T "Сохранить" "Save")</button></form>"
+      echo "<form method=get class=act>$(hidden)<button>$(T "Отмена" "Cancel")</button></form></div>"
+    fi
+  fi
+  DEL="$(T "Удалить" "Delete")"; EDIT="$(T "Изменить" "Edit")"
+  ASK="$(T "Удалить подписку и её серверы?" "Delete the subscription and its servers?")"
+  echo "<div class=card><h2>$(T "Подписки" "Subscriptions")</h2><small>$(T "Ссылки на подписки любых VPN-провайдеров в формате v2rayN / Happ / Hiddify: список vless://, обычный или в base64. Серверы всех подписок появятся на вкладке «Серверы»." \
+    "Subscription links from any VPN providers in the v2rayN / Happ / Hiddify format: a list of vless:// links, plain or base64. Servers from all subscriptions appear on the Servers tab.")</small>"
+  [ -n "$SUBLIST" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
+  echo "$SUBLIST" | while IFS="$TAB" read -r id sname host st info; do
+    [ -n "$id" ] || continue
+    [ "$st" = - ] && st="$(T "ещё не обновлялась" "not updated yet")"
+    [ "$info" = - ] && info="" || info="<br><small>$info</small>"
+    echo "<div class=item><span>$sname<br><small>$host · $st</small>$info</span>"
+    echo "<form method=get>$(hidden)<input type=hidden name=subedit value='$id'><button>$EDIT</button></form>"
+    echo "<form method=get onsubmit=\"return confirm('$ASK')\">$(hidden)<input type=hidden name=subdel value='$id'><button title='$DEL'>✕</button></form></div>"
+  done
+  echo "<form method=get class=row>$(hidden)<input type=text name=subadd placeholder='https://provider.example/sub/...' required>"
+  echo "<input type=text name=subname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить подписку" "Add subscription")</button></form></div>"
+  echo "<div class=card><h2>$(T "Обновление" "Updates")</h2>"
+  btn sub 1 "" "$(T "Обновить все подписки сейчас" "Update all subscriptions now")"
+  CHECKED="$(cat /etc/xray/sub-checked 2>/dev/null | esc)"
+  echo "<small>$(T "Последняя проверка" "Last check"): ${CHECKED:-$NEVER}</small>"
+  SI="$(flint-sub-update interval)"
+  echo "<form method=get class=row>$(hidden)<select name=subint>"
+  for v in "off:$(T "Автообновление выключено" "Auto-update off")" "30m:$(T "Обновлять каждые 30 минут" "Update every 30 minutes")" \
+    "1h:$(T "Обновлять каждый час" "Update every hour")" "3h:$(T "Обновлять каждые 3 часа" "Update every 3 hours")" \
+    "6h:$(T "Обновлять каждые 6 часов" "Update every 6 hours")" "12h:$(T "Обновлять каждые 12 часов" "Update every 12 hours")" \
+    "24h:$(T "Обновлять раз в сутки" "Update once a day")"; do
+    sel=""; [ "${v%%:*}" = "$SI" ] && sel=" selected"
+    echo "<option value='${v%%:*}'$sel>${v#*:}</option>"
+  done
+  echo "</select><button>$(T "Сохранить" "Save")</button></form>"
+  echo "<small>$(T "Если подписка не скачалась, её серверы остаются прежними." "If a subscription fails to download, its servers stay as they were.")</small></div>"
   ;;
 routing)
   echo "<div class=card><h2>$(T "Гео-фильтр РФ" "Russia geo filter")</h2>"

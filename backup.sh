@@ -18,7 +18,7 @@ PATHS="/etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /etc/firewall.user* /etc/in
 ssh "$TARGET" "tar -czf - $PATHS 2>/dev/null" > "$DIR/router-config.tar.gz" || true
 echo "Saved $DIR/router-config.tar.gz"
 
-for f in flint.env nodes.conf nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
+for f in flint.env nodes.conf nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
 	if ssh "$TARGET" "test -f /etc/xray/$f"; then
 		ssh "$TARGET" "cat /etc/xray/$f" > "$ROOT/config/$f"
 		cp "$ROOT/config/$f" "$DIR/"

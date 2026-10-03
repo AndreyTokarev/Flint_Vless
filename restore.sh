@@ -36,7 +36,7 @@ if [ -f "$TMP/etc/xray/gru.env" ] && [ ! -f "$TMP/etc/xray/flint.env" ]; then
 	mv "$TMP/etc/xray/gru.env" "$TMP/etc/xray/flint.env"
 fi
 FOUND=""
-for f in flint.env nodes.conf nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
+for f in flint.env nodes.conf nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
 	if [ -f "$TMP/etc/xray/$f" ]; then FOUND="$FOUND $f"; fi
 done
 
@@ -51,7 +51,7 @@ fi
 if [ -n "$FOUND" ]; then
 	KEEP="$ROOT/backup/config-before-restore-$(date +%Y-%m-%d_%H%M%S)"
 	mkdir -p "$KEEP"
-	for f in flint.env nodes.conf nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
+	for f in flint.env nodes.conf nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
 		if [ -f "$ROOT/config/$f" ]; then cp "$ROOT/config/$f" "$KEEP/"; fi
 	done
 	echo "Current config/ saved to $KEEP"

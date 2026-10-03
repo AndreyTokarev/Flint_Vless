@@ -17,6 +17,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#web-panel">Web panel</a> ·
   <a href="#troubleshooting">Troubleshooting</a> ·
+  <a href="CHANGELOG.en.md">Changelog</a> ·
   <a href="LICENSE.en.md">License</a>
 </p>
 
@@ -41,7 +42,7 @@ The panel is available in English and Russian: the language follows your browser
 - **Russia geo filter.** Russian sites (`geosite:category-ru`) and IPs (`geoip:ru`) go direct, the rest via VPN. One button turns it off (everything via VPN).
 - **Your own rules.** Sites, IPs and subnets "always direct" or "always via VPN", taking priority over the geo filter.
 - **Web panel** at `http://vpn.lan:81/`, protected by a PIN: server selection, VPN on/off, routing, own servers. Works on phones.
-- **Provider subscription.** The server list is refreshed from the subscription URL — on demand or automatically (every 30 minutes to once a day). The router downloads it directly, so refreshing works even when the current server is down.
+- **Subscriptions from any providers.** Add several subscriptions in the v2rayN / Happ / Hiddify format — servers from all of them show up in the panel, grouped by provider. The subscription name, expiry date and traffic are picked up automatically. The list is refreshed on demand or automatically (every 30 minutes to once a day); the router downloads subscriptions directly, so refreshing works even when the current server is down.
 - **Own servers.** Add by `vless://` link, by copying a subscription server, or manually; TCP (xtls-rprx-vision) or gRPC transport.
 - **Failover.** Every 2 minutes the router checks the tunnel; if the server stopped responding while the internet is up, it refreshes the subscription and switches to the first working server.
 - **White lists.** Provider servers given by bare IP (for networks where only a white list is open) are grouped in a separate collapsible block.
@@ -59,10 +60,12 @@ The panel is available in English and Russian: the language follows your browser
 | ![Servers](docs/screenshots/en/servers.png) | ![White lists](docs/screenshots/en/whitelist.png) |
 | **Own servers** | **Editing a server** |
 | ![Own servers](docs/screenshots/en/own.png) | ![Edit](docs/screenshots/en/edit.png) |
-| **Routing** | **Phone** |
-| ![Routing](docs/screenshots/en/routing.png) | ![Phone](docs/screenshots/en/mobile-status.png) |
-| **Ad blocking** | **Phone: servers** |
-| ![Ad blocking](docs/screenshots/en/adblock.png) | ![Phone: servers](docs/screenshots/en/mobile-servers.png) |
+| **Subscriptions** | **Routing** |
+| ![Subscriptions](docs/screenshots/en/subs.png) | ![Routing](docs/screenshots/en/routing.png) |
+| **Ad blocking** | **Phone** |
+| ![Ad blocking](docs/screenshots/en/adblock.png) | ![Phone](docs/screenshots/en/mobile-status.png) |
+| **Phone: servers** | |
+| ![Phone: servers](docs/screenshots/en/mobile-servers.png) | |
 
 The screenshots use demo data: documentation IP ranges, made-up servers and keys.
 
@@ -226,8 +229,9 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 | Tab | What's there |
 |---|---|
 | **Status** | VPN on/off button, current server, exit IP, geo filter, number of own sites and servers, last subscription check, failover state and last failure, ad blocking |
-| **Servers** | one-click server selection; "White lists" block; refresh the subscription now and the auto-update interval; failover on/off |
+| **Servers** | one-click server selection — servers grouped by subscription, own servers apart; "White lists" block; failover on/off |
 | **Own servers** | servers not from the subscription: add by `vless://` link, copy a subscription server and edit the copy, enter manually; edit or delete |
+| **Subscriptions** | VPN provider subscriptions: add by link, change the link or name, delete; last update, number of servers, expiry and traffic; "Update all subscriptions now" and the auto-update interval |
 | **Routing** | Russia geo filter on/off; own sites, IPs and subnets "always direct" or "always via VPN" |
 | **Ad blocking** | ad blocking on/off and 24-hour stats; devices without blocking; filter lists — ready-made and your own by URL; auto-update and "Update the lists now"; own rules |
 
@@ -247,7 +251,7 @@ The panel speaks English and Russian. On the first visit the language follows th
 | `UPSTREAM_IF` | main router interface: `sta1` (Wi‑Fi, Repeater) or `wan` (cable) |
 | `UPSTREAM_NET` | main router's network; reachable from devices behind Flint without the VPN, and Flint is reachable from it |
 | `LOCAL_HOSTS` | local names: `"nas01=192.168.0.145 printer=192.168.0.50"` — `nas01`, `nas01.lan`, `nas01.local` will resolve |
-| `SUB_URL` | subscription URL; the router refreshes the server list from it, `tools/sub2nodes.py` reads it too. The subscription host always bypasses the VPN |
+| `SUB_URL` | the first subscription on a fresh router; more are added on the Subscriptions tab (see [Subscriptions](#subscriptions)). `tools/sub2nodes.py` reads it too |
 | `SUB_INTERVAL` | auto-update interval for a fresh router: `off`, `30m`, `1h`, `3h`, `6h`, `12h`, `24h` (default `24h`); later changed in the panel, survives redeploys |
 | `SUB_GRPC` | `1` — also import gRPC servers from the subscription (skipped by default, see [Limitations](#limitations)) |
 | `ADBLOCK` | `on` — turn ad blocking on for a fresh router; later it is switched in the panel, and the choice survives redeploys |
@@ -261,7 +265,7 @@ python tools/sub2nodes.py --no-ip   # without "white list" servers (bare IPs)
 python tools/sub2nodes.py --grpc    # also gRPC servers
 ```
 
-On the router `flint-sub-update` does the same (panel button and auto-update). VLESS + REALITY over TCP (xtls-rprx-vision) is imported, including bare-IP servers, which go to the "white lists" block. gRPC only with `--grpc` / `SUB_GRPC=1`. Provider announcements disguised as servers (names starting with ❗) are skipped.
+On the router `flint-sub-update` does the same (panel button and auto-update); once the router has subscriptions, a redeploy no longer replaces its `nodes.conf` with the PC copy. VLESS + REALITY over TCP (xtls-rprx-vision) is imported, including bare-IP servers, which go to the "white lists" block. gRPC only with `--grpc` / `SUB_GRPC=1`. Provider announcements disguised as servers (names starting with ❗) are skipped.
 
 Line format:
 
@@ -272,6 +276,17 @@ code  address  sni  pbk  sid  [uuid]  [port]  [tcp|grpc]  [serviceName]
 An empty field is `-`; `uuid` defaults to `VLESS_UUID`, port to `443`, transport to `tcp`. The comment line above a server is its panel name.
 
 **Own servers** added in the panel are stored separately on the router, in `/etc/xray/nodes-custom.conf`, with codes `my1`, `my2`… Subscription updates don't touch them.
+
+## Subscriptions
+
+You can have several subscriptions from different providers: add, change and delete them on the Subscriptions tab or with `flint-sub-update`. A regular subscription link from Happ, v2rayN or Hiddify works — a list of `vless://` links (plain or base64). On the first run `SUB_URL` from `flint.env` becomes the first subscription.
+
+- A subscription is added only if it downloads and has supported servers (VLESS + REALITY).
+- Servers from all subscriptions are merged into `/etc/xray/nodes.conf`, one block per subscription (a `#@ s1`, `#@ s2`… line). When codes clash, the second server gets a number: `de`, `de2`.
+- If a subscription fails to download during an update, its servers stay as they were and the panel shows the error.
+- The default subscription name comes from the `profile-title` header, the expiry and traffic from `subscription-userinfo` (most providers send them for Happ).
+- The hosts of all subscriptions bypass the VPN, so refreshing works even when the current server is down.
+- The list lives in `/etc/xray/subscriptions` (links carry a token, keep it secret); a backup copies it to `config/subscriptions`.
 
 ## Failover
 
@@ -320,7 +335,7 @@ AdGuard Home uses 40–60 MB of RAM; with blocking off it is stopped.
 ./backup.sh --with-binary
 ```
 
-The backup pulls from the router its settings, the own servers and sites from the panel, and the network and Wi‑Fi configs. Fresh `flint.env`, `nodes.conf`, `nodes-custom.conf`, `custom-sites` and the ad blocking files (`adblock-lists`, `adblock-rules`, `adblock-exclude`) are also copied into `config/`.
+The backup pulls from the router its settings, the own servers and sites from the panel, and the network and Wi‑Fi configs. Fresh `flint.env`, `nodes.conf`, `nodes-custom.conf`, `custom-sites`, `subscriptions` and the ad blocking files (`adblock-lists`, `adblock-rules`, `adblock-exclude`) are also copied into `config/`.
 
 > [!WARNING]
 > `backup/` and the files in `config/` contain your subscription UUID and Wi‑Fi passwords. They are gitignored; keep them separately — in the cloud or on a USB stick.
@@ -338,7 +353,7 @@ The backup pulls from the router its settings, the own servers and sites from th
 ./restore.sh --full
 ```
 
-By default the settings from the backup (`flint.env`, servers, own servers and sites, ad blocking lists, rules and exclusions) go into `config/`, then a normal deploy runs. This works for a reset router too: first connect it to the internet in the GL admin panel. The current `config/` files are saved to `backup/config-before-restore-<time>/` before being replaced.
+By default the settings from the backup (`flint.env`, servers, subscriptions, own servers and sites, ad blocking lists, rules and exclusions) go into `config/`, then a normal deploy runs. This works for a reset router too: first connect it to the internet in the GL admin panel. The current `config/` files are saved to `backup/config-before-restore-<time>/` before being replaced.
 
 `-Full` / `--full` is only for the **same** router: it brings back its network, Wi‑Fi (SSIDs and passwords), firewall, DHCP reservations, cron and SSH keys, then reboots. The script asks for confirmation (`-Yes` / `--yes` skips it).
 
@@ -351,7 +366,11 @@ flint-node routing ru            # geo filter: RU direct (global — everything 
 flint-node vpn off               # clients go online directly (on — via VPN again)
 flint-node site add direct example.ru     # own site: direct — bypass VPN, proxy — via VPN
 flint-custom link 'vless://...'  # add an own server by link
-flint-sub-update                 # refresh the server list from the subscription
+flint-sub-update                 # update all subscriptions
+flint-sub-update list            # subscriptions: id, name, host, last update, expiry and traffic
+flint-sub-update add 'https://...' "Name"   # add a subscription
+flint-sub-update set s2 'https://...'      # new link (or name) for subscription s2
+flint-sub-update del s2          # delete a subscription and its servers
 flint-sub-update interval 1h     # auto-update: off, 30m, 1h, 3h, 6h, 12h, 24h
 flint-watchdog off               # turn failover off (on — turn on)
 flint-geo-update                 # update geoip/geosite manually
@@ -385,7 +404,8 @@ If you run it on another device, please report the result in [Issues](https://gi
 | `DNS: FAIL` | `/etc/init.d/flint-doh restart`, then `nslookup youtube.com 127.0.0.1`; does the router have internet |
 | Panel doesn't open at `vpn.lan` | use `http://192.168.8.1:81/`; disable Private DNS / DoH on the device; `/etc/init.d/flint-ui restart` |
 | No internet after switching servers | the server is down — pick another or enable failover; as a last resort turn the VPN off on the Status tab |
-| A server fails though it works in Happ | the provider rotated keys or SNI — refresh the subscription |
+| A server fails though it works in Happ | the provider rotated keys or SNI — "Subscriptions → Update all subscriptions now" |
+| A subscription is not added | "could not be downloaded" - open the link in a browser, check the router's internet; "no supported servers" - the subscription has no VLESS + REALITY (VMess, Trojan, Shadowsocks, XHTTP are not supported) |
 | A Russian site goes via VPN | geoip/geosite missing (then `global` mode): `flint-geo-update`; or add the site as "direct" |
 | A site or app broke with ad blocking on | turn blocking off to confirm; if it is the cause, add the domain to own rules as "Allow" or the device to "Devices without blocking" |
 | Ads are not blocked on a device | turn off Private DNS / browser DoH on it; check it is not excluded; ads from the same domain as the video (YouTube) can't be blocked by DNS |
@@ -397,6 +417,12 @@ If you run it on another device, please report the result in [Issues](https://gi
 - **IPv6 is not tunnelled.** If the main router hands out IPv6, disable it for the Flint network.
 - **Xray 1.8.x from opkg:** no XHTTP transport; the gRPC "white list" servers of some providers fail the REALITY handshake with it, so they are not imported by default.
 - **The panel is for the home network:** plain HTTP, the PIN travels in the request URL. Never expose port 81 to the internet.
+
+## Versions
+
+Versions follow [SemVer](https://semver.org): `1.2.3` is major (incompatible changes), minor (new features), patch (fixes). The number is in `kit/VERSION`, every version has a `vX.Y.Z` git tag, and the changes are in [CHANGELOG.en.md](CHANGELOG.en.md).
+
+On the router the version is shown at the bottom of the panel menu and in `/usr/share/flint/version`; a deploy prints which version it installs and which one was there.
 
 ## Contributing
 

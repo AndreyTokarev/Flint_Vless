@@ -12,6 +12,7 @@ set -e
 ENV=/etc/xray/flint.env
 NODES=/etc/xray/nodes.conf
 CUSTOM=/etc/xray/nodes-custom.conf
+SUBS=/etc/xray/subscriptions
 TEMPLATE=/etc/xray/template.json
 CONF=/etc/xray/config.json
 CUR=/etc/xray/current-node
@@ -24,14 +25,14 @@ node_files() { for f in "$NODES" "$CUSTOM"; do [ -f "$f" ] && echo "$f"; done; }
 nodes() { cat $(node_files) | grep -v -E '^[[:space:]]*(#|$)'; }
 current() { cat "$CUR" 2>/dev/null || nodes | awk 'NR == 1 {print $1}'; }
 mode() { cat "$MODE_FILE" 2>/dev/null || echo ru; }
-sub_host() { echo "$SUB_URL" | sed -e 's|^[a-zA-Z]*://||' -e 's|[/:?#].*||'; }
+sub_hosts() { { echo "$SUB_URL"; cut -f2 "$SUBS" 2>/dev/null; } | sed -e 's|^[a-zA-Z]*://||' -e 's|[/:?#].*||'; }
 vpn_state() { cat "$VPN_FILE" 2>/dev/null || echo on; }
 
 # Provider server names (address + REALITY SNI of every node) routed direct, so a VPN
 # client on a Flint device (e.g. Happ) does not get tunnelled into the same provider twice.
-# The subscription host goes direct too: Happ on a LAN device must refresh it while the current node is down.
+# Subscription hosts go direct too: Happ on a LAN device must refresh them while the current node is down.
 provider_domains() {
-	{ nodes | awk '{print $2; print $3}'; sub_host; } | grep -v -E '^([0-9.]+)?$' | sort -u |
+	{ nodes | awk '{print $2; print $3}'; sub_hosts; } | grep -v -E '^([0-9.]+)?$' | sort -u |
 		sed 's/.*/"full:&"/' | tr '\n' ',' | sed 's/,$//; s/,/, /g'
 }
 
@@ -109,11 +110,15 @@ case "$cmd" in
 		nodes | awk '{print $1}'
 		;;
 	names)
-		# "code<TAB>name<TAB>ip|domain"; the name is the comment line right above the node.
+		# "code<TAB>name<TAB>ip|domain<TAB>group"; the name is the comment line right above the node.
 		# "ip" = subscription node with a bare IP (the panel's white list group); own nodes are always "domain".
-		awk -v own="$CUSTOM" '/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
+		# group: subscription id from the "#@" line (see flint-sub-update), "own" for own nodes.
+		first="$(head -n1 "$SUBS" 2>/dev/null | cut -f1)"
+		awk -v own="$CUSTOM" -v first="${first:--}" 'FNR == 1 { g = (FILENAME == own) ? "own" : first }
+			/^#@/ { if (FILENAME != own) g = $2; name = ""; next }
+			/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
 			/^[[:space:]]*$/ { next }
-			{ print $1 "\t" ((name != "" && name !~ /^Generated/) ? name : $1) "\t" ($2 ~ /^[0-9.]+$/ && FILENAME != own ? "ip" : "domain"); name = "" }' $(node_files)
+			{ print $1 "\t" ((name != "" && name !~ /^Generated/) ? name : $1) "\t" ($2 ~ /^[0-9.]+$/ && FILENAME != own ? "ip" : "domain") "\t" g; name = "" }' $(node_files)
 		;;
 	routing)
 		[ -n "$2" ] || { mode; exit 0; }

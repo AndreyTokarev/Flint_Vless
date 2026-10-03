@@ -18,7 +18,7 @@ STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT
 cp -R "$ROOT/kit/." "$STAGING/"
 mkdir -p "$STAGING/config"
-for f in flint.env nodes.conf nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
+for f in flint.env nodes.conf nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
 	if [ -f "$ROOT/config/$f" ]; then cp "$ROOT/config/$f" "$STAGING/config/"; fi
 done
 if [ -f "$ROOT/backup/bin/xray" ]; then

@@ -2,6 +2,7 @@ config/flint.env
 config/nodes.conf
 config/nodes-custom.conf
 config/custom-sites
+config/subscriptions
 config/adblock-lists
 config/adblock-rules
 config/adblock-exclude
