@@ -318,7 +318,7 @@ How it works:
 
 Rules take effect in a few seconds.
 
-**What DNS blocking can't do:** remove ads served from the same domain as the content (YouTube) or hide page elements — only browser extensions like uBlock Origin do that. Devices with Private DNS or DoH in the browser bypass the router's DNS, and therefore the blocking too.
+**What DNS blocking can't do:** remove ads served from the same domain as the content (YouTube, VK) or hide page elements — only browser extensions like uBlock Origin do that. Devices with Private DNS or DoH in the browser bypass the router's DNS, and therefore the blocking too.
 
 AdGuard Home uses 40–60 MB of RAM; with blocking off it is stopped.
 
