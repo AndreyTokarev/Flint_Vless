@@ -20,7 +20,7 @@
   <a href="LICENSE.en.md">License</a>
 </p>
 
-![Panel: status](docs/screenshots/status.png)
+![Panel: status](docs/screenshots/en/status.png)
 
 ## About
 
@@ -33,7 +33,7 @@ Flint VPN turns a GL.iNet router into a transparent VPN gateway. Every device on
 
 **Why a custom web panel.** The ready-made solution from GitHub I was using simply refused to start on this router. So the Xray setup, server switching and everything else are done here from scratch: a set of shell scripts and a lightweight CGI panel running on the stock `uhttpd`, with no Node.js, Python or other heavy dependencies on the router.
 
-The UI and most messages are in Russian.
+The panel is available in English and Russian: the language follows your browser, and there is an RU · EN switch in the menu.
 
 ## Features
 
@@ -53,13 +53,13 @@ The UI and most messages are in Russian.
 
 | Login | Status |
 |---|---|
-| ![Login](docs/screenshots/login.png) | ![Status](docs/screenshots/status.png) |
+| ![Login](docs/screenshots/en/login.png) | ![Status](docs/screenshots/en/status.png) |
 | **Servers** | **White lists** |
-| ![Servers](docs/screenshots/servers.png) | ![White lists](docs/screenshots/whitelist.png) |
+| ![Servers](docs/screenshots/en/servers.png) | ![White lists](docs/screenshots/en/whitelist.png) |
 | **Own servers** | **Editing a server** |
-| ![Own servers](docs/screenshots/own.png) | ![Edit](docs/screenshots/edit.png) |
+| ![Own servers](docs/screenshots/en/own.png) | ![Edit](docs/screenshots/en/edit.png) |
 | **Routing** | **Phone** |
-| ![Routing](docs/screenshots/routing.png) | ![Phone](docs/screenshots/mobile-status.png) |
+| ![Routing](docs/screenshots/en/routing.png) | ![Phone](docs/screenshots/en/mobile-status.png) |
 
 The screenshots use demo data: documentation IP ranges, made-up servers and keys.
 
@@ -223,10 +223,12 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 
 | Tab | What's there |
 |---|---|
-| **Статус** (Status) | VPN on/off button, current server, exit IP, geo filter, number of own sites and servers, last subscription check, failover state and last failure |
-| **Серверы** (Servers) | one-click server selection; "white lists" block; refresh the subscription now and the auto-update interval; failover on/off |
-| **Свои серверы** (Own servers) | servers not from the subscription: add by `vless://` link, copy a subscription server and edit the copy, enter manually; edit or delete |
-| **Маршрутизация** (Routing) | Russia geo filter on/off; own sites, IPs and subnets "always direct" or "always via VPN" |
+| **Status** | VPN on/off button, current server, exit IP, geo filter, number of own sites and servers, last subscription check, failover state and last failure |
+| **Servers** | one-click server selection; "White lists" block; refresh the subscription now and the auto-update interval; failover on/off |
+| **Own servers** | servers not from the subscription: add by `vless://` link, copy a subscription server and edit the copy, enter manually; edit or delete |
+| **Routing** | Russia geo filter on/off; own sites, IPs and subnets "always direct" or "always via VPN" |
+
+The panel speaks English and Russian. On the first visit the language follows the browser (or `UI_LANG` in `gru.env`); after that use the **RU · EN** switch under the menu or on the login page — the choice is remembered in the browser. Messages after panel actions use the same language.
 
 ## Settings `config/gru.env`
 
@@ -236,6 +238,7 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 | `UI_PIN` | panel PIN (letters and digits only) |
 | `UI_TITLE` | text of the panel logo, default `Flint VPN` (the last word is gold) |
 | `UI_TAGLINE` | tagline under the logo, default `Sail the internet`; an empty value removes it |
+| `UI_LANG` | default panel language: `ru` or `en`; empty — follow the browser. Background records (last subscription check, last failure) are written in it too |
 | `DEFAULT_NODE` | server code from `nodes.conf` enabled after installation (usually `auto`) |
 | `ROUTING` | `ru` — Russian sites and IPs direct, the rest via VPN; `global` — everything via VPN. The `geoip.dat`/`geosite.dat` databases (Loyalsoldier) are downloaded on install and updated on Sundays at 4:30; without them the router runs in `global` mode |
 | `UPSTREAM_IF` | main router interface: `sta1` (Wi‑Fi, Repeater) or `wan` (cable) |

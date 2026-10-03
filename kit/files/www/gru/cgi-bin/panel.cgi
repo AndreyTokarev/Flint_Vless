@@ -1,7 +1,5 @@
 #!/bin/sh
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
-echo "Content-Type: text/html; charset=utf-8"
-echo ""
 qs="$QUERY_STRING"
 raw() { echo "$qs" | tr '&' '\n' | sed -n "s/^$1=//p" | head -n1; }
 get() { raw "$1" | tr -cd 'A-Za-z0-9_-'; }
@@ -17,13 +15,32 @@ param() {
       printf "%s", out s }')"
 }
 esc() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e "s/'/\&#39;/g"; }
+. /etc/xray/gru.env
+
+# Language: ?lang= (remembered in a cookie), then the cookie, then UI_LANG, then the browser's first language.
+lang="$(get lang)"
+case "$lang" in
+  ru|en) L="$lang" ;;
+  *)
+    L="$(echo "$HTTP_COOKIE" | tr ';' '\n' | sed -n -E 's/^ *lang=(ru|en) *$/\1/p' | head -n1)"
+    [ -n "$L" ] || case "$UI_LANG" in ru|en) L="$UI_LANG" ;; esac
+    if [ -z "$L" ]; then
+      case "$(echo "$HTTP_ACCEPT_LANGUAGE" | cut -c1-2 | tr 'A-Z' 'a-z')" in ""|ru) L=ru ;; *) L=en ;; esac
+    fi ;;
+esac
+export GRU_LANG="$L"
+T() { if [ "$L" = en ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+
+echo "Content-Type: text/html; charset=utf-8"
+[ "$lang" = "$L" ] && echo "Set-Cookie: lang=$L; Path=/; Max-Age=31536000; SameSite=Lax"
+echo ""
+
 pass="$(get pass)"; node="$(get node)"; routing="$(get routing)"; vpn="$(get vpn)"; sub="$(get sub)"
 add="$(param add)"; to="$(get to)"; del="$(param del)"
 link="$(param link)"; edit="$(get edit)"; copy="$(get copy)"; newnode="$(get newnode)"; save="$(get save)"; ndel="$(get ndel)"
 subint="$(get subint)"; wd="$(get wd)"
 tab="$(get tab)"
 case "$tab" in status|servers|own|routing) ;; *) tab=status ;; esac
-. /etc/xray/gru.env
 TITLE="$(echo "${UI_TITLE:-Flint VPN}" | esc)"
 TAGLINE="$(echo "${UI_TAGLINE-Sail the internet}" | esc)"
 FOOTER='<footer><span>YOUR NETWORK. <b>YOUR RULES.</b></span></footer>'
@@ -34,8 +51,13 @@ logo() {
   tag=""; [ -n "$TAGLINE" ] && tag="<div class=tag>$TAGLINE</div>"
   echo "<div class=\"logo $1\"><img src=/logo.svg alt=\"\"><div><div class=word>$first$last</div>$tag</div></div>"
 }
+# Language switch; $1 is the link prefix ending in "?" or "&amp;".
+langs() {
+  if [ "$L" = en ]; then echo "<div class=lang><a href='${1}lang=ru'>RU</a> · <b>EN</b></div>"
+  else echo "<div class=lang><b>RU</b> · <a href='${1}lang=en'>EN</a></div>"; fi
+}
 cat <<HTML
-<!DOCTYPE html><html lang=ru><head>
+<!DOCTYPE html><html lang=$L><head>
 <meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>$TITLE</title>
 <link rel=icon type=image/svg+xml href=/icon.svg>
@@ -75,6 +97,10 @@ small{color:#9ca3af}
 .logo .tag{display:flex;align-items:center;gap:.5em;margin-top:.3em;font-size:.36em;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:#d1d5db;white-space:nowrap}
 .logo .tag::before,.logo .tag::after{content:"";flex:1;min-width:.8em;height:2px;background:#f59e0b;border-radius:1px}
 .logo.big{font-size:40px;justify-content:center;margin:40px 0 8px}
+.lang{font-size:14px;color:#6b7280;letter-spacing:.05em}
+.lang a{color:#93c5fd;text-decoration:none}
+.lang b{color:#e5e7eb}
+main>.lang{text-align:center;margin-top:4px}
 .login{max-width:340px;margin-left:auto;margin-right:auto;padding:28px 24px;text-align:center}
 .login{margin-top:16px}
 .lock{font-size:40px}
@@ -90,6 +116,8 @@ nav a{display:block;padding:10px 12px;margin-bottom:4px;border-radius:10px;color
 nav a:hover{background:#1f2937}
 nav a.cur{background:#1f2937;color:#34d399;font-weight:600}
 nav a.logout{color:#9ca3af;margin-top:16px}
+nav .lang{padding:6px 12px}
+nav .lang a{display:inline;padding:0;margin:0;background:none;color:#93c5fd}
 .content{flex:1;min-width:0}
 .content>.card:first-child{margin-top:0}
 .stat{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #374151}
@@ -104,17 +132,18 @@ nav{flex:none;position:static;display:grid;grid-template-columns:1fr 1fr;gap:6px
 nav .brand{grid-column:1/-1;margin:0 4px 4px}
 nav a{margin:0;padding:10px;background:#1f2937;text-align:center}
 nav a.logout{grid-column:1/-1;background:none;padding:2px;margin:0;font-size:14px}
+nav .lang{grid-column:1/-1;text-align:center;padding:0}
 .stat{flex-wrap:wrap}
 }
 </style></head><body>
 HTML
 if [ -z "$UI_PIN" ] || [ "$pass" != "$UI_PIN" ]; then
-  err=""; [ -n "$pass" ] && err="<p class='err login-err'>Неверный PIN, попробуйте ещё раз</p>"
+  err=""; [ -n "$pass" ] && err="<p class='err login-err'>$(T "Неверный PIN, попробуйте ещё раз" "Wrong PIN, please try again")</p>"
   cat <<HTML
 <main>$(logo big)<div class="card login"><div class=lock>🔒</div>
-<p class=login-hint>Введите PIN, чтобы управлять VPN</p>$err
+<p class=login-hint>$(T "Введите PIN, чтобы управлять VPN" "Enter the PIN to manage the VPN")</p>$err
 <form method=get><input type=password name=pass placeholder=PIN autocomplete=current-password autofocus required>
-<button class=on>Войти</button></form></div></main>$FOOTER</body></html>
+<button class=on>$(T "Войти" "Sign in")</button></form></div>$(langs "?")</main>$FOOTER</body></html>
 HTML
   exit 0
 fi
@@ -152,7 +181,7 @@ $(gru-custom show "${edit:-$copy}")
 EOF
   [ "$f_sid" = - ] && f_sid=""
   [ "$f_svc" = - ] && f_svc=""
-  if [ -n "$edit" ]; then form="$edit"; else form=new; f_name="$f_name (копия)"; fi
+  if [ -n "$edit" ]; then form="$edit"; else form=new; f_name="$f_name ($(T "копия" "copy"))"; fi
 elif [ "$newnode" = 1 ]; then
   form=new; f_port=443
 fi
@@ -167,13 +196,16 @@ field() { echo "<label>$1<input type=text name=$2 value='$(printf '%s' "$3" | es
 NAMES="$(gru-node names | esc)"
 CUR_NAME="$(echo "$NAMES" | awk -F "$TAB" -v c="$CUR" '$1 == c {print $2}')"
 SITES="$(gru-node site list)"
+ON="<b class=ok>$(T "включено" "on")</b>"; OFF="<b class=err>$(T "выключено" "off")</b>"
+NEVER="$(T "ещё не было" "never")"
 
 echo "<div class=layout><nav>$(logo brand)"
-for t in "status:🏠 Статус" "servers:🌍 Серверы" "own:⭐ Свои серверы" "routing:🔀 Маршрутизация"; do
+for t in "status:🏠 $(T "Статус" "Status")" "servers:🌍 $(T "Серверы" "Servers")" "own:⭐ $(T "Свои серверы" "Own servers")" \
+  "routing:🔀 $(T "Маршрутизация" "Routing")"; do
   cur=""; [ "${t%%:*}" = "$tab" ] && cur=" class=cur"
   echo "<a href='?pass=$pass&amp;tab=${t%%:*}'$cur>${t#*:}</a>"
 done
-echo "<a href='?' class=logout>Выйти</a></nav><div class=content>"
+echo "<a href='?' class=logout>$(T "Выйти" "Sign out")</a>$(langs "?pass=$pass&amp;tab=$tab&amp;")</nav><div class=content>"
 [ -n "$msg" ] && echo "<div class=card><pre class=ok>$(echo "$msg" | esc)</pre></div>"
 
 case "$tab" in
@@ -181,27 +213,27 @@ status)
   echo "<div class=card>"
   if [ "$VPN" = off ]; then
     IP="$(curl -s -m 8 https://ifconfig.me 2>/dev/null || echo n/a)"
-    echo "<b class=err>VPN выключен</b> — устройства ходят в интернет напрямую<br>IP: <b>$IP</b>"
-    btn vpn on " class=on" "Включить VPN"
+    echo "<b class=err>$(T "VPN выключен" "VPN is off")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>IP: <b>$IP</b>"
+    btn vpn on " class=on" "$(T "Включить VPN" "Turn VPN on")"
   else
     IP="$(curl -s -m 8 -x http://127.0.0.1:1087 https://ifconfig.me 2>/dev/null || echo n/a)"
-    echo "VPN: <b class=ok>включён</b><br>Сервер: <b class=ok>${CUR_NAME:-$CUR}</b><br>IP: <b>$IP</b>"
-    btn vpn off " class=off" "Выключить VPN"
+    echo "VPN: <b class=ok>$(T "включён" "on")</b><br>$(T "Сервер" "Server"): <b class=ok>${CUR_NAME:-$CUR}</b><br>IP: <b>$IP</b>"
+    btn vpn off " class=off" "$(T "Выключить VPN" "Turn VPN off")"
   fi
   echo "</div>"
-  [ "$MODE" = ru ] && geo="<b class=ok>включён</b>" || geo="<b class=err>выключен</b>"
+  [ "$MODE" = ru ] && geo="<b class=ok>$(T "включён" "on")</b>" || geo="<b class=err>$(T "выключен" "off")</b>"
   total="$(echo "$NAMES" | grep -c .)"; own="$(gru-custom list | grep -c .)"
   ndirect="$(echo "$SITES" | grep -c '^direct')"; nproxy="$(echo "$SITES" | grep -c '^proxy')"
   CHECKED="$(cat /etc/xray/sub-checked 2>/dev/null | esc)"
   WLAST="$(cat /etc/xray/watchdog-last 2>/dev/null | esc)"
-  [ "$(gru-watchdog state)" = on ] && wds="<b class=ok>включено</b>" || wds="<b class=err>выключено</b>"
+  [ "$(gru-watchdog state)" = on ] && wds="$ON" || wds="$OFF"
   echo "<div class=card>"
-  echo "<div class=stat><span>Гео-фильтр РФ</span><span>$geo</span></div>"
-  echo "<div class=stat><span>Свои сайты</span><a href='?pass=$pass&amp;tab=routing'>$ndirect напрямую, $nproxy через VPN</a></div>"
-  echo "<div class=stat><span>Серверов</span><a href='?pass=$pass&amp;tab=servers'>$total, из них своих $own</a></div>"
-  echo "<div class=stat><span>Проверка подписки</span><span>${CHECKED:-ещё не было}</span></div>"
-  echo "<div class=stat><span>Автопереключение при сбое</span><a href='?pass=$pass&amp;tab=servers'>$wds</a></div>"
-  [ -n "$WLAST" ] && echo "<div class=stat><span>Последний сбой</span><span>$WLAST</span></div>"
+  echo "<div class=stat><span>$(T "Гео-фильтр РФ" "Russia geo filter")</span><span>$geo</span></div>"
+  echo "<div class=stat><span>$(T "Свои сайты" "Own sites")</span><a href='?pass=$pass&amp;tab=routing'>$(T "$ndirect напрямую, $nproxy через VPN" "$ndirect direct, $nproxy via VPN")</a></div>"
+  echo "<div class=stat><span>$(T "Серверов" "Servers")</span><a href='?pass=$pass&amp;tab=servers'>$(T "$total, из них своих $own" "$total, $own of them own")</a></div>"
+  echo "<div class=stat><span>$(T "Проверка подписки" "Subscription check")</span><span>${CHECKED:-$NEVER}</span></div>"
+  echo "<div class=stat><span>$(T "Автопереключение при сбое" "Failover")</span><a href='?pass=$pass&amp;tab=servers'>$wds</a></div>"
+  [ -n "$WLAST" ] && echo "<div class=stat><span>$(T "Последний сбой" "Last failure")</span><span>$WLAST</span></div>"
   echo "</div>"
   ;;
 servers)
@@ -212,91 +244,96 @@ servers)
       echo "<form method=get>$(hidden)<input type=hidden name=node value='$code'><button class='$on'>$name</button></form>"
     done
   }
-  echo "<div class=card><h2>Серверы</h2><div class=grid>$(grid domain)</div></div>"
+  echo "<div class=card><h2>$(T "Серверы" "Servers")</h2><div class=grid>$(grid domain)</div></div>"
   WL="$(grid ip)"
   if [ -n "$WL" ]; then
     open=""; echo "$NAMES" | awk -F "$TAB" -v c="$CUR" '$1 == c && $3 == "ip" { f = 1 } END { exit !f }' && open=" open"
-    echo "<details class=card$open><summary><b>Белые списки</b> <small>— серверы по IP-адресу, для сетей, где открыт только белый список</small></summary>"
+    echo "<details class=card$open><summary><b>$(T "Белые списки" "White lists")</b> <small>— $(T "серверы по IP-адресу, для сетей, где открыт только белый список" "servers by IP address, for networks where only a white list is open")</small></summary>"
     echo "<div class=grid style='margin-top:10px'>$WL</div></details>"
   fi
-  echo "<div class=card><h2>Подписка</h2>"
-  btn sub 1 "" "Обновить список серверов сейчас"
+  echo "<div class=card><h2>$(T "Подписка" "Subscription")</h2>"
+  btn sub 1 "" "$(T "Обновить список серверов сейчас" "Refresh the server list now")"
   CHECKED="$(cat /etc/xray/sub-checked 2>/dev/null | esc)"
-  echo "<small>Последняя проверка: ${CHECKED:-ещё не было}</small>"
+  echo "<small>$(T "Последняя проверка" "Last check"): ${CHECKED:-$NEVER}</small>"
   SI="$(gru-sub-update interval)"
   echo "<form method=get class=row>$(hidden)<select name=subint>"
-  for v in "off:Автообновление выключено" "30m:Обновлять каждые 30 минут" "1h:Обновлять каждый час" "3h:Обновлять каждые 3 часа" \
-    "6h:Обновлять каждые 6 часов" "12h:Обновлять каждые 12 часов" "24h:Обновлять раз в сутки"; do
+  for v in "off:$(T "Автообновление выключено" "Auto-update off")" "30m:$(T "Обновлять каждые 30 минут" "Update every 30 minutes")" \
+    "1h:$(T "Обновлять каждый час" "Update every hour")" "3h:$(T "Обновлять каждые 3 часа" "Update every 3 hours")" \
+    "6h:$(T "Обновлять каждые 6 часов" "Update every 6 hours")" "12h:$(T "Обновлять каждые 12 часов" "Update every 12 hours")" \
+    "24h:$(T "Обновлять раз в сутки" "Update once a day")"; do
     sel=""; [ "${v%%:*}" = "$SI" ] && sel=" selected"
     echo "<option value='${v%%:*}'$sel>${v#*:}</option>"
   done
-  echo "</select><button>Сохранить</button></form></div>"
-  echo "<div class=card><h2>Автопереключение при сбое</h2>"
+  echo "</select><button>$(T "Сохранить" "Save")</button></form></div>"
+  echo "<div class=card><h2>$(T "Автопереключение при сбое" "Failover")</h2>"
   if [ "$(gru-watchdog state)" = on ]; then
-    echo "<b class=ok>включено</b> — каждые 2 минуты роутер проверяет VPN. Если сервер не отвечает, а интернет есть, он обновляет подписку и при необходимости переходит на первый рабочий сервер."
-    btn wd off "" "Выключить автопереключение"
+    echo "$ON — $(T "каждые 2 минуты роутер проверяет VPN. Если сервер не отвечает, а интернет есть, он обновляет подписку и при необходимости переходит на первый рабочий сервер." \
+      "every 2 minutes the router checks the VPN. If the server does not respond while the internet works, it refreshes the subscription and, if needed, switches to the first working server.")"
+    btn wd off "" "$(T "Выключить автопереключение" "Turn failover off")"
   else
-    echo "<b class=err>выключено</b> — при сбое сервера интернет пропадёт, пока не выберете другой сервер вручную."
-    btn wd on " class=on" "Включить автопереключение"
+    echo "$OFF — $(T "при сбое сервера интернет пропадёт, пока не выберете другой сервер вручную." "if the server fails, the internet stays down until you pick another server manually.")"
+    btn wd on " class=on" "$(T "Включить автопереключение" "Turn failover on")"
   fi
   WLAST="$(cat /etc/xray/watchdog-last 2>/dev/null | esc)"
-  echo "<small>Последнее срабатывание: ${WLAST:-не было}</small></div>"
+  echo "<small>$(T "Последнее срабатывание" "Last triggered"): ${WLAST:-$NEVER}</small></div>"
   ;;
 own)
   if [ -n "$form" ]; then
-    [ "$form" = new ] && title="Новый сервер" || title="Изменить сервер"
-    echo "<div class=card><h2>$title</h2><small>Поддерживаются VLESS + REALITY поверх TCP (xtls-rprx-vision) или gRPC.</small>"
+    [ "$form" = new ] && title="$(T "Новый сервер" "New server")" || title="$(T "Изменить сервер" "Edit server")"
+    echo "<div class=card><h2>$title</h2><small>$(T "Поддерживаются VLESS + REALITY поверх TCP (xtls-rprx-vision) или gRPC." "Supported: VLESS + REALITY over TCP (xtls-rprx-vision) or gRPC.")</small>"
     echo "<form method=get>$(hidden)<input type=hidden name=save value='$form'>"
-    field "Название" n "$f_name" " maxlength=60"
-    field "Адрес сервера" a "$f_addr" " required"
-    field "Порт" p "$f_port" " required inputmode=numeric"
+    field "$(T "Название" "Name")" n "$f_name" " maxlength=60"
+    field "$(T "Адрес сервера" "Server address")" a "$f_addr" " required"
+    field "$(T "Порт" "Port")" p "$f_port" " required inputmode=numeric"
     field "UUID" u "$f_uuid" " required"
     field "SNI (serverName)" s "$f_sni" " required"
     field "Public key (pbk)" k "$f_pbk" " required"
     field "Short ID (sid)" i "$f_sid" ""
     [ "$f_net" = grpc ] && g_sel=" selected" || g_sel=""
-    echo "<label>Транспорт<select name=t style='width:100%;margin-top:4px'><option value=tcp>TCP (xtls-rprx-vision)</option><option value=grpc$g_sel>gRPC</option></select></label>"
-    field "gRPC serviceName (только для gRPC)" g "$f_svc" ""
-    echo "<button class=on style='margin-top:12px'>Сохранить</button></form>"
-    echo "<form method=get class=act>$(hidden)<button>Отмена</button></form></div>"
+    echo "<label>$(T "Транспорт" "Transport")<select name=t style='width:100%;margin-top:4px'><option value=tcp>TCP (xtls-rprx-vision)</option><option value=grpc$g_sel>gRPC</option></select></label>"
+    field "gRPC serviceName ($(T "только для gRPC" "gRPC only"))" g "$f_svc" ""
+    echo "<button class=on style='margin-top:12px'>$(T "Сохранить" "Save")</button></form>"
+    echo "<form method=get class=act>$(hidden)<button>$(T "Отмена" "Cancel")</button></form></div>"
   fi
-  echo "<div class=card><h2>Свои серверы</h2><small>Не из подписки: автообновление их не трогает. Выбираются на вкладке «Серверы».</small>"
+  echo "<div class=card><h2>$(T "Свои серверы" "Own servers")</h2><small>$(T "Не из подписки: автообновление их не трогает. Выбираются на вкладке «Серверы»." "Not from the subscription: auto-update leaves them alone. Pick them on the Servers tab.")</small>"
   OWN="$(gru-custom list | esc)"
-  [ -n "$OWN" ] || echo "<p><small>пока нет</small></p>"
+  [ -n "$OWN" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
+  DEL="$(T "Удалить" "Delete")"; EDIT="$(T "Изменить" "Edit")"
   echo "$OWN" | while IFS="$TAB" read -r code name; do
     [ -n "$code" ] || continue
     echo "<div class=item><span>$name</span>"
-    echo "<form method=get>$(hidden)<input type=hidden name=edit value='$code'><button>Изменить</button></form>"
-    echo "<form method=get>$(hidden)<input type=hidden name=ndel value='$code'><button title='Удалить'>✕</button></form></div>"
+    echo "<form method=get>$(hidden)<input type=hidden name=edit value='$code'><button>$EDIT</button></form>"
+    echo "<form method=get>$(hidden)<input type=hidden name=ndel value='$code'><button title='$DEL'>✕</button></form></div>"
   done
-  echo "</div><div class=card><h2>Добавить</h2>"
-  echo "<form method=get class=row>$(hidden)<input type=text name=link placeholder='vless://...' required><button>Добавить по ссылке</button></form>"
+  echo "</div><div class=card><h2>$(T "Добавить" "Add")</h2>"
+  echo "<form method=get class=row>$(hidden)<input type=text name=link placeholder='vless://...' required><button>$(T "Добавить по ссылке" "Add by link")</button></form>"
   echo "<form method=get class=row>$(hidden)<select name=copy>"
   echo "$NAMES" | while IFS="$TAB" read -r code name kind; do [ -n "$code" ] && echo "<option value='$code'>$name</option>"; done
-  echo "</select><button>Скопировать и изменить</button></form>"
-  btn newnode 1 "" "Ввести вручную"
+  echo "</select><button>$(T "Скопировать и изменить" "Copy and edit")</button></form>"
+  btn newnode 1 "" "$(T "Ввести вручную" "Enter manually")"
   echo "</div>"
   ;;
 routing)
-  echo "<div class=card><h2>Гео-фильтр РФ</h2>"
+  echo "<div class=card><h2>$(T "Гео-фильтр РФ" "Russia geo filter")</h2>"
   if [ "$MODE" = ru ]; then
-    echo "<b class=ok>включён</b> — российские сайты и IP идут напрямую, остальное через VPN"
-    btn routing global "" "Выключить гео-фильтр (всё через VPN)"
+    echo "<b class=ok>$(T "включён" "on")</b> — $(T "российские сайты и IP идут напрямую, остальное через VPN" "Russian sites and IPs go direct, everything else via VPN")"
+    btn routing global "" "$(T "Выключить гео-фильтр (всё через VPN)" "Turn the geo filter off (everything via VPN)")"
   else
-    echo "<b class=err>выключен</b> — весь трафик идёт через VPN"
-    btn routing ru " class=on" "Включить гео-фильтр"
+    echo "<b class=err>$(T "выключен" "off")</b> — $(T "весь трафик идёт через VPN" "all traffic goes via VPN")"
+    btn routing ru " class=on" "$(T "Включить гео-фильтр" "Turn the geo filter on")"
   fi
   echo "</div>"
-  echo "<div class=card><h2>Свои сайты</h2><small>Важнее гео-фильтра. Домен действует вместе с поддоменами; можно вставить ссылку, IP или подсеть.</small>"
+  echo "<div class=card><h2>$(T "Свои сайты" "Own sites")</h2><small>$(T "Важнее гео-фильтра. Домен действует вместе с поддоменами; можно вставить ссылку, IP или подсеть." "Override the geo filter. A domain covers its subdomains; you can paste a link, an IP or a subnet.")</small>"
   echo "<form method=get class=row>$(hidden)<input type=text name=add placeholder='example.com' required>"
-  echo "<select name=to><option value=direct>Напрямую</option><option value=proxy>Через VPN</option></select><button>Добавить</button></form>"
+  echo "<select name=to><option value=direct>$(T "Напрямую" "Direct")</option><option value=proxy>$(T "Через VPN" "Via VPN")</option></select><button>$(T "Добавить" "Add")</button></form>"
+  DEL="$(T "Удалить" "Delete")"
   for list in direct proxy; do
-    [ "$list" = direct ] && title="Всегда напрямую (мимо VPN)" || title="Всегда через VPN"
+    [ "$list" = direct ] && title="$(T "Всегда напрямую (мимо VPN)" "Always direct (bypass VPN)")" || title="$(T "Всегда через VPN" "Always via VPN")"
     items="$(echo "$SITES" | awk -F "$TAB" -v l="$list" '$1 == l {print $2}')"
     echo "<p><b>$title</b></p>"
-    [ -n "$items" ] || echo "<small>пусто</small>"
+    [ -n "$items" ] || echo "<small>$(T "пусто" "empty")</small>"
     for s in $items; do
-      echo "<form method=get class=item>$(hidden)<input type=hidden name=del value='$s'><span>$s</span><button title='Удалить'>✕</button></form>"
+      echo "<form method=get class=item>$(hidden)<input type=hidden name=del value='$s'><span>$s</span><button title='$DEL'>✕</button></form>"
     done
   done
   echo "</div>"
