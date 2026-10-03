@@ -59,11 +59,14 @@ render() {
 	uuid="${6:-$VLESS_UUID}"
 	port="${7:-443}"
 	sid="$5"; [ "$sid" = - ] && sid=""
+	net="${8:-tcp}"; svc="${9:--}"; [ "$svc" = - ] && svc=""
+	if [ "$net" = tcp ]; then flow=xtls-rprx-vision; else flow=""; fi
 	cdi="$(sites_json direct ip)"; cpi="$(sites_json proxy ip)"
 	if [ "$RENDER_MODE" = ru ] || [ -n "$cdi$cpi" ]; then strategy=IPIfNonMatch; else strategy=AsIs; fi
 	umask 077
 	sed -e "s|__UUID__|$uuid|" -e "s|__ADDR__|$2|" -e "s|__PORT__|$port|" -e "s|__SNI__|$3|" \
 		-e "s|__PBK__|$4|" -e "s|__SID__|$sid|" -e "s|__DOMAIN_STRATEGY__|$strategy|" \
+		-e "s|__NET__|$net|" -e "s|__FLOW__|$flow|" -e "s|__GRPC_SERVICE__|$svc|" \
 		-e "s|__PROVIDER_DOMAINS__|$(provider_domains)|" \
 		-e "s|__CUSTOM_PROXY_DOMAIN__|$(sites_json proxy domain)|" -e "s|__CUSTOM_PROXY_IP__|$cpi|" \
 		-e "s|__CUSTOM_DIRECT_DOMAIN__|$(sites_json direct domain)|" -e "s|__CUSTOM_DIRECT_IP__|$cdi|" \
@@ -106,10 +109,10 @@ case "$cmd" in
 		nodes | awk '{print $1}'
 		;;
 	names)
-		# "code<TAB>name"; the name is the comment line right above the node (see tools/sub2nodes.py).
+		# "code<TAB>name<TAB>ip|domain"; the name is the comment line right above the node.
 		awk '/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
 			/^[[:space:]]*$/ { next }
-			{ print $1 "\t" ((name != "" && name !~ /^Generated/) ? name : $1); name = "" }' $(node_files)
+			{ print $1 "\t" ((name != "" && name !~ /^Generated/) ? name : $1) "\t" ($2 ~ /^[0-9.]+$/ ? "ip" : "domain"); name = "" }' $(node_files)
 		;;
 	routing)
 		[ -n "$2" ] || { mode; exit 0; }

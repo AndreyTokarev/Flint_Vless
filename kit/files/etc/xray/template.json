@@ -27,12 +27,13 @@
           "address": "__ADDR__", "port": __PORT__,
           "users": [{
             "id": "__UUID__",
-            "encryption": "none", "flow": "xtls-rprx-vision"
+            "encryption": "none", "flow": "__FLOW__"
           }]
         }]
       },
       "streamSettings": {
-        "network": "tcp", "security": "reality",
+        "network": "__NET__", "security": "reality",
+        "grpcSettings": { "serviceName": "__GRPC_SERVICE__", "multiMode": false },
         "realitySettings": {
           "serverName": "__SNI__",
           "fingerprint": "firefox",

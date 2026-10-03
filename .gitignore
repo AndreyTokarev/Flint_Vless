@@ -3,3 +3,4 @@ config/nodes.conf
 config/nodes-custom.conf
 config/custom-sites
 backup/
+__pycache__/

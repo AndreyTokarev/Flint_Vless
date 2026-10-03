@@ -1,6 +1,8 @@
 # vless:// share links (one per line, run under LC_ALL=C) -> TSV:
-#   status host port uuid sni pbk sid flag name
-# status: "ok" for TCP + REALITY (+ xtls-rprx-vision), otherwise the reason it is unsupported.
+#   status host port uuid sni pbk sid flag net service name
+# status: "ok" for REALITY over TCP (+ xtls-rprx-vision) or gRPC, "info" for provider notices
+# named with a leading ❗, otherwise the reason it is unsupported.
+# net: tcp | grpc; service: gRPC serviceName.
 # flag: two-letter country code from the flag emoji at the start of the name.
 # Empty fields are "-" so a shell "read" with IFS=TAB keeps the columns; name stays last and
 # has %XX turned into \0ooo escapes for the shell printf %b.
@@ -48,11 +50,16 @@ function d(s) { return s == "" ? "-" : s }
 	c = index(hp, ":"); host = c ? substr(hp, 1, c - 1) : hp; port = c ? substr(hp, c + 1) : 443
 	type = param(q, "type"); sec = param(q, "security"); fl = param(q, "flow")
 	sni = param(q, "sni"); pbk = param(q, "pbk"); sid = param(q, "sid")
+	svc = param(q, "serviceName"); mode = param(q, "mode")
+	if (type == "") type = "tcp"
 	st = "ok"
-	if (uuid == "" || host == "") st = "no address or id"
-	else if (type != "" && type != "tcp") st = "transport " type
+	if (index(toupper(frag), "%E2%9D%97") == 1) st = "info"
+	else if (uuid == "" || host == "") st = "no address or id"
+	else if (type != "tcp" && type != "grpc") st = "transport " type
 	else if (sec != "reality") st = "security " d(sec)
 	else if (sni == "" || pbk == "") st = "no sni or pbk"
-	else if (fl != "" && fl != "xtls-rprx-vision") st = "flow " fl
-	print st "\t" d(host) "\t" d(port) "\t" d(uuid) "\t" d(sni) "\t" d(pbk) "\t" d(sid) "\t" d(flag(frag)) "\t" unpct(frag)
+	else if (type == "tcp" && fl != "" && fl != "xtls-rprx-vision") st = "flow " fl
+	else if (type == "grpc" && (fl != "" || (mode != "" && mode != "gun"))) st = "grpc " d(mode) " " fl
+	else if (svc ~ /[^A-Za-z0-9._\/-]/) st = "bad serviceName"
+	print st "\t" d(host) "\t" d(port) "\t" d(uuid) "\t" d(sni) "\t" d(pbk) "\t" d(sid) "\t" d(flag(frag)) "\t" type "\t" d(svc) "\t" unpct(frag)
 }

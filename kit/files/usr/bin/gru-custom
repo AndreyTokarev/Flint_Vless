@@ -2,9 +2,9 @@
 # Own VLESS REALITY nodes, kept in nodes-custom.conf apart from the subscription list
 # (gru-sub-update never touches them). Same format as nodes.conf.
 # Usage: gru-custom list                  code<TAB>name of own nodes
-#        gru-custom show <code>           code name address port uuid sni pbk sid (TAB-separated, any node)
+#        gru-custom show <code>           code name address port uuid sni pbk sid net service (TAB-separated, any node)
 #        gru-custom link <vless://...>    add a node from a share link
-#        gru-custom set <code|new> <name> <address> <port> <uuid> <sni> <pbk> [sid]
+#        gru-custom set <code|new> <name> <address> <port> <uuid> <sni> <pbk> [sid] [tcp|grpc] [service]
 #        gru-custom del <code>
 set -e
 ENV=/etc/xray/gru.env
@@ -14,13 +14,14 @@ CUR=/etc/xray/current-node
 PARSER=/usr/share/gru/vless.awk
 TAB="$(printf '\t')"
 
-# "code name address port uuid sni pbk sid" (TAB-separated) for every node in the given files.
+# "code name address port uuid sni pbk sid net service" (TAB-separated) for every node in the given files.
 entries() {
 	for f in "$@"; do [ -f "$f" ] && cat "$f"; done | awk -v u="$VLESS_UUID" '
 		/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
 		/^[[:space:]]*$/ { next }
 		{ n = (name != "" && name !~ /^Generated/) ? name : $1
-		  print $1 "\t" n "\t" $2 "\t" ($7 ? $7 : 443) "\t" ($6 ? $6 : u) "\t" $3 "\t" $4 "\t" $5; name = "" }'
+		  print $1 "\t" n "\t" $2 "\t" ($7 ? $7 : 443) "\t" ($6 ? $6 : u) "\t" $3 "\t" $4 "\t" $5 "\t" ($8 ? $8 : "tcp") "\t" ($9 ? $9 : "-")
+		  name = "" }'
 }
 # nodes-custom.conf without node $1 (and its name line).
 without() {
@@ -39,7 +40,7 @@ check() {
 reapply() { if [ "$(cat "$CUR" 2>/dev/null)" = "$1" ]; then gru-node apply; fi; }
 
 set_node() {
-	code="$1"; host="$3"; port="$4"; uuid="$5"; sni="$6"; pbk="$7"; sid="${8:--}"
+	code="$1"; host="$3"; port="$4"; uuid="$5"; sni="$6"; pbk="$7"; sid="${8:--}"; net="${9:-tcp}"; svc="${10:--}"
 	name="$(printf '%s' "$2" | tr -d '\000-\037')"
 	check address "$host" '^[A-Za-z0-9.-]+$'
 	check port "$port" '^[0-9]{1,5}$'
@@ -47,6 +48,8 @@ set_node() {
 	check SNI "$sni" '^[A-Za-z0-9.-]+$'
 	check "public key (pbk)" "$pbk" '^[A-Za-z0-9_-]{43}$'
 	check "short id" "$sid" '^(-|[0-9a-fA-F]{1,16})$'
+	check transport "$net" '^(tcp|grpc)$'
+	check "gRPC service" "$svc" '^(-|[A-Za-z0-9._/-]{1,64})$'
 	if [ "$code" = new ]; then
 		i=1; while entries "$NODES" "$CUSTOM" | cut -f1 | grep -qx "my$i"; do i=$((i + 1)); done
 		code="my$i"
@@ -54,7 +57,7 @@ set_node() {
 		is_custom "$code" || { echo "Not an own node: $code (copy it first)"; exit 1; }
 	fi
 	umask 077
-	{ without "$code"; printf '# %s\n%s  %s  %s  %s  %s  %s  %s\n' "${name:-$host}" "$code" "$host" "$sni" "$pbk" "$sid" "$uuid" "$port"; } > "$CUSTOM.new"
+	{ without "$code"; printf '# %s\n%s  %s  %s  %s  %s  %s  %s  %s  %s\n' "${name:-$host}" "$code" "$host" "$sni" "$pbk" "$sid" "$uuid" "$port" "$net" "$svc"; } > "$CUSTOM.new"
 	mv "$CUSTOM.new" "$CUSTOM"
 	echo "Saved: $code (${name:-$host})"
 	reapply "$code"
@@ -71,11 +74,11 @@ case "$1" in
 	link)
 		r="$(printf '%s\n' "$2" | tr -d '\r' | LC_ALL=C awk -f "$PARSER")"
 		[ -n "$r" ] || { echo "Not a vless:// link"; exit 1; }
-		IFS="$TAB" read -r st host port uuid sni pbk sid fl name <<EOF
+		IFS="$TAB" read -r st host port uuid sni pbk sid fl net svc name <<EOF
 $r
 EOF
-		[ "$st" = ok ] || { echo "Unsupported link ($st): only TCP + REALITY (+ xtls-rprx-vision)"; exit 1; }
-		set_node new "$(printf '%b' "$name")" "$host" "$port" "$uuid" "$sni" "$pbk" "$sid"
+		[ "$st" = ok ] || { echo "Unsupported link ($st): only REALITY over TCP (xtls-rprx-vision) or gRPC"; exit 1; }
+		set_node new "$(printf '%b' "$name")" "$host" "$port" "$uuid" "$sni" "$pbk" "$sid" "$net" "$svc"
 		;;
 	set)
 		shift; set_node "$@"
