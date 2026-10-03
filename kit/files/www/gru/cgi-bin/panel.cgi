@@ -49,10 +49,25 @@ input,select{padding:10px;border-radius:8px;border:1px solid #374151;background:
 pre{white-space:pre-wrap;margin:0}
 small{color:#9ca3af}
 .ok{color:#34d399}.err{color:#f87171}
+.login{max-width:340px;margin-left:auto;margin-right:auto;padding:28px 24px;text-align:center}
+main:has(.login) h1{text-align:center;margin-top:40px}
+.login{margin-top:16px}
+.lock{font-size:40px}
+.login-hint{color:#9ca3af;margin:8px 0 18px}
+.login-err{margin:-6px 0 14px}
+.login input{width:100%;box-sizing:border-box;padding:14px;font-size:20px;text-align:center;letter-spacing:4px;margin-bottom:12px}
+.login input::placeholder{letter-spacing:normal}
+.login input:focus{outline:none;border-color:#34d399}
 </style></head><body><main><h1>$TITLE</h1>
 HTML
 if [ -z "$UI_PIN" ] || [ "$pass" != "$UI_PIN" ]; then
-  echo "<div class=card><form method=get>PIN: <input type=password name=pass> <button>Войти</button></form></div></main></body></html>"
+  err=""; [ -n "$pass" ] && err="<p class='err login-err'>Неверный PIN, попробуйте ещё раз</p>"
+  cat <<HTML
+<div class="card login"><div class=lock>🔒</div>
+<p class=login-hint>Введите PIN, чтобы управлять VPN</p>$err
+<form method=get><input type=password name=pass placeholder=PIN autocomplete=current-password autofocus required>
+<button class=on>Войти</button></form></div></main></body></html>
+HTML
   exit 0
 fi
 
