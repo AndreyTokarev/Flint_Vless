@@ -1,5 +1,6 @@
 config/flint.env
 config/nodes.conf
+config/nodes.d/
 config/nodes-custom.conf
 config/custom-sites
 config/subscriptions
