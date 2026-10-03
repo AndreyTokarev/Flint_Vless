@@ -32,7 +32,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 tar -xzf "$ARCHIVE" -C "$TMP" etc/xray 2>/dev/null || true
 FOUND=""
-for f in gru.env nodes.conf nodes-custom.conf custom-sites; do
+for f in gru.env nodes.conf nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
 	if [ -f "$TMP/etc/xray/$f" ]; then FOUND="$FOUND $f"; fi
 done
 
@@ -47,7 +47,7 @@ fi
 if [ -n "$FOUND" ]; then
 	KEEP="$ROOT/backup/config-before-restore-$(date +%Y-%m-%d_%H%M%S)"
 	mkdir -p "$KEEP"
-	for f in gru.env nodes.conf nodes-custom.conf custom-sites; do
+	for f in gru.env nodes.conf nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
 		if [ -f "$ROOT/config/$f" ]; then cp "$ROOT/config/$f" "$KEEP/"; fi
 	done
 	echo "Current config/ saved to $KEEP"

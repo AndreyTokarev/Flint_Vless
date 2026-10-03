@@ -39,8 +39,20 @@ pass="$(get pass)"; node="$(get node)"; routing="$(get routing)"; vpn="$(get vpn
 add="$(param add)"; to="$(get to)"; del="$(param del)"
 link="$(param link)"; edit="$(get edit)"; copy="$(get copy)"; newnode="$(get newnode)"; save="$(get save)"; ndel="$(get ndel)"
 subint="$(get subint)"; wd="$(get wd)"
+adblock="$(get adblock)"; ablist="$(param ablist)"; abname="$(param abname)"; abpreset="$(get abpreset)"; abldel="$(param abldel)"
+abrule="$(param abrule)"; abto="$(get abto)"; abrdel="$(param abrdel)"; abint="$(get abint)"; abref="$(get abref)"
+abxadd="$(param abxadd)"; abxname="$(param abxname)"; abxdel="$(param abxdel)"
 tab="$(get tab)"
-case "$tab" in status|servers|own|routing) ;; *) tab=status ;; esac
+case "$tab" in status|servers|own|routing|adblock) ;; *) tab=status ;; esac
+# Ready-made lists from AdGuard's registry of DNS blocklists: id:name.
+PRESET_URL=https://adguardteam.github.io/HostlistsRegistry/assets/filter_
+PRESETS="1:AdGuard DNS filter
+59:AdGuard DNS Popup Hosts filter
+48:HaGeZi's Pro Blocklist
+5:OISD Blocklist Small
+33:Steven Black's List
+18:Phishing Army
+11:Malicious URL Blocklist (URLHaus)"
 TITLE="$(echo "${UI_TITLE:-Flint VPN}" | esc)"
 TAGLINE="$(echo "${UI_TAGLINE-Sail the internet}" | esc)"
 FOOTER='<footer><span>YOUR NETWORK. <b>YOUR RULES.</b></span></footer>'
@@ -161,6 +173,27 @@ elif [ -n "$subint" ]; then
   msg="$(gru-sub-update interval "$subint" 2>&1)"
 elif [ "$wd" = on ] || [ "$wd" = off ]; then
   msg="$(gru-watchdog "$wd" 2>&1)"
+elif [ "$adblock" = on ] || [ "$adblock" = off ]; then
+  msg="$(gru-adblock "$adblock" 2>&1)"
+elif [ -n "$abpreset" ]; then
+  pname="$(echo "$PRESETS" | awk -F : -v i="$abpreset" '$1 == i { print $2 }')"
+  [ -n "$pname" ] && msg="$(gru-adblock list add "$PRESET_URL$abpreset.txt" "$pname" 2>&1)"
+elif [ -n "$ablist" ]; then
+  msg="$(gru-adblock list add "$ablist" "$abname" 2>&1)"
+elif [ -n "$abldel" ]; then
+  msg="$(gru-adblock list del "$abldel" 2>&1)"
+elif [ -n "$abrule" ] && { [ "$abto" = block ] || [ "$abto" = allow ]; }; then
+  msg="$(gru-adblock rule add "$abto" "$abrule" 2>&1)"
+elif [ -n "$abrdel" ]; then
+  msg="$(gru-adblock rule del "$abrdel" 2>&1)"
+elif [ -n "$abint" ]; then
+  msg="$(gru-adblock interval "$abint" 2>&1)"
+elif [ "$abref" = 1 ]; then
+  msg="$(gru-adblock refresh 2>&1)"
+elif [ -n "$abxadd" ]; then
+  msg="$(gru-adblock exclude add "$abxadd" "$abxname" 2>&1)"
+elif [ -n "$abxdel" ]; then
+  msg="$(gru-adblock exclude del "$abxdel" 2>&1)"
 elif [ -n "$add" ] && { [ "$to" = direct ] || [ "$to" = proxy ]; }; then
   msg="$(gru-node site add "$to" "$add" 2>&1)"
 elif [ -n "$del" ]; then
@@ -201,7 +234,7 @@ NEVER="$(T "ещё не было" "never")"
 
 echo "<div class=layout><nav>$(logo brand)"
 for t in "status:🏠 $(T "Статус" "Status")" "servers:🌍 $(T "Серверы" "Servers")" "own:⭐ $(T "Свои серверы" "Own servers")" \
-  "routing:🔀 $(T "Маршрутизация" "Routing")"; do
+  "routing:🔀 $(T "Маршрутизация" "Routing")" "adblock:🛡️ $(T "Реклама" "Ad blocking")"; do
   cur=""; [ "${t%%:*}" = "$tab" ] && cur=" class=cur"
   echo "<a href='?pass=$pass&amp;tab=${t%%:*}'$cur>${t#*:}</a>"
 done
@@ -233,6 +266,8 @@ status)
   echo "<div class=stat><span>$(T "Серверов" "Servers")</span><a href='?pass=$pass&amp;tab=servers'>$(T "$total, из них своих $own" "$total, $own of them own")</a></div>"
   echo "<div class=stat><span>$(T "Проверка подписки" "Subscription check")</span><span>${CHECKED:-$NEVER}</span></div>"
   echo "<div class=stat><span>$(T "Автопереключение при сбое" "Failover")</span><a href='?pass=$pass&amp;tab=servers'>$wds</a></div>"
+  [ "$(gru-adblock state)" = on ] && abs="$ON" || abs="$OFF"
+  echo "<div class=stat><span>$(T "Блокировка рекламы" "Ad blocking")</span><a href='?pass=$pass&amp;tab=adblock'>$abs</a></div>"
   [ -n "$WLAST" ] && echo "<div class=stat><span>$(T "Последний сбой" "Last failure")</span><span>$WLAST</span></div>"
   echo "</div>"
   ;;
@@ -335,6 +370,80 @@ routing)
     for s in $items; do
       echo "<form method=get class=item>$(hidden)<input type=hidden name=del value='$s'><span>$s</span><button title='$DEL'>✕</button></form>"
     done
+  done
+  echo "</div>"
+  ;;
+adblock)
+  echo "<div class=card><h2>$(T "Блокировка рекламы" "Ad blocking")</h2>"
+  if [ "$(gru-adblock state)" = on ]; then
+    echo "$ON — $(T "реклама, трекеры и вредоносные сайты блокируются для всех устройств сети на уровне DNS." \
+      "ads, trackers and malicious sites are blocked for every device on the network at the DNS level.")"
+    set -- $(gru-adblock stats 2>/dev/null)
+    if [ -n "$1" ]; then
+      pct="$(awk -v q="$1" -v b="$2" 'BEGIN { printf "%.1f", q ? b * 100 / q : 0 }')"
+      echo "<br><small>$(T "За сутки: запросов $1, заблокировано $2 ($pct%)" "Last 24 hours: $1 queries, $2 blocked ($pct%)")</small>"
+    fi
+    btn adblock off "" "$(T "Выключить блокировку" "Turn ad blocking off")"
+  else
+    echo "$OFF — $(T "устройства видят рекламу как обычно." "devices see ads as usual.")"
+    btn adblock on " class=on" "$(T "Включить блокировку" "Turn ad blocking on")"
+  fi
+  [ -x /usr/bin/AdGuardHome ] || echo "<p class=err>$(T "AdGuard Home не найден: нужна прошивка GL 4.x или пакет adguardhome." "AdGuard Home not found: needs GL firmware 4.x or the adguardhome package.")</p>"
+  echo "</div>"
+  DEL="$(T "Удалить" "Delete")"
+  echo "<div class=card><h2>$(T "Устройства без блокировки" "Devices without blocking")</h2><small>$(T "Блокировка действует на все устройства сети, кроме этих. Устройство узнаётся по MAC-адресу." \
+    "Blocking applies to every device on the network except these. A device is recognised by its MAC address.")</small>"
+  EXCL="$(gru-adblock exclude | esc)"
+  [ -n "$EXCL" ] || echo "<p><small>$(T "нет — блокировка для всех" "none — blocking for everyone")</small></p>"
+  echo "$EXCL" | while IFS="$TAB" read -r m name; do
+    [ -n "$m" ] || continue
+    echo "<div class=item><span>$name<br><small>$m</small></span>"
+    echo "<form method=get>$(hidden)<input type=hidden name=abxdel value='$m'><button title='$DEL'>✕</button></form></div>"
+  done
+  DEVS="$(gru-adblock devices | esc | awk -F '\t' -v ex="$(gru-adblock exclude | cut -f1 | tr '\n' ' ')" 'index(" " ex, " " $1 " ") == 0')"
+  if [ -n "$DEVS" ]; then
+    echo "<form method=get class=row>$(hidden)<select name=abxadd>"
+    echo "$DEVS" | while IFS="$TAB" read -r m ip name; do echo "<option value='$m'>${name:-$m} — $ip</option>"; done
+    echo "</select><button>$(T "Не блокировать" "Don't block")</button></form>"
+  fi
+  echo "<form method=get class=row>$(hidden)<input type=text name=abxadd placeholder='aa:bb:cc:dd:ee:ff' required>"
+  echo "<input type=text name=abxname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить по MAC" "Add by MAC")</button></form></div>"
+  echo "<div class=card><h2>$(T "Списки фильтров" "Filter lists")</h2><small>$(T "Списки в формате AdGuard или hosts. AdGuard DNS filter — DNS-версия фильтров платного AdGuard: Base, Tracking Protection, Mobile Ads, российские рекламные серверы, EasyList, EasyPrivacy." \
+    "Lists in AdGuard or hosts format. AdGuard DNS filter is the DNS version of the filters in paid AdGuard: Base, Tracking Protection, Mobile Ads, Russian ad servers, EasyList, EasyPrivacy.")</small>"
+  LISTS="$(gru-adblock list | esc)"
+  [ -n "$LISTS" ] || echo "<p><small>$(T "пусто" "empty")</small></p>"
+  echo "$LISTS" | while IFS="$TAB" read -r url name rc up; do
+    [ -n "$url" ] || continue
+    info="$url"; [ "$rc" != - ] && info="$(T "правил" "rules"): $rc · $(T "обновлён" "updated") $up"
+    echo "<div class=item><span>$name<br><small>$info</small></span>"
+    echo "<form method=get>$(hidden)<input type=hidden name=abldel value='$url'><button title='$DEL'>✕</button></form></div>"
+  done
+  OPTS="$(echo "$PRESETS" | while IFS=: read -r id pname; do
+    echo "$LISTS" | cut -f1 | grep -qxF "$PRESET_URL$id.txt" || echo "<option value=$id>$pname</option>"
+  done)"
+  [ -n "$OPTS" ] && echo "<form method=get class=row>$(hidden)<select name=abpreset>$OPTS</select><button>$(T "Добавить" "Add")</button></form>"
+  echo "<form method=get class=row>$(hidden)<input type=text name=ablist placeholder='https://example.com/list.txt' required>"
+  echo "<input type=text name=abname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить по ссылке" "Add by link")</button></form></div>"
+  echo "<div class=card><h2>$(T "Обновление списков" "List updates")</h2>"
+  btn abref 1 "" "$(T "Обновить списки сейчас" "Update the lists now")"
+  AI="$(gru-adblock interval)"
+  echo "<form method=get class=row>$(hidden)<select name=abint>"
+  for v in "off:$(T "Автообновление выключено" "Auto-update off")" "1:$(T "Обновлять каждый час" "Update every hour")" \
+    "12:$(T "Обновлять каждые 12 часов" "Update every 12 hours")" "24:$(T "Обновлять раз в сутки" "Update once a day")" \
+    "72:$(T "Обновлять раз в 3 дня" "Update every 3 days")" "168:$(T "Обновлять раз в неделю" "Update once a week")"; do
+    sel=""; [ "${v%%:*}" = "$AI" ] && sel=" selected"
+    echo "<option value='${v%%:*}'$sel>${v#*:}</option>"
+  done
+  echo "</select><button>$(T "Сохранить" "Save")</button></form></div>"
+  echo "<div class=card><h2>$(T "Свои правила" "Own rules")</h2><small>$(T "Домен или ссылка блокируются вместе с поддоменами. «Разрешить» — исключение, если список заблокировал нужный сайт. Шаблоны пишутся в синтаксисе AdGuard: ||ads.*^, /regex/, @@||site.ru^." \
+    "A domain or link is blocked with its subdomains. \"Allow\" makes an exception when a list blocks a site you need. Patterns use AdGuard syntax: ||ads.*^, /regex/, @@||site.com^.")</small>"
+  echo "<form method=get class=row>$(hidden)<input type=text name=abrule placeholder='ads.example.com' required>"
+  echo "<select name=abto><option value=block>$(T "Блокировать" "Block")</option><option value=allow>$(T "Разрешить" "Allow")</option></select><button>$(T "Добавить" "Add")</button></form>"
+  RULES="$(gru-adblock rule | esc)"
+  [ -n "$RULES" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
+  echo "$RULES" | while IFS= read -r r; do
+    [ -n "$r" ] || continue
+    echo "<form method=get class=item>$(hidden)<input type=hidden name=abrdel value='$r'><span>$r</span><button title='$DEL'>✕</button></form>"
   done
   echo "</div>"
   ;;

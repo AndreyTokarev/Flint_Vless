@@ -46,6 +46,7 @@ The panel is available in English and Russian: the language follows your browser
 - **Failover.** Every 2 minutes the router checks the tunnel; if the server stopped responding while the internet is up, it refreshes the subscription and switches to the first working server.
 - **White lists.** Provider servers given by bare IP (for networks where only a white list is open) are grouped in a separate collapsible block.
 - **DNS over HTTPS** (dnscrypt-proxy) against DNS spoofing; client DNS queries are forced through the router.
+- **Ad blocking** for the whole network at the DNS level — AdGuard Home from the GL firmware, one button to turn it on. The default list is AdGuard DNS filter, the DNS version of the filters in paid AdGuard; add your own lists by URL and your own rules. Lists update by themselves, and individual devices can be excluded.
 - **Home network access.** The main router's LAN, NAS and printer are reachable directly, bypassing the VPN; local names (`nas01`) are served by dnsmasq.
 - **Backup and restore** with one command; redeploying keeps the settings made in the panel.
 
@@ -60,6 +61,8 @@ The panel is available in English and Russian: the language follows your browser
 | ![Own servers](docs/screenshots/en/own.png) | ![Edit](docs/screenshots/en/edit.png) |
 | **Routing** | **Phone** |
 | ![Routing](docs/screenshots/en/routing.png) | ![Phone](docs/screenshots/en/mobile-status.png) |
+| **Ad blocking** | **Phone: servers** |
+| ![Ad blocking](docs/screenshots/en/adblock.png) | ![Phone: servers](docs/screenshots/en/mobile-servers.png) |
 
 The screenshots use demo data: documentation IP ranges, made-up servers and keys.
 
@@ -70,7 +73,7 @@ The screenshots use demo data: documentation IP ranges, made-up servers and keys
           │  Wi-Fi or LAN, no settings
           ▼
  ┌──────────────── Flint (OpenWrt) ────────────────┐
- │ dnsmasq ──► dnscrypt-proxy (DoH)                │
+ │ DNS: [AdGuard Home] ──► dnsmasq ──► DoH         │
  │ iptables: TCP from br-lan ──► Xray :12345       │
  │ Xray: RU and own "direct" ──► direct            │
  │       everything else ──► VLESS + REALITY       │
@@ -82,6 +85,7 @@ The screenshots use demo data: documentation IP ranges, made-up servers and keys
 ```
 
 - `iptables` rules (in `/etc/firewall.user`) send client TCP traffic from `br-lan` into Xray's `dokodemo-door`. Local and private networks and the VPN servers' own addresses bypass it.
+- Client DNS queries are forced to the router. With ad blocking on they go to AdGuard Home first, otherwise straight to dnsmasq; then to dnscrypt-proxy (DoH).
 - QUIC (UDP 443) is blocked so that browsers and apps fall back to TCP and enter the tunnel. Other UDP goes direct.
 - The Xray config is rendered from `/etc/xray/template.json` by `gru-node`: selected server, geo filter, own sites. It is validated with `xray -test` before being applied, and the exit IP is checked afterwards.
 - The router's own traffic (subscription and package updates) goes direct.
@@ -223,10 +227,11 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 
 | Tab | What's there |
 |---|---|
-| **Status** | VPN on/off button, current server, exit IP, geo filter, number of own sites and servers, last subscription check, failover state and last failure |
+| **Status** | VPN on/off button, current server, exit IP, geo filter, number of own sites and servers, last subscription check, failover state and last failure, ad blocking |
 | **Servers** | one-click server selection; "White lists" block; refresh the subscription now and the auto-update interval; failover on/off |
 | **Own servers** | servers not from the subscription: add by `vless://` link, copy a subscription server and edit the copy, enter manually; edit or delete |
 | **Routing** | Russia geo filter on/off; own sites, IPs and subnets "always direct" or "always via VPN" |
+| **Ad blocking** | ad blocking on/off and 24-hour stats; devices without blocking; filter lists — ready-made and your own by URL; auto-update and "Update the lists now"; own rules |
 
 The panel speaks English and Russian. On the first visit the language follows the browser (or `UI_LANG` in `gru.env`); after that use the **RU · EN** switch under the menu or on the login page — the choice is remembered in the browser. Messages after panel actions use the same language.
 
@@ -247,6 +252,7 @@ The panel speaks English and Russian. On the first visit the language follows th
 | `SUB_URL` | subscription URL; the router refreshes the server list from it, `tools/sub2nodes.py` reads it too. The subscription host always bypasses the VPN |
 | `SUB_INTERVAL` | auto-update interval for a fresh router: `off`, `30m`, `1h`, `3h`, `6h`, `12h`, `24h` (default `24h`); later changed in the panel, survives redeploys |
 | `SUB_GRPC` | `1` — also import gRPC servers from the subscription (skipped by default, see [Limitations](#limitations)) |
+| `ADBLOCK` | `on` — turn ad blocking on for a fresh router; later it is switched in the panel, and the choice survives redeploys |
 | `XRAY_VERSION` | Xray release downloaded from GitHub if `xray-core` is not available in `opkg` (default `v1.8.24`) |
 
 ## Servers `config/nodes.conf`
@@ -273,6 +279,34 @@ An empty field is `-`; `uuid` defaults to `VLESS_UUID`, port to `443`, transport
 
 `gru-watchdog` runs from cron every 2 minutes: it checks the tunnel (a request to `generate_204` through Xray); on failure it waits 10 seconds and checks again; if the direct internet works (so it's the server, not the ISP), it refreshes the subscription; if the current server still fails, it tries the others in order and stays on the first working one, or returns to the original if none works. The last result is shown in the panel and in `/etc/xray/watchdog-last`. Turn it off in the panel or with `gru-watchdog off`.
 
+## Ad blocking
+
+Works at the DNS level for every device on the network, with no apps on the devices. It uses AdGuard Home, which already ships with GL.iNet firmware 4.x (`/usr/bin/AdGuardHome`): the project runs its own instance on `127.0.0.1:5054`. The stock AdGuard Home from the GL admin panel stays off — don't turn both on.
+
+How it works:
+- with blocking on, the firewall (`GRU_DNS` chain) sends client DNS queries to AdGuard Home, which forwards them to dnsmasq, so local names and DoH keep working;
+- devices in "Devices without blocking" (by MAC address) go straight to dnsmasq;
+- every 2 minutes cron checks that AdGuard Home answers. If not, it restarts it, and if that fails, DNS bypasses it until it is back. The ad blocker never takes the internet down;
+- the AdGuard Home web UI is not exposed (`127.0.0.1` only); everything is managed from the panel.
+
+**Lists.** The default is [AdGuard DNS filter](https://github.com/AdguardTeam/AdGuardSDNSFilter): the DNS version of the filters in paid AdGuard products (Base, Tracking Protection, Mobile Ads, Russian and other regional ad servers, EasyList, EasyPrivacy). It is free and open. The panel adds ready-made lists from the [AdGuard registry](https://github.com/AdguardTeam/HostlistsRegistry) (Popup Hosts, HaGeZi Pro, OISD, Steven Black, phishing and malware protection) or any list by URL in AdGuard/Adblock or hosts format. More lists mean more false positives, so start with one.
+
+**Updates.** Lists update automatically — once a day by default, from every hour to once a week, or off — and with the "Update the lists now" button.
+
+**Own rules:**
+
+| What you enter | Result |
+|---|---|
+| `ads.example.com` or a link, "Block" | the domain is blocked with its subdomains (`\|\|ads.example.com^`) |
+| the same, "Allow" | an exception (`@@\|\|ads.example.com^`) when a list blocks a site you need |
+| `\|\|ads.*^`, `/^ad[0-9]+\./`, `@@\|\|site.com^` | a rule in [AdGuard syntax](https://adguard-dns.io/kb/general/dns-filtering-syntax/) as is |
+
+Rules take effect in a few seconds.
+
+**What DNS blocking can't do:** remove ads served from the same domain as the content (YouTube) or hide page elements — only browser extensions like uBlock Origin do that. Devices with Private DNS or DoH in the browser bypass the router's DNS, and therefore the blocking too.
+
+AdGuard Home uses 40–60 MB of RAM; with blocking off it is stopped.
+
 ## Access from the main router's network
 
 `install.sh` allows incoming connections from `UPSTREAM_NET` to Flint and to devices behind it (`192.168.8.x`). On the main router, add a DHCP reservation for Flint (e.g. `192.168.0.111`) and a static route: network `192.168.8.0`, mask `255.255.255.0`, gateway `192.168.0.111`.
@@ -288,7 +322,7 @@ An empty field is `-`; `uuid` defaults to `VLESS_UUID`, port to `443`, transport
 ./backup.sh --with-binary
 ```
 
-The backup pulls from the router its settings, the own servers and sites from the panel, and the network and Wi‑Fi configs. Fresh `gru.env`, `nodes.conf`, `nodes-custom.conf`, `custom-sites` are also copied into `config/`.
+The backup pulls from the router its settings, the own servers and sites from the panel, and the network and Wi‑Fi configs. Fresh `gru.env`, `nodes.conf`, `nodes-custom.conf`, `custom-sites` and the ad blocking files (`adblock-lists`, `adblock-rules`, `adblock-exclude`) are also copied into `config/`.
 
 > [!WARNING]
 > `backup/` and the files in `config/` contain your subscription UUID and Wi‑Fi passwords. They are gitignored; keep them separately — in the cloud or on a USB stick.
@@ -306,7 +340,7 @@ The backup pulls from the router its settings, the own servers and sites from th
 ./restore.sh --full
 ```
 
-By default the settings from the backup (`gru.env`, servers, own servers and sites) go into `config/`, then a normal deploy runs. This works for a reset router too: first connect it to the internet in the GL admin panel. The current `config/` files are saved to `backup/config-before-restore-<time>/` before being replaced.
+By default the settings from the backup (`gru.env`, servers, own servers and sites, ad blocking lists, rules and exclusions) go into `config/`, then a normal deploy runs. This works for a reset router too: first connect it to the internet in the GL admin panel. The current `config/` files are saved to `backup/config-before-restore-<time>/` before being replaced.
 
 `-Full` / `--full` is only for the **same** router: it brings back its network, Wi‑Fi (SSIDs and passwords), firewall, DHCP reservations, cron and SSH keys, then reboots. The script asks for confirmation (`-Yes` / `--yes` skips it).
 
@@ -323,6 +357,13 @@ gru-sub-update                 # refresh the server list from the subscription
 gru-sub-update interval 1h     # auto-update: off, 30m, 1h, 3h, 6h, 12h, 24h
 gru-watchdog off               # turn failover off (on — turn on)
 gru-geo-update                 # update geoip/geosite manually
+gru-adblock on                 # ad blocking (off — turn off)
+gru-adblock list               # lists: URL, name, rules, last update
+gru-adblock list add https://example.com/list.txt "Name"
+gru-adblock rule add block ads.example.com   # allow — exception
+gru-adblock exclude add aa:bb:cc:dd:ee:ff    # device without blocking
+gru-adblock refresh            # update the lists now
+gru-adblock interval 24        # auto-update: off, 1, 12, 24, 72, 168 hours
 logread -e xray                # Xray logs
 ```
 
@@ -348,6 +389,8 @@ If you run it on another device, please report the result in [Issues](https://gi
 | No internet after switching servers | the server is down — pick another or enable failover; as a last resort turn the VPN off on the Status tab |
 | A server fails though it works in Happ | the provider rotated keys or SNI — refresh the subscription |
 | A Russian site goes via VPN | geoip/geosite missing (then `global` mode): `gru-geo-update`; or add the site as "direct" |
+| A site or app broke with ad blocking on | turn blocking off to confirm; if it is the cause, add the domain to own rules as "Allow" or the device to "Devices without blocking" |
+| Ads are not blocked on a device | turn off Private DNS / browser DoH on it; check it is not excluded; ads from the same domain as the video (YouTube) can't be blocked by DNS |
 | `opkg install ... failed` | `/tmp/gru-opkg.log`; router internet; put Xray into `backup/bin/xray` |
 
 ## Limitations
@@ -363,7 +406,7 @@ Pull requests and issues are welcome: fixes, support for other routers, panel tr
 
 ## Credits
 
-[Xray-core](https://github.com/XTLS/Xray-core), [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat), [dnscrypt-proxy](https://github.com/DNSCrypt/dnscrypt-proxy), [OpenWrt](https://openwrt.org), [GL.iNet](https://www.gl-inet.com).
+[Xray-core](https://github.com/XTLS/Xray-core), [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat), [dnscrypt-proxy](https://github.com/DNSCrypt/dnscrypt-proxy), [AdGuard Home](https://github.com/AdguardTeam/AdGuardHome) and [AdGuard filters](https://github.com/AdguardTeam/AdGuardSDNSFilter), [OpenWrt](https://openwrt.org), [GL.iNet](https://www.gl-inet.com).
 
 ## License
 

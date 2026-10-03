@@ -18,6 +18,8 @@ case "$1" in
 	"") ;;
 	*) sed -n '5,7s/^# \{0,1\}//p' "$0"; exit 1 ;;
 esac
+# Ad blocking runs in the DNS path, so it is checked even with failover off.
+gru-adblock check >/dev/null 2>&1
 [ "$(cat "$STATE" 2>/dev/null || echo on)" = on ] || exit 0
 [ "$(gru-node vpn)" = on ] || exit 0
 

@@ -84,19 +84,21 @@ say "files"
 mkdir -p /etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /www/gru/cgi-bin /usr/share/gru
 cp "$KIT/files/etc/xray/template.json" /etc/xray/
 cp "$KIT/files/usr/share/gru/vless.awk" /usr/share/gru/
-cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/gru-ui" "$KIT/files/etc/init.d/gru-doh" /etc/init.d/
+cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/gru-ui" "$KIT/files/etc/init.d/gru-doh" \
+	"$KIT/files/etc/init.d/gru-adblock" /etc/init.d/
 cp "$KIT/files/etc/dnscrypt-proxy2/gru-doh.toml" /etc/dnscrypt-proxy2/
 cp "$KIT/files/etc/firewall.user" /etc/firewall.user
 cp "$KIT/files/usr/bin/gru-node" "$KIT/files/usr/bin/gru-geo-update" "$KIT/files/usr/bin/gru-sub-update" \
-	"$KIT/files/usr/bin/gru-custom" "$KIT/files/usr/bin/gru-watchdog" /usr/bin/
+	"$KIT/files/usr/bin/gru-custom" "$KIT/files/usr/bin/gru-watchdog" "$KIT/files/usr/bin/gru-adblock" /usr/bin/
 cp "$KIT/files/www/gru/index.html" "$KIT/files/www/gru/logo.svg" "$KIT/files/www/gru/icon.svg" /www/gru/
 cp "$KIT/files/www/gru/cgi-bin/panel.cgi" /www/gru/cgi-bin/
-chmod 755 /etc/init.d/xray /etc/init.d/gru-ui /etc/init.d/gru-doh /usr/bin/gru-node /usr/bin/gru-geo-update \
-	/usr/bin/gru-sub-update /usr/bin/gru-custom /usr/bin/gru-watchdog /www/gru/cgi-bin/panel.cgi
+chmod 755 /etc/init.d/xray /etc/init.d/gru-ui /etc/init.d/gru-doh /etc/init.d/gru-adblock /usr/bin/gru-node \
+	/usr/bin/gru-geo-update /usr/bin/gru-sub-update /usr/bin/gru-custom /usr/bin/gru-watchdog /usr/bin/gru-adblock \
+	/www/gru/cgi-bin/panel.cgi
 
 (umask 077; cp "$KIT/config/gru.env" /etc/xray/gru.env; cp "$KIT/config/nodes.conf" /etc/xray/nodes.conf)
-# Optional: own nodes and custom sites saved by backup; without them the router's copies stay.
-for f in nodes-custom.conf custom-sites; do
+# Optional: own nodes, custom sites and ad blocking lists/rules saved by backup; without them the router's copies stay.
+for f in nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
 	if [ -f "$KIT/config/$f" ]; then (umask 077; cp "$KIT/config/$f" "/etc/xray/$f"); fi
 done
 case "${ROUTING:-ru}" in
@@ -175,6 +177,13 @@ done
 sleep 2
 /etc/init.d/dnsmasq restart
 sleep 2
+# Ad blocking: the state chosen in the panel survives a redeploy; ADBLOCK only seeds a fresh router.
+[ -f /etc/xray/adblock ] || case "$ADBLOCK" in on|1) echo on ;; *) echo off ;; esac > /etc/xray/adblock
+if [ "$(gru-adblock state)" = on ]; then
+	gru-adblock on || true
+else
+	/etc/init.d/gru-adblock disable 2>/dev/null || true
+fi
 /etc/init.d/xray enable
 gru-node "$DEFAULT_NODE"
 /etc/init.d/gru-ui enable

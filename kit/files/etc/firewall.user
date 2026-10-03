@@ -1,5 +1,6 @@
 # Gru: transparent Xray for LAN clients, router DNS enforcement, direct access to upstream LAN.
 # Safe to re-run on every firewall reload.
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 . /etc/xray/gru.env
 
 ensure() {
@@ -42,8 +43,12 @@ else
 	# Only TCP goes through Xray; dropping QUIC makes browsers fall back to TCP.
 	ensure filter FORWARD -i br-lan -p udp --dport 443 -j DROP
 fi
-ensure nat PREROUTING -i br-lan -p udp --dport 53 -j REDIRECT --to-ports 53
-ensure nat PREROUTING -i br-lan -p tcp --dport 53 -j REDIRECT --to-ports 53
+# LAN DNS goes to the router: dnsmasq, or AdGuard Home when ad blocking is on (GRU_DNS, see gru-adblock).
+remove nat PREROUTING -i br-lan -p udp --dport 53 -j REDIRECT --to-ports 53
+remove nat PREROUTING -i br-lan -p tcp --dport 53 -j REDIRECT --to-ports 53
+gru-adblock fw
+ensure nat PREROUTING -i br-lan -p udp --dport 53 -j GRU_DNS
+ensure nat PREROUTING -i br-lan -p tcp --dport 53 -j GRU_DNS
 
 if [ -n "$UPSTREAM_IF" ] && [ -n "$UPSTREAM_NET" ]; then
 	ensure nat POSTROUTING -o "$UPSTREAM_IF" -d "$UPSTREAM_NET" -j MASQUERADE

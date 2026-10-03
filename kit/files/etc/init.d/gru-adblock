@@ -1,0 +1,15 @@
+#!/bin/sh /etc/rc.common
+# AdGuard Home for gru-adblock: DNS 127.0.0.1:5054, API 127.0.0.1:3054.
+# Separate from GL's AdGuard Home service (ports 3053/3000), which stays disabled.
+START=19
+STOP=88
+USE_PROCD=1
+start_service() {
+  [ "$(cat /etc/xray/adblock 2>/dev/null)" = on ] || return 0
+  [ -x /usr/bin/AdGuardHome ] || return 0
+  /usr/bin/gru-adblock config
+  procd_open_instance
+  procd_set_param command /usr/bin/AdGuardHome --no-check-update -c /etc/gru-adguard/config.yaml -w /etc/gru-adguard -l syslog
+  procd_set_param respawn
+  procd_close_instance
+}

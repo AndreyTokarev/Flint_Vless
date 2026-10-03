@@ -20,7 +20,7 @@ try {
     Remove-Item $staging, $archive -Recurse -Force -ErrorAction SilentlyContinue
     Copy-Item (Join-Path $root "kit") $staging -Recurse
     New-Item -ItemType Directory (Join-Path $staging "config") | Out-Null
-    foreach ($f in "gru.env", "nodes.conf", "nodes-custom.conf", "custom-sites") {
+    foreach ($f in "gru.env", "nodes.conf", "nodes-custom.conf", "custom-sites", "adblock-lists", "adblock-rules", "adblock-exclude") {
         $src = Join-Path $root "config\$f"
         if (Test-Path $src) { Copy-Item $src (Join-Path $staging "config") }
     }

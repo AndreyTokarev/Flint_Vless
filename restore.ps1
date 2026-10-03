@@ -25,7 +25,7 @@ if (-not $Backup) {
 $archive = Join-Path (Resolve-Path $Backup) "router-config.tar.gz"
 if (-not (Test-Path $archive)) { throw "Missing $archive" }
 
-$files = "gru.env", "nodes.conf", "nodes-custom.conf", "custom-sites"
+$files = "gru.env", "nodes.conf", "nodes-custom.conf", "custom-sites", "adblock-lists", "adblock-rules", "adblock-exclude"
 $tmp = Join-Path ([IO.Path]::GetTempPath()) "gru-restore"
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory $tmp | Out-Null

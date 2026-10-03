@@ -2,6 +2,9 @@ config/gru.env
 config/nodes.conf
 config/nodes-custom.conf
 config/custom-sites
+config/adblock-lists
+config/adblock-rules
+config/adblock-exclude
 backup/
 __pycache__/
 tmp
