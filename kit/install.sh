@@ -89,7 +89,7 @@ cp "$KIT/files/etc/dnscrypt-proxy2/gru-doh.toml" /etc/dnscrypt-proxy2/
 cp "$KIT/files/etc/firewall.user" /etc/firewall.user
 cp "$KIT/files/usr/bin/gru-node" "$KIT/files/usr/bin/gru-geo-update" "$KIT/files/usr/bin/gru-sub-update" \
 	"$KIT/files/usr/bin/gru-custom" "$KIT/files/usr/bin/gru-watchdog" /usr/bin/
-cp "$KIT/files/www/gru/index.html" /www/gru/
+cp "$KIT/files/www/gru/index.html" "$KIT/files/www/gru/logo.svg" "$KIT/files/www/gru/icon.svg" /www/gru/
 cp "$KIT/files/www/gru/cgi-bin/panel.cgi" /www/gru/cgi-bin/
 chmod 755 /etc/init.d/xray /etc/init.d/gru-ui /etc/init.d/gru-doh /usr/bin/gru-node /usr/bin/gru-geo-update \
 	/usr/bin/gru-sub-update /usr/bin/gru-custom /usr/bin/gru-watchdog /www/gru/cgi-bin/panel.cgi

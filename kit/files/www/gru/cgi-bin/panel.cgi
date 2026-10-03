@@ -26,21 +26,19 @@ case "$tab" in status|servers|own|routing) ;; *) tab=status ;; esac
 . /etc/xray/gru.env
 TITLE="$(echo "${UI_TITLE:-Flint VPN}" | esc)"
 TAGLINE="$(echo "${UI_TAGLINE-Sail the internet}" | esc)"
-SHIELD='<path d="M7 15 29 8l16 8-2 22c-1 9-8 16-19 21C13 54 8 46 7 37Z" fill="url(#lg)" stroke="#e5e7eb" stroke-width="3" stroke-linejoin="round"/><path d="M10 17l18-6 3 13-10 6-11-4Z" fill="#4c6ef5" opacity=".55"/><path d="M14 21l10 6 9-6M24 27v22" fill="none" stroke="#e5e7eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M27 36C35 24 45 13 61 4 56 15 47 26 36 35Z" fill="#f59e0b"/><path d="M23 31C30 21 39 13 52 6 47 14 40 22 31 29Z" fill="#fcd34d"/>'
 FOOTER='<footer><span>YOUR NETWORK. <b>YOUR RULES.</b></span></footer>'
-ICON='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M17 31l-5 13 6-2-1 7 6-5ZM47 31l5 13-6-2 1 7-6-5Z" fill="#1e2a7a"/><path d="M17 31c0 12 2 17 7 19v6c4 3 12 3 16 0v-6c5-2 7-7 7-19Z" fill="#e5e7eb"/><path d="M20 38l9 2c0 4-4 5-7 3Z" fill="#111827"/><circle cx="25.5" cy="41.2" r="1.7" fill="#22d3ee"/><path d="M18 35l29 5" stroke="#1e2a7a" stroke-width="2"/><ellipse cx="38.5" cy="41.5" rx="5.2" ry="4.2" fill="#1e2a7a"/><path d="M32 45l-2.2 4h4.4Z" fill="#111827"/><path d="M25 52.5h14M28 50.5v5M31 50.8v5.4M34 50.8v5.4M37 50.5v5" stroke="#4b5563" stroke-width="1"/><path d="M4 19c6 3 11 5 15 6 2-14 24-14 26 0 4-1 9-3 15-6-3 11-14 16-28 16S7 30 4 19Z" fill="#23308f" stroke="#f5b301" stroke-width="2" stroke-linejoin="round"/><path d="M32 15.5l5 3v6l-5 3-5-3v-6Z" fill="#e5e7eb"/><path d="M27 18.5l5 3 5-3M32 21.5v6" fill="none" stroke="#23308f" stroke-width="1.3"/><path d="M33 25l10-11-3 7Z" fill="#f5b301"/></svg>'
 logo() {
   last="${TITLE##* }"; first="${TITLE% *}"
   [ "$first" = "$TITLE" ] && last=""
   [ -n "$last" ] && last=" <b>$last</b>"
   tag=""; [ -n "$TAGLINE" ] && tag="<div class=tag>$TAGLINE</div>"
-  echo "<div class=\"logo $1\"><svg viewBox=\"0 0 64 64\" aria-hidden=true><defs><linearGradient id=lg x1=0 y1=0 x2=1 y2=1><stop offset=0 stop-color=\"#2f4fc4\"/><stop offset=1 stop-color=\"#0f1a4a\"/></linearGradient></defs>$SHIELD</svg><div><div class=word>$first$last</div>$tag</div></div>"
+  echo "<div class=\"logo $1\"><img src=/logo.svg alt=\"\"><div><div class=word>$first$last</div>$tag</div></div>"
 }
 cat <<HTML
 <!DOCTYPE html><html lang=ru><head>
 <meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>$TITLE</title>
-<link rel=icon href="data:image/svg+xml,$(echo "$ICON" | sed -e 's/"/'"'"'/g' -e 's/#/%23/g' -e 's/</%3C/g' -e 's/>/%3E/g')">
+<link rel=icon type=image/svg+xml href=/icon.svg>
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:#111827;color:#e5e7eb;min-height:100vh;display:flex;flex-direction:column}
 footer{margin-top:auto;padding:32px 0 28px;display:flex;align-items:center;gap:18px;font:700 15px/1 ui-monospace,Consolas,"Courier New",monospace;letter-spacing:.3em;color:#cbd5e1;white-space:nowrap}
@@ -71,7 +69,7 @@ pre{white-space:pre-wrap;margin:0}
 small{color:#9ca3af}
 .ok{color:#34d399}.err{color:#f87171}
 .logo{display:flex;align-items:center;gap:.35em;font-size:22px}
-.logo svg{width:2.1em;height:2.1em;flex:none}
+.logo img{width:2.1em;height:2.1em;object-fit:contain;flex:none}
 .logo .word{font-weight:800;line-height:1.05;letter-spacing:-.01em;white-space:nowrap;color:#f9fafb;text-align:center;padding-right:.12em}
 .logo .word b{color:#f59e0b;font-weight:800}
 .logo .tag{display:flex;align-items:center;gap:.5em;margin-top:.3em;font-size:.36em;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:#d1d5db;white-space:nowrap}
@@ -247,7 +245,7 @@ servers)
 own)
   if [ -n "$form" ]; then
     [ "$form" = new ] && title="Новый сервер" || title="Изменить сервер"
-    echo "<div class=card><h2>$title</h2><small>Поддерживаются VLESS + TCP + REALITY (xtls-rprx-vision).</small>"
+    echo "<div class=card><h2>$title</h2><small>Поддерживаются VLESS + REALITY поверх TCP (xtls-rprx-vision) или gRPC.</small>"
     echo "<form method=get>$(hidden)<input type=hidden name=save value='$form'>"
     field "Название" n "$f_name" " maxlength=60"
     field "Адрес сервера" a "$f_addr" " required"

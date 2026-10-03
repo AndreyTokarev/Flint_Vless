@@ -110,9 +110,10 @@ case "$cmd" in
 		;;
 	names)
 		# "code<TAB>name<TAB>ip|domain"; the name is the comment line right above the node.
-		awk '/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
+		# "ip" = subscription node with a bare IP (the panel's white list group); own nodes are always "domain".
+		awk -v own="$CUSTOM" '/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
 			/^[[:space:]]*$/ { next }
-			{ print $1 "\t" ((name != "" && name !~ /^Generated/) ? name : $1) "\t" ($2 ~ /^[0-9.]+$/ ? "ip" : "domain"); name = "" }' $(node_files)
+			{ print $1 "\t" ((name != "" && name !~ /^Generated/) ? name : $1) "\t" ($2 ~ /^[0-9.]+$/ && FILENAME != own ? "ip" : "domain"); name = "" }' $(node_files)
 		;;
 	routing)
 		[ -n "$2" ] || { mode; exit 0; }
