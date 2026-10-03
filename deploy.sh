@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Upload the kit with config/flint.env + config/nodes.conf to the router and run install.sh (macOS/Linux).
+# Upload the kit with config/flint.env (+ config/nodes.conf and other saved lists, if any) to the router and run install.sh (macOS/Linux).
 # Usage: ./deploy.sh [router_ip] [user]
 set -euo pipefail
 ROUTER="${1:-192.168.8.1}"
@@ -7,12 +7,10 @@ USER_NAME="${2:-root}"
 TARGET="$USER_NAME@$ROUTER"
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 
-for f in flint.env nodes.conf; do
-	[ -f "$ROOT/config/$f" ] || {
-		echo "Missing config/$f - copy config/$f.example and fill it in (or restore from backup)." >&2
-		exit 1
-	}
-done
+[ -f "$ROOT/config/flint.env" ] || {
+	echo "Missing config/flint.env - copy config/flint.env.example and fill it in (or restore from backup)." >&2
+	exit 1
+}
 
 STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT

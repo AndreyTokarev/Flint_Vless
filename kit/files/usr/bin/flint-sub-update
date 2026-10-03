@@ -178,7 +178,6 @@ build() {
 	} > "$TMP/nodes.conf"
 }
 count() { grep -c -v -E '^[[:space:]]*(#|$)' "${1:-$TMP/nodes.conf}"; }
-own_count() { cat "$CUSTOM" 2>/dev/null | grep -c -v -E '^[[:space:]]*(#|$)'; }
 # Some providers hand out a random SNI from a pool on every request: SNI-only changes are ignored.
 same() { strip() { grep -v -E '^[[:space:]]*(#|$)' "$1" | awk '{ $3 = ""; print }'; }; [ -f "$NODES" ] && [ "$(strip "$TMP/nodes.conf")" = "$(strip "$NODES")" ]; }
 # Install $TMP/nodes.conf and re-apply the current node (or the first one if it is gone).
@@ -188,9 +187,9 @@ commit() {
 	cur="$(cat "$CUR" 2>/dev/null)"
 	if ! cat "$NODES" "$CUSTOM" 2>/dev/null | awk -v c="$cur" '$1 == c { f = 1 } END { exit !f }'; then
 		cur="$(cat "$NODES" "$CUSTOM" 2>/dev/null | grep -v -E '^[[:space:]]*(#|$)' | awk 'NR == 1 { print $1 }')"
-		t "Текущего сервера больше нет, переключаюсь на $cur" "The current server is gone, switching to $cur"
+		[ -z "$cur" ] || t "Текущего сервера больше нет, переключаюсь на $cur" "The current server is gone, switching to $cur"
 	fi
-	flint-node "$cur"
+	flint-node "${cur:-apply}"
 }
 
 case "$1" in
@@ -249,15 +248,9 @@ case "$1" in
 		name="$(field "$2" 3)"
 		[ -n "$(field "$2" 1)" ] || fail "$(t "Нет такой подписки" "No such subscription")"
 		lock
-		cp "$SUBS" "$TMP/subs.bak"
 		subs | awk -F '\t' -v i="$2" '$1 != i' > "$SUBS.new"
 		(umask 077; cp "$SUBS.new" "$SUBS"); rm -f "$SUBS.new"
 		build
-		if [ "$(count)" = 0 ] && [ "$(own_count)" = 0 ]; then
-			cp "$TMP/subs.bak" "$SUBS"
-			fail "$(t "Это единственный источник серверов: сначала добавьте другую подписку или свой сервер" \
-				"This is the only source of servers: add another subscription or an own server first")"
-		fi
 		sub_status "$2" ""
 		cron_apply
 		status "$(t "подписка «$name» удалена" "subscription \"$name\" deleted")"

@@ -256,7 +256,11 @@ echo "<a href='?' class=logout>$(T "Выйти" "Sign out")</a>$(langs "?pass=$p
 case "$tab" in
 status)
   echo "<div class=card>"
-  if [ "$VPN" = off ]; then
+  if [ -z "$NAMES" ]; then
+    IP="$(curl -s -m 8 https://ifconfig.me 2>/dev/null || echo n/a)"
+    echo "<b class=err>$(T "Серверов пока нет" "No servers yet")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>IP: <b>$IP</b>"
+    echo "<p><a href='?pass=$pass&amp;tab=subs'>$(T "Добавить подписку" "Add a subscription")</a> · <a href='?pass=$pass&amp;tab=own'>$(T "добавить свой сервер" "add an own server")</a></p>"
+  elif [ "$VPN" = off ]; then
     IP="$(curl -s -m 8 https://ifconfig.me 2>/dev/null || echo n/a)"
     echo "<b class=err>$(T "VPN выключен" "VPN is off")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>IP: <b>$IP</b>"
     btn vpn on " class=on" "$(T "Включить VPN" "Turn VPN on")"
@@ -296,6 +300,8 @@ servers)
   }
   card() { [ -n "$2" ] && echo "<div class=card><h2>$1</h2><div class=grid>$2</div></div>"; }
   SERVERS="$(T "Серверы" "Servers")"
+  [ -n "$NAMES" ] || echo "<div class=card><h2>$SERVERS</h2>$(T "Серверов пока нет: устройства ходят в интернет напрямую." "No servers yet: devices go online directly.")
+    <p><a href='?pass=$pass&amp;tab=subs'>$(T "Добавить подписку" "Add a subscription")</a> · <a href='?pass=$pass&amp;tab=own'>$(T "добавить свой сервер" "add an own server")</a></p></div>"
   if [ "$(echo "$SUBLIST" | grep -c .)" -gt 1 ]; then
     echo "$SUBLIST" | while IFS="$TAB" read -r id sname host st info; do card "$sname" "$(grid domain "$id")"; done
   elif [ -n "$SUBLIST" ]; then
@@ -351,9 +357,11 @@ own)
   done
   echo "</div><div class=card><h2>$(T "Добавить" "Add")</h2>"
   echo "<form method=get class=row>$(hidden)<input type=text name=link placeholder='vless://...' required><button>$(T "Добавить по ссылке" "Add by link")</button></form>"
-  echo "<form method=get class=row>$(hidden)<select name=copy>"
-  echo "$NAMES" | while IFS="$TAB" read -r code name kind group; do [ -n "$code" ] && echo "<option value='$code'>$name</option>"; done
-  echo "</select><button>$(T "Скопировать и изменить" "Copy and edit")</button></form>"
+  if [ -n "$NAMES" ]; then
+    echo "<form method=get class=row>$(hidden)<select name=copy>"
+    echo "$NAMES" | while IFS="$TAB" read -r code name kind group; do [ -n "$code" ] && echo "<option value='$code'>$name</option>"; done
+    echo "</select><button>$(T "Скопировать и изменить" "Copy and edit")</button></form>"
+  fi
   btn newnode 1 "" "$(T "Ввести вручную" "Enter manually")"
   echo "</div>"
   ;;

@@ -158,17 +158,18 @@ The minimum to fill in:
 
 | Setting | Value |
 |---|---|
-| `VLESS_UUID` | the UUID from your link: `vless://`**`UUID`**`@host:443?...` |
 | `UI_PIN` | panel PIN (letters and digits) |
-| `SUB_URL` | subscription URL (the one you add to Happ / v2rayN); leave empty if you only have your own server |
+| `SUB_URL` | subscription URL (the one you add to Happ / v2rayN). May be left empty: add the subscription later in the panel |
 | `UPSTREAM_IF` | `sta1` — router on Wi‑Fi (Repeater), `wan` — on a cable |
 | `UPSTREAM_NET` | main router's network, e.g. `192.168.0.0/24` or `192.168.1.0/24` |
 
 All settings are described in [Settings](#settings-configflintenv). `config/flint.env` is never committed.
 
-### 5. Prepare the server list `config/nodes.conf`
+### 5. Prepare the server list `config/nodes.conf` (optional)
 
-**Option A — from the subscription (recommended).** Requires Python 3:
+You can skip this step. The install also works without servers: devices go online directly until you add a subscription on the Subscriptions tab (or an own server on the Own servers tab), then the VPN turns on by itself. If `SUB_URL` is set, the router downloads the subscription's servers during the install.
+
+**Option A — from the subscription.** Requires Python 3:
 
 ```sh
 python tools/sub2nodes.py     # reads SUB_URL from config/flint.env, writes config/nodes.conf
@@ -187,7 +188,7 @@ vless://UUID@ADDRESS:PORT?type=tcp&security=reality&sni=SNI&pbk=PBK&sid=SID&flow
 nl  ADDRESS  SNI  PBK  SID  UUID  PORT
 ```
 
-The comment line above a server is its name in the panel. An empty `sid` is written as `-`. The first field is a short code (`nl`); `DEFAULT_NODE` in `flint.env` must match one of the codes.
+The comment line above a server is its name in the panel. An empty `sid` is written as `-`. The first field is a short code (`nl`); after the install the server with the `DEFAULT_NODE` code from `flint.env` is enabled, or the first one if there is no such code.
 
 ### 6. Install
 
@@ -241,17 +242,17 @@ The panel speaks English and Russian. On the first visit the language follows th
 
 | Setting | Description |
 |---|---|
-| `VLESS_UUID` | UUID from `vless://UUID@...`; used for servers without their own UUID |
+| `VLESS_UUID` | optional: UUID for `config/nodes.conf` lines without one (subscription and own servers carry their own) |
 | `UI_PIN` | panel PIN (letters and digits only) |
 | `UI_TITLE` | text of the panel logo, default `Flint VPN` (the last word is gold) |
 | `UI_TAGLINE` | tagline under the logo, default `Sail the internet`; an empty value removes it |
 | `UI_LANG` | default panel language: `ru` or `en`; empty — follow the browser. Background records (last subscription check, last failure) are written in it too |
-| `DEFAULT_NODE` | server code from `nodes.conf` enabled after installation (usually `auto`) |
+| `DEFAULT_NODE` | server code enabled after installation (usually `auto`); the first server if there is no such code |
 | `ROUTING` | `ru` — Russian sites and IPs direct, the rest via VPN; `global` — everything via VPN. The `geoip.dat`/`geosite.dat` databases (Loyalsoldier) are downloaded on install and updated on Sundays at 4:30; without them the router runs in `global` mode |
 | `UPSTREAM_IF` | main router interface: `sta1` (Wi‑Fi, Repeater) or `wan` (cable) |
 | `UPSTREAM_NET` | main router's network; reachable from devices behind Flint without the VPN, and Flint is reachable from it |
 | `LOCAL_HOSTS` | local names: `"nas01=192.168.0.145 printer=192.168.0.50"` — `nas01`, `nas01.lan`, `nas01.local` will resolve |
-| `SUB_URL` | the first subscription on a fresh router; more are added on the Subscriptions tab (see [Subscriptions](#subscriptions)). `tools/sub2nodes.py` reads it too |
+| `SUB_URL` | optional: the first subscription on a fresh router; more are added on the Subscriptions tab (see [Subscriptions](#subscriptions)). `tools/sub2nodes.py` reads it too |
 | `SUB_INTERVAL` | auto-update interval for a fresh router: `off`, `30m`, `1h`, `3h`, `6h`, `12h`, `24h` (default `24h`); later changed in the panel, survives redeploys |
 | `SUB_GRPC` | `1` — also import gRPC servers from the subscription (skipped by default, see [Limitations](#limitations)) |
 | `ADBLOCK` | `on` — turn ad blocking on for a fresh router; later it is switched in the panel, and the choice survives redeploys |
@@ -287,6 +288,7 @@ You can have several subscriptions from different providers: add, change and del
 - The default subscription name comes from the `profile-title` header, the expiry and traffic from `subscription-userinfo` (most providers send them for Happ).
 - The hosts of all subscriptions bypass the VPN, so refreshing works even when the current server is down.
 - The list lives in `/etc/xray/subscriptions` (links carry a token, keep it secret); a backup copies it to `config/subscriptions`.
+- There may be no subscriptions at all, e.g. right after an install without `SUB_URL` or after deleting the last one. With no own servers either, Xray stays down and devices go online directly; the Status tab shows it. The first subscription or own server added turns the VPN on by itself.
 
 ## Failover
 
@@ -400,7 +402,7 @@ If you run it on another device, please report the result in [Issues](https://gi
 
 | Symptom | What to check |
 |---|---|
-| `VPN: FAIL` at the end of install | is `VLESS_UUID` correct; is `DEFAULT_NODE` alive (try another: `flint-node <code>`); `logread -e xray` |
+| `VPN: FAIL` at the end of install | is the subscription alive (Subscriptions tab); is `VLESS_UUID` correct for manual `nodes.conf` lines; is `DEFAULT_NODE` alive (try another: `flint-node <code>`); `logread -e xray` |
 | `DNS: FAIL` | `/etc/init.d/flint-doh restart`, then `nslookup youtube.com 127.0.0.1`; does the router have internet |
 | Panel doesn't open at `vpn.lan` | use `http://192.168.8.1:81/`; disable Private DNS / DoH on the device; `/etc/init.d/flint-ui restart` |
 | No internet after switching servers | the server is down — pick another or enable failover; as a last resort turn the VPN off on the Status tab |

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Flint kit installer for GL.iNet GL-BE6500 (Flint), firmware 4.x.
 # Run on the router from the unpacked kit dir: sh install.sh
-# Expects config/flint.env and config/nodes.conf next to this script (see config/*.example).
+# Expects config/flint.env next to this script (see config/*.example); config/nodes.conf is optional:
+# without servers LAN devices go online directly until a subscription is added in the panel.
 set -e
 KIT="$(cd "$(dirname "$0")" && pwd)"
 say() { echo "== $*"; }
@@ -10,13 +11,9 @@ VERSION="$(cat "$KIT/VERSION" 2>/dev/null || echo dev)"
 echo "Flint VPN $VERSION (was: $(cat /usr/share/flint/version 2>/dev/null || echo none))"
 
 [ -f "$KIT/config/flint.env" ] || die "missing $KIT/config/flint.env"
-[ -f "$KIT/config/nodes.conf" ] || die "missing $KIT/config/nodes.conf"
 . "$KIT/config/flint.env"
-[ -n "$VLESS_UUID" ] || die "VLESS_UUID is empty in flint.env"
 [ -n "$UI_PIN" ] || die "UI_PIN is empty in flint.env"
 DEFAULT_NODE="${DEFAULT_NODE:-auto}"
-grep -q -E "^[[:space:]]*$DEFAULT_NODE[[:space:]]" "$KIT/config/nodes.conf" ||
-	die "DEFAULT_NODE '$DEFAULT_NODE' not found in nodes.conf"
 
 say "packages"
 [ "$(uname -m)" = aarch64 ] || die "kit expects an aarch64 router, got $(uname -m)"
@@ -113,7 +110,7 @@ chmod 755 /etc/init.d/xray /etc/init.d/flint-ui /etc/init.d/flint-doh /etc/init.
 (umask 077; cp "$KIT/config/flint.env" /etc/xray/flint.env)
 # A router with subscriptions builds nodes.conf itself (all of them, see flint-sub-update): the PC copy
 # would drop the servers of subscriptions added in the panel, so it only seeds a router without them.
-if [ ! -s /etc/xray/nodes.conf ] || [ ! -s /etc/xray/subscriptions ]; then
+if [ -f "$KIT/config/nodes.conf" ] && { [ ! -s /etc/xray/nodes.conf ] || [ ! -s /etc/xray/subscriptions ]; }; then
 	(umask 077; cp "$KIT/config/nodes.conf" /etc/xray/nodes.conf)
 fi
 # Optional: own nodes, custom sites, subscriptions and ad blocking lists/rules saved by backup; without them the router's copies stay.
@@ -204,7 +201,13 @@ else
 	/etc/init.d/flint-adblock disable 2>/dev/null || true
 fi
 /etc/init.d/xray enable
-flint-node use "$DEFAULT_NODE" || flint-node use "$(flint-node codes | head -n1)"
+# No servers yet but SUB_URL is set: fetch them now.
+[ -n "$(flint-node codes)" ] || [ -z "$(flint-sub-update list)" ] || flint-sub-update || true
+if [ -n "$(flint-node codes)" ]; then
+	flint-node use "$DEFAULT_NODE" || flint-node use "$(flint-node codes | head -n1)"
+else
+	flint-node apply
+fi
 /etc/init.d/flint-ui enable
 /etc/init.d/flint-ui restart
 /etc/init.d/firewall reload
@@ -212,7 +215,7 @@ sh /etc/firewall.user
 
 say "geo files for RU routing (~25 MB)"
 if [ -s /usr/share/xray/geoip.dat ] && [ -s /usr/share/xray/geosite.dat ]; then
-	flint-node apply
+	[ -z "$(flint-node codes)" ] || flint-node apply
 else
 	flint-geo-update
 fi
@@ -227,11 +230,15 @@ grep -q flint-watchdog /etc/crontabs/root 2>/dev/null ||
 
 say "check"
 nslookup youtube.com 127.0.0.1 >/dev/null && echo "DNS: ok" || echo "DNS: FAIL"
-for try in 1 2 3; do
-	ip="$(curl -s -m 15 -x http://127.0.0.1:1087 https://ifconfig.me || true)"
-	[ -n "$ip" ] && break
-	sleep 5
-done
-[ -n "$ip" ] && echo "VPN exit IP: $ip" || echo "VPN: FAIL (check nodes.conf / VLESS_UUID)"
+if [ -z "$(flint-node codes)" ]; then
+	echo "VPN: no servers yet, devices go online directly. Add a subscription in the panel (Subscriptions tab)."
+else
+	for try in 1 2 3; do
+		ip="$(curl -s -m 15 -x http://127.0.0.1:1087 https://ifconfig.me || true)"
+		[ -n "$ip" ] && break
+		sleep 5
+	done
+	[ -n "$ip" ] && echo "VPN exit IP: $ip" || echo "VPN: FAIL (check the servers on the panel's Servers tab)"
+fi
 [ "$(flint-node vpn)" = off ] && echo "NOTE: VPN is switched off in the panel (flint-node vpn on to enable)"
 echo "Flint VPN $VERSION. Panel: http://vpn.lan:81/  (PIN from flint.env)"

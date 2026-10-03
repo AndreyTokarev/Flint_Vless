@@ -6,6 +6,19 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-03
+
+### Added
+- Install without servers: a deploy needs only `config/flint.env` with `UI_PIN`; `config/nodes.conf`, `SUB_URL` and `VLESS_UUID` are optional. While there are no servers, Xray stays down and devices go online directly; the Status and Servers tabs link to "Add a subscription" and "add an own server". The first subscription or own server added turns the VPN on by itself.
+- With `SUB_URL` set and no servers yet, the install downloads the subscription's servers right away.
+
+### Changed
+- The last subscription can now be deleted: the router switches to the no-servers mode.
+- "Copy and edit" on the Own servers tab is hidden while there is nothing to copy.
+
+### Fixed
+- Deleting the last own server while it was the current one no longer leaves Xray on the old config.
+
 ## [1.0.0] — 2026-10-03
 
 ### Added
@@ -89,7 +102,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v0.7.0...v1.0.0
 [0.7.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v0.5.0...v0.6.0

@@ -2,6 +2,8 @@
 START=99
 USE_PROCD=1
 start_service() {
+  # No config while there are no servers (see flint-node).
+  [ -s /etc/xray/config.json ] || return 0
   procd_open_instance
   procd_set_param command /usr/bin/xray run -c /etc/xray/config.json
   procd_set_param env XRAY_LOCATION_ASSET=/usr/share/xray

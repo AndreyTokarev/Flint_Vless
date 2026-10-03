@@ -22,6 +22,7 @@ esac
 flint-adblock check >/dev/null 2>&1
 [ "$(cat "$STATE" 2>/dev/null || echo on)" = on ] || exit 0
 [ "$(flint-node vpn)" = on ] || exit 0
+[ -n "$(flint-node codes)" ] || exit 0
 
 tunnel_ok() { [ "$(curl -s -o /dev/null -m 8 -w '%{http_code}' -x http://127.0.0.1:1087 https://www.google.com/generate_204)" = 204 ]; }
 online() { curl -s -o /dev/null -m 8 https://ya.ru || curl -s -o /dev/null -m 8 https://www.google.com/generate_204; }

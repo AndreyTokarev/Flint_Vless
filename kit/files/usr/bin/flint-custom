@@ -38,7 +38,8 @@ check() {
 	case "$2" in *"$NL"*) echo "Bad $1"; exit 1 ;; esac
 	echo "$2" | grep -qE "$3" || { echo "Bad $1: '$2'"; exit 1; }
 }
-reapply() { if [ "$(cat "$CUR" 2>/dev/null)" = "$1" ]; then flint-node apply; fi; }
+# Also the first server on a router that had none: it becomes the current one.
+reapply() { if [ ! -s "$CUR" ] || [ "$(cat "$CUR")" = "$1" ]; then flint-node apply; fi; }
 
 set_node() {
 	code="$1"; host="$3"; port="$4"; uuid="$5"; sni="$6"; pbk="$7"; sid="${8:--}"; net="${9:-tcp}"; svc="${10:--}"
@@ -90,8 +91,8 @@ EOF
 		echo "Deleted: $2"
 		if [ "$(cat "$CUR" 2>/dev/null)" = "$2" ]; then
 			first="$(flint-node codes | head -n1)"
-			echo "It was the current server, switching to $first"
-			flint-node "$first"
+			[ -z "$first" ] || echo "It was the current server, switching to $first"
+			flint-node "${first:-apply}"
 		fi
 		;;
 	*)

@@ -1,4 +1,4 @@
-# Upload the kit with config/flint.env + config/nodes.conf to the router and run install.sh.
+# Upload the kit with config/flint.env (+ config/nodes.conf and other saved lists, if any) to the router and run install.sh.
 # Usage: .\deploy.ps1 [-Router 192.168.8.1]
 param(
     [string]$Router = "192.168.8.1",
@@ -8,10 +8,8 @@ $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $target = "$User@$Router"
 
-foreach ($f in "flint.env", "nodes.conf") {
-    if (-not (Test-Path (Join-Path $root "config\$f"))) {
-        throw "Missing config\$f - copy config\$f.example and fill it in (or restore from backup)."
-    }
+if (-not (Test-Path (Join-Path $root "config\flint.env"))) {
+    throw "Missing config\flint.env - copy config\flint.env.example and fill it in (or restore from backup)."
 }
 
 $staging = Join-Path ([IO.Path]::GetTempPath()) "flint-kit"

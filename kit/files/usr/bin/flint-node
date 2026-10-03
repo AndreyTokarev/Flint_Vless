@@ -4,6 +4,7 @@
 #        flint-node use <code>     switch without the exit IP check
 #        flint-node routing [ru|global]
 #        flint-node vpn [on|off]   off = LAN clients go to the internet directly, bypassing Xray
+#                                  (so they do while there are no servers at all)
 #        flint-node site list | add direct|proxy <site> | del <site>
 #   ru     - Russian sites/IPs go direct, the rest via VPN (needs /usr/share/xray/geo*.dat)
 #   global - everything via VPN
@@ -22,7 +23,7 @@ SITES=/etc/xray/custom-sites
 GEO=/usr/share/xray
 
 node_files() { for f in "$NODES" "$CUSTOM"; do [ -f "$f" ] && echo "$f"; done; }
-nodes() { cat $(node_files) | grep -v -E '^[[:space:]]*(#|$)'; }
+nodes() { [ -n "$(node_files)" ] || return 0; cat $(node_files) | grep -v -E '^[[:space:]]*(#|$)'; }
 current() { cat "$CUR" 2>/dev/null || nodes | awk 'NR == 1 {print $1}'; }
 mode() { cat "$MODE_FILE" 2>/dev/null || echo ru; }
 sub_hosts() { { echo "$SUB_URL"; cut -f2 "$SUBS" 2>/dev/null; } | sed -e 's|^[a-zA-Z]*://||' -e 's|[/:?#].*||'; }
@@ -81,8 +82,20 @@ render() {
 
 apply() {
 	code="$1"
-	nodes | awk '{print $1}' | grep -qx "$code" || { echo "Unknown: $code"; exit 1; }
 	. "$ENV"
+	# No servers at all (none deployed, no subscription yet): Xray stays down and firewall.user lets LAN go direct.
+	if [ -z "$(nodes)" ]; then
+		/etc/init.d/xray stop >/dev/null 2>&1 || true
+		rm -f "$CONF" "$CUR"
+		sh /etc/firewall.user >/dev/null 2>&1 || true
+		if [ "${FLINT_LANG:-${UI_LANG:-ru}}" = en ]; then
+			echo "No servers yet: devices go online directly. Add a subscription on the Subscriptions tab or an own server."
+		else
+			echo "Серверов пока нет: устройства ходят в интернет напрямую. Добавьте подписку на вкладке «Подписки» или свой сервер."
+		fi
+		return 0
+	fi
+	nodes | awk '{print $1}' | grep -qx "$code" || { echo "Unknown: $code"; exit 1; }
 	RENDER_MODE="$(mode)"
 	if ! render "$code"; then
 		if [ "$RENDER_MODE" = ru ]; then
@@ -95,7 +108,7 @@ apply() {
 	fi
 	mv "$CONF.new" "$CONF"
 	echo "$code" > "$CUR"
-	/etc/init.d/xray restart
+	/etc/init.d/xray restart 2>/dev/null
 	sh /etc/firewall.user >/dev/null 2>&1 || true
 	echo "Node: $code, routing: $RENDER_MODE"
 }
