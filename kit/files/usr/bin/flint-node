@@ -1,15 +1,15 @@
 #!/bin/sh
 # Switch the Xray VLESS REALITY node and routing mode.
-# Usage: gru-node [list|codes|names|apply|<code>]
-#        gru-node use <code>     switch without the exit IP check
-#        gru-node routing [ru|global]
-#        gru-node vpn [on|off]   off = LAN clients go to the internet directly, bypassing Xray
-#        gru-node site list | add direct|proxy <site> | del <site>
+# Usage: flint-node [list|codes|names|apply|<code>]
+#        flint-node use <code>     switch without the exit IP check
+#        flint-node routing [ru|global]
+#        flint-node vpn [on|off]   off = LAN clients go to the internet directly, bypassing Xray
+#        flint-node site list | add direct|proxy <site> | del <site>
 #   ru     - Russian sites/IPs go direct, the rest via VPN (needs /usr/share/xray/geo*.dat)
 #   global - everything via VPN
 #   custom sites (domains incl. subdomains, IPv4, CIDR) override the geo filter in both modes
 set -e
-ENV=/etc/xray/gru.env
+ENV=/etc/xray/flint.env
 NODES=/etc/xray/nodes.conf
 CUSTOM=/etc/xray/nodes-custom.conf
 TEMPLATE=/etc/xray/template.json
@@ -75,7 +75,7 @@ render() {
 	if [ "$RENDER_MODE" != ru ]; then
 		sed -i -e '/geosite:category-ru/d' -e '/"geoip:ru"/d' "$CONF.new"
 	fi
-	XRAY_LOCATION_ASSET=$GEO xray run -test -format json -c "$CONF.new" > /tmp/gru-xray-test.log 2>&1
+	XRAY_LOCATION_ASSET=$GEO xray run -test -format json -c "$CONF.new" > /tmp/flint-xray-test.log 2>&1
 }
 
 apply() {
@@ -87,9 +87,9 @@ apply() {
 		if [ "$RENDER_MODE" = ru ]; then
 			echo "RU routing unavailable (geo files missing or broken), using global"
 			RENDER_MODE=global
-			render "$code" || { echo "Config test failed:"; tail -n 3 /tmp/gru-xray-test.log; exit 1; }
+			render "$code" || { echo "Config test failed:"; tail -n 3 /tmp/flint-xray-test.log; exit 1; }
 		else
-			echo "Config test failed:"; tail -n 3 /tmp/gru-xray-test.log; exit 1
+			echo "Config test failed:"; tail -n 3 /tmp/flint-xray-test.log; exit 1
 		fi
 	fi
 	mv "$CONF.new" "$CONF"
@@ -117,7 +117,7 @@ case "$cmd" in
 		;;
 	routing)
 		[ -n "$2" ] || { mode; exit 0; }
-		case "$2" in ru|global) ;; *) echo "Usage: gru-node routing [ru|global]"; exit 1 ;; esac
+		case "$2" in ru|global) ;; *) echo "Usage: flint-node routing [ru|global]"; exit 1 ;; esac
 		echo "$2" > "$MODE_FILE"
 		apply "$(current)"
 		;;
@@ -133,7 +133,7 @@ case "$cmd" in
 				[ -f "$SITES" ] && awk 'NF == 2 { print $1 "\t" $2 }' "$SITES"
 				exit 0 ;;
 			add)
-				case "$3" in direct|proxy) ;; *) echo "Usage: gru-node site add direct|proxy <site>"; exit 1 ;; esac
+				case "$3" in direct|proxy) ;; *) echo "Usage: flint-node site add direct|proxy <site>"; exit 1 ;; esac
 				site="$(normalize_site "$4")"
 				[ -n "$site" ] || { echo "Not a domain or IP: $4"; exit 1; }
 				touch "$SITES"
@@ -148,13 +148,13 @@ case "$cmd" in
 				mv "$SITES.new" "$SITES"
 				echo "Removed: $site" ;;
 			*)
-				echo "Usage: gru-node site list | add direct|proxy <site> | del <site>"; exit 1 ;;
+				echo "Usage: flint-node site list | add direct|proxy <site> | del <site>"; exit 1 ;;
 		esac
 		apply "$(current)"
 		;;
 	vpn)
 		[ -n "$2" ] || { vpn_state; exit 0; }
-		case "$2" in on|off) ;; *) echo "Usage: gru-node vpn [on|off]"; exit 1 ;; esac
+		case "$2" in on|off) ;; *) echo "Usage: flint-node vpn [on|off]"; exit 1 ;; esac
 		echo "$2" > "$VPN_FILE"
 		sh /etc/firewall.user >/dev/null 2>&1
 		echo "VPN: $2"

@@ -12,13 +12,13 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 DIR="$ROOT/backup/$(date +%Y-%m-%d_%H%M)"
 mkdir -p "$DIR" "$ROOT/config"
 
-PATHS="/etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /etc/firewall.user* /etc/init.d/xray /etc/init.d/gru-* \
-/usr/bin/gru-* /usr/share/gru /www/gru /etc/config/dhcp /etc/config/firewall /etc/config/network \
+PATHS="/etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /etc/firewall.user* /etc/init.d/xray /etc/init.d/flint-* \
+/usr/bin/flint-* /usr/share/flint /www/flint /etc/config/dhcp /etc/config/firewall /etc/config/network \
 /etc/config/wireless /etc/rc.local /etc/hosts /etc/opkg.conf /etc/crontabs/root /etc/dropbear/authorized_keys"
 ssh "$TARGET" "tar -czf - $PATHS 2>/dev/null" > "$DIR/router-config.tar.gz" || true
 echo "Saved $DIR/router-config.tar.gz"
 
-for f in gru.env nodes.conf nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
+for f in flint.env nodes.conf nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
 	if ssh "$TARGET" "test -f /etc/xray/$f"; then
 		ssh "$TARGET" "cat /etc/xray/$f" > "$ROOT/config/$f"
 		cp "$ROOT/config/$f" "$DIR/"

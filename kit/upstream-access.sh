@@ -6,20 +6,20 @@
 set -e
 NET="${1:-192.168.0.0/24}"
 
-uci set firewall.gru_upstream_in=rule
-uci set firewall.gru_upstream_in.name='Allow-Upstream-LAN-to-Router'
-uci set firewall.gru_upstream_in.src='wan'
-uci set firewall.gru_upstream_in.src_ip="$NET"
-uci set firewall.gru_upstream_in.proto='all'
-uci set firewall.gru_upstream_in.target='ACCEPT'
+uci set firewall.flint_upstream_in=rule
+uci set firewall.flint_upstream_in.name='Allow-Upstream-LAN-to-Router'
+uci set firewall.flint_upstream_in.src='wan'
+uci set firewall.flint_upstream_in.src_ip="$NET"
+uci set firewall.flint_upstream_in.proto='all'
+uci set firewall.flint_upstream_in.target='ACCEPT'
 
-uci set firewall.gru_upstream_fwd=rule
-uci set firewall.gru_upstream_fwd.name='Allow-Upstream-LAN-to-LAN'
-uci set firewall.gru_upstream_fwd.src='wan'
-uci set firewall.gru_upstream_fwd.dest='lan'
-uci set firewall.gru_upstream_fwd.src_ip="$NET"
-uci set firewall.gru_upstream_fwd.proto='all'
-uci set firewall.gru_upstream_fwd.target='ACCEPT'
+uci set firewall.flint_upstream_fwd=rule
+uci set firewall.flint_upstream_fwd.name='Allow-Upstream-LAN-to-LAN'
+uci set firewall.flint_upstream_fwd.src='wan'
+uci set firewall.flint_upstream_fwd.dest='lan'
+uci set firewall.flint_upstream_fwd.src_ip="$NET"
+uci set firewall.flint_upstream_fwd.proto='all'
+uci set firewall.flint_upstream_fwd.target='ACCEPT'
 
 uci commit firewall
 /etc/init.d/firewall reload

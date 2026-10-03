@@ -1,17 +1,17 @@
 #!/bin/sh
-# Gru kit installer for GL.iNet GL-BE6500 (Flint), firmware 4.x.
+# Flint kit installer for GL.iNet GL-BE6500 (Flint), firmware 4.x.
 # Run on the router from the unpacked kit dir: sh install.sh
-# Expects config/gru.env and config/nodes.conf next to this script (see config/*.example).
+# Expects config/flint.env and config/nodes.conf next to this script (see config/*.example).
 set -e
 KIT="$(cd "$(dirname "$0")" && pwd)"
 say() { echo "== $*"; }
 die() { echo "!! $*" >&2; exit 1; }
 
-[ -f "$KIT/config/gru.env" ] || die "missing $KIT/config/gru.env"
+[ -f "$KIT/config/flint.env" ] || die "missing $KIT/config/flint.env"
 [ -f "$KIT/config/nodes.conf" ] || die "missing $KIT/config/nodes.conf"
-. "$KIT/config/gru.env"
-[ -n "$VLESS_UUID" ] || die "VLESS_UUID is empty in gru.env"
-[ -n "$UI_PIN" ] || die "UI_PIN is empty in gru.env"
+. "$KIT/config/flint.env"
+[ -n "$VLESS_UUID" ] || die "VLESS_UUID is empty in flint.env"
+[ -n "$UI_PIN" ] || die "UI_PIN is empty in flint.env"
 DEFAULT_NODE="${DEFAULT_NODE:-auto}"
 grep -q -E "^[[:space:]]*$DEFAULT_NODE[[:space:]]" "$KIT/config/nodes.conf" ||
 	die "DEFAULT_NODE '$DEFAULT_NODE' not found in nodes.conf"
@@ -34,9 +34,9 @@ missing() {
 need="$(missing | tr '\n' ' ')"
 if [ -n "${need% }" ]; then
 	say "opkg install: $need"
-	opkg update > /tmp/gru-opkg.log 2>&1 || echo "opkg update failed, see /tmp/gru-opkg.log"
+	opkg update > /tmp/flint-opkg.log 2>&1 || echo "opkg update failed, see /tmp/flint-opkg.log"
 	for p in $need; do
-		opkg install "$p" >> /tmp/gru-opkg.log 2>&1 || echo "opkg install $p failed"
+		opkg install "$p" >> /tmp/flint-opkg.log 2>&1 || echo "opkg install $p failed"
 	done
 fi
 
@@ -56,14 +56,30 @@ if ! command -v xray >/dev/null; then
 fi
 
 left="$(missing | grep -v -x unzip | tr '\n' ' ')"
-[ -z "${left% }" ] || die "still missing: $left (see /tmp/gru-opkg.log)"
+[ -z "${left% }" ] || die "still missing: $left (see /tmp/flint-opkg.log)"
 echo "xray: $(xray version | head -n1)"
 
 say "legacy cleanup"
-if [ -x /etc/init.d/gru-ui81 ]; then
-	/etc/init.d/gru-ui81 stop || true
-	/etc/init.d/gru-ui81 disable || true
-	rm -f /etc/init.d/gru-ui81
+# Kits before the rename used the gru- prefix: services, files, cron jobs and firewall rules.
+for s in gru-ui81 gru-ui gru-doh gru-adblock; do
+	[ -x "/etc/init.d/$s" ] || continue
+	"/etc/init.d/$s" stop >/dev/null 2>&1 || true
+	"/etc/init.d/$s" disable >/dev/null 2>&1 || true
+	rm -f "/etc/init.d/$s"
+done
+for p in udp tcp; do
+	while iptables -t nat -D PREROUTING -i br-lan -p "$p" --dport 53 -j GRU_DNS 2>/dev/null; do :; done
+done
+iptables -t nat -F GRU_DNS 2>/dev/null && iptables -t nat -X GRU_DNS 2>/dev/null || true
+[ -d /etc/gru-adguard ] && [ ! -e /etc/flint-adguard ] && mv /etc/gru-adguard /etc/flint-adguard
+rm -rf /etc/gru-adguard /www/gru /usr/share/gru
+rm -f /usr/bin/gru-* /etc/dnsmasq.d/gru-*.conf /tmp/dnsmasq.d/gru-*.conf \
+	/etc/dnscrypt-proxy2/gru-doh.toml /etc/xray/gru.env /etc/xray/gru-ui.pass
+sed -i '/\/usr\/bin\/gru-/d' /etc/crontabs/root 2>/dev/null || true
+for sec in gru_ui81 gru_ui gru_upstream_in gru_upstream_fwd; do uci -q delete "firewall.$sec" || true; done
+if [ -f /etc/nginx/conf.d/gru-ui.conf ]; then
+	rm -f /etc/nginx/conf.d/gru-ui.conf
+	/etc/init.d/nginx reload || true
 fi
 if [ -x /etc/init.d/v2raya ]; then
 	/etc/init.d/v2raya stop 2>/dev/null || true
@@ -72,31 +88,26 @@ fi
 sed -i '/dnscrypt-proxy -config/d' /etc/rc.local
 rm -f /etc/firewall.user.d-local-hosts /etc/firewall.user.d-upstream-lan \
 	/etc/dnsmasq.d/local-hosts.conf /tmp/dnsmasq.d/local-hosts.conf \
-	/etc/xray/nodes.tsv /etc/xray/gru-ui.pass
+	/etc/xray/nodes.tsv
 rm -rf /etc/xray/nodes
-uci -q delete firewall.gru_ui81 || true
-if [ -f /etc/nginx/conf.d/gru-ui.conf ]; then
-	rm -f /etc/nginx/conf.d/gru-ui.conf
-	/etc/init.d/nginx reload || true
-fi
 
 say "files"
-mkdir -p /etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /www/gru/cgi-bin /usr/share/gru
+mkdir -p /etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /www/flint/cgi-bin /usr/share/flint
 cp "$KIT/files/etc/xray/template.json" /etc/xray/
-cp "$KIT/files/usr/share/gru/vless.awk" /usr/share/gru/
-cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/gru-ui" "$KIT/files/etc/init.d/gru-doh" \
-	"$KIT/files/etc/init.d/gru-adblock" /etc/init.d/
-cp "$KIT/files/etc/dnscrypt-proxy2/gru-doh.toml" /etc/dnscrypt-proxy2/
+cp "$KIT/files/usr/share/flint/vless.awk" /usr/share/flint/
+cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/flint-ui" "$KIT/files/etc/init.d/flint-doh" \
+	"$KIT/files/etc/init.d/flint-adblock" /etc/init.d/
+cp "$KIT/files/etc/dnscrypt-proxy2/flint-doh.toml" /etc/dnscrypt-proxy2/
 cp "$KIT/files/etc/firewall.user" /etc/firewall.user
-cp "$KIT/files/usr/bin/gru-node" "$KIT/files/usr/bin/gru-geo-update" "$KIT/files/usr/bin/gru-sub-update" \
-	"$KIT/files/usr/bin/gru-custom" "$KIT/files/usr/bin/gru-watchdog" "$KIT/files/usr/bin/gru-adblock" /usr/bin/
-cp "$KIT/files/www/gru/index.html" "$KIT/files/www/gru/logo.svg" "$KIT/files/www/gru/icon.svg" /www/gru/
-cp "$KIT/files/www/gru/cgi-bin/panel.cgi" /www/gru/cgi-bin/
-chmod 755 /etc/init.d/xray /etc/init.d/gru-ui /etc/init.d/gru-doh /etc/init.d/gru-adblock /usr/bin/gru-node \
-	/usr/bin/gru-geo-update /usr/bin/gru-sub-update /usr/bin/gru-custom /usr/bin/gru-watchdog /usr/bin/gru-adblock \
-	/www/gru/cgi-bin/panel.cgi
+cp "$KIT/files/usr/bin/flint-node" "$KIT/files/usr/bin/flint-geo-update" "$KIT/files/usr/bin/flint-sub-update" \
+	"$KIT/files/usr/bin/flint-custom" "$KIT/files/usr/bin/flint-watchdog" "$KIT/files/usr/bin/flint-adblock" /usr/bin/
+cp "$KIT/files/www/flint/index.html" "$KIT/files/www/flint/logo.svg" "$KIT/files/www/flint/icon.svg" /www/flint/
+cp "$KIT/files/www/flint/cgi-bin/panel.cgi" /www/flint/cgi-bin/
+chmod 755 /etc/init.d/xray /etc/init.d/flint-ui /etc/init.d/flint-doh /etc/init.d/flint-adblock /usr/bin/flint-node \
+	/usr/bin/flint-geo-update /usr/bin/flint-sub-update /usr/bin/flint-custom /usr/bin/flint-watchdog /usr/bin/flint-adblock \
+	/www/flint/cgi-bin/panel.cgi
 
-(umask 077; cp "$KIT/config/gru.env" /etc/xray/gru.env; cp "$KIT/config/nodes.conf" /etc/xray/nodes.conf)
+(umask 077; cp "$KIT/config/flint.env" /etc/xray/flint.env; cp "$KIT/config/nodes.conf" /etc/xray/nodes.conf)
 # Optional: own nodes, custom sites and ad blocking lists/rules saved by backup; without them the router's copies stay.
 for f in nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
 	if [ -f "$KIT/config/$f" ]; then (umask 077; cp "$KIT/config/$f" "/etc/xray/$f"); fi
@@ -108,12 +119,12 @@ esac
 
 LAN_IP="$(uci -q get network.lan.ipaddr || echo 192.168.8.1)"
 LAN_IP="${LAN_IP%%/*}"
-sed "s/__LAN_IP__/$LAN_IP/g" "$KIT/files/etc/dnsmasq.d/gru-names.conf" > /etc/dnsmasq.d/gru-names.conf
-: > /etc/dnsmasq.d/gru-hosts.conf
+sed "s/__LAN_IP__/$LAN_IP/g" "$KIT/files/etc/dnsmasq.d/flint-names.conf" > /etc/dnsmasq.d/flint-names.conf
+: > /etc/dnsmasq.d/flint-hosts.conf
 for pair in $LOCAL_HOSTS; do
 	name="${pair%%=*}"; ip="${pair#*=}"
 	for n in "$name" "$name.lan" "$name.local"; do
-		echo "address=/$n/$ip" >> /etc/dnsmasq.d/gru-hosts.conf
+		echo "address=/$n/$ip" >> /etc/dnsmasq.d/flint-hosts.conf
 	done
 done
 
@@ -131,12 +142,12 @@ if ! uci show firewall | grep -q "path='/etc/firewall.user'"; then
 	uci set "firewall.$sec.path=/etc/firewall.user"
 	uci set "firewall.$sec.fw4_compatible=1"
 fi
-uci set firewall.gru_ui=rule
-uci set firewall.gru_ui.name='Allow-Gru-UI'
-uci set firewall.gru_ui.src='lan'
-uci set firewall.gru_ui.dest_port='81'
-uci set firewall.gru_ui.proto='tcp'
-uci set firewall.gru_ui.target='ACCEPT'
+uci set firewall.flint_ui=rule
+uci set firewall.flint_ui.name='Allow-Flint-UI'
+uci set firewall.flint_ui.src='lan'
+uci set firewall.flint_ui.dest_port='81'
+uci set firewall.flint_ui.proto='tcp'
+uci set firewall.flint_ui.target='ACCEPT'
 uci set firewall.xray_socks=rule
 uci set firewall.xray_socks.name='Allow-Xray-SOCKS'
 uci set firewall.xray_socks.src='lan'
@@ -149,60 +160,60 @@ uci set firewall.xray_http.src='lan'
 uci set firewall.xray_http.dest_port='1087'
 uci set firewall.xray_http.proto='tcp'
 uci set firewall.xray_http.target='ACCEPT'
-uci -q delete firewall.gru_upstream_in || true
-uci -q delete firewall.gru_upstream_fwd || true
+uci -q delete firewall.flint_upstream_in || true
+uci -q delete firewall.flint_upstream_fwd || true
 if [ -n "$UPSTREAM_NET" ]; then
-	uci set firewall.gru_upstream_in=rule
-	uci set firewall.gru_upstream_in.name='Allow-Upstream-LAN-to-Router'
-	uci set firewall.gru_upstream_in.src='wan'
-	uci set firewall.gru_upstream_in.src_ip="$UPSTREAM_NET"
-	uci set firewall.gru_upstream_in.proto='all'
-	uci set firewall.gru_upstream_in.target='ACCEPT'
-	uci set firewall.gru_upstream_fwd=rule
-	uci set firewall.gru_upstream_fwd.name='Allow-Upstream-LAN-to-LAN'
-	uci set firewall.gru_upstream_fwd.src='wan'
-	uci set firewall.gru_upstream_fwd.dest='lan'
-	uci set firewall.gru_upstream_fwd.src_ip="$UPSTREAM_NET"
-	uci set firewall.gru_upstream_fwd.proto='all'
-	uci set firewall.gru_upstream_fwd.target='ACCEPT'
+	uci set firewall.flint_upstream_in=rule
+	uci set firewall.flint_upstream_in.name='Allow-Upstream-LAN-to-Router'
+	uci set firewall.flint_upstream_in.src='wan'
+	uci set firewall.flint_upstream_in.src_ip="$UPSTREAM_NET"
+	uci set firewall.flint_upstream_in.proto='all'
+	uci set firewall.flint_upstream_in.target='ACCEPT'
+	uci set firewall.flint_upstream_fwd=rule
+	uci set firewall.flint_upstream_fwd.name='Allow-Upstream-LAN-to-LAN'
+	uci set firewall.flint_upstream_fwd.src='wan'
+	uci set firewall.flint_upstream_fwd.dest='lan'
+	uci set firewall.flint_upstream_fwd.src_ip="$UPSTREAM_NET"
+	uci set firewall.flint_upstream_fwd.proto='all'
+	uci set firewall.flint_upstream_fwd.target='ACCEPT'
 fi
 uci commit firewall
 
 say "services"
 for pid in $(pidof dnscrypt-proxy); do
-	grep -q gru-doh.toml /proc/$pid/cmdline 2>/dev/null || kill "$pid" 2>/dev/null || true
+	grep -q flint-doh.toml /proc/$pid/cmdline 2>/dev/null || kill "$pid" 2>/dev/null || true
 done
-/etc/init.d/gru-doh enable
-/etc/init.d/gru-doh restart
+/etc/init.d/flint-doh enable
+/etc/init.d/flint-doh restart
 sleep 2
 /etc/init.d/dnsmasq restart
 sleep 2
 # Ad blocking: the state chosen in the panel survives a redeploy; ADBLOCK only seeds a fresh router.
 [ -f /etc/xray/adblock ] || case "$ADBLOCK" in on|1) echo on ;; *) echo off ;; esac > /etc/xray/adblock
-if [ "$(gru-adblock state)" = on ]; then
-	gru-adblock on || true
+if [ "$(flint-adblock state)" = on ]; then
+	flint-adblock on || true
 else
-	/etc/init.d/gru-adblock disable 2>/dev/null || true
+	/etc/init.d/flint-adblock disable 2>/dev/null || true
 fi
 /etc/init.d/xray enable
-gru-node use "$DEFAULT_NODE"
-/etc/init.d/gru-ui enable
-/etc/init.d/gru-ui restart
+flint-node use "$DEFAULT_NODE"
+/etc/init.d/flint-ui enable
+/etc/init.d/flint-ui restart
 /etc/init.d/firewall reload
 sh /etc/firewall.user
 
 say "geo files for RU routing (~25 MB)"
 if [ -s /usr/share/xray/geoip.dat ] && [ -s /usr/share/xray/geosite.dat ]; then
-	gru-node apply
+	flint-node apply
 else
-	gru-geo-update
+	flint-geo-update
 fi
-grep -q gru-geo-update /etc/crontabs/root 2>/dev/null ||
-	echo "30 4 * * 0 /usr/bin/gru-geo-update >/tmp/gru-geo-update.log 2>&1" >> /etc/crontabs/root
+grep -q flint-geo-update /etc/crontabs/root 2>/dev/null ||
+	echo "30 4 * * 0 /usr/bin/flint-geo-update >/tmp/flint-geo-update.log 2>&1" >> /etc/crontabs/root
 # The interval chosen in the panel survives a redeploy; SUB_INTERVAL only seeds a fresh router.
-gru-sub-update interval "$(cat /etc/xray/sub-interval 2>/dev/null || echo "${SUB_INTERVAL:-24h}")"
-grep -q gru-watchdog /etc/crontabs/root 2>/dev/null ||
-	echo "*/2 * * * * /usr/bin/gru-watchdog >/tmp/gru-watchdog.log 2>&1" >> /etc/crontabs/root
+flint-sub-update interval "$(cat /etc/xray/sub-interval 2>/dev/null || echo "${SUB_INTERVAL:-24h}")"
+grep -q flint-watchdog /etc/crontabs/root 2>/dev/null ||
+	echo "*/2 * * * * /usr/bin/flint-watchdog >/tmp/flint-watchdog.log 2>&1" >> /etc/crontabs/root
 /etc/init.d/cron enable
 /etc/init.d/cron restart
 
@@ -214,5 +225,5 @@ for try in 1 2 3; do
 	sleep 5
 done
 [ -n "$ip" ] && echo "VPN exit IP: $ip" || echo "VPN: FAIL (check nodes.conf / VLESS_UUID)"
-[ "$(gru-node vpn)" = off ] && echo "NOTE: VPN is switched off in the panel (gru-node vpn on to enable)"
-echo "Panel: http://vpn.lan:81/  (PIN from gru.env)"
+[ "$(flint-node vpn)" = off ] && echo "NOTE: VPN is switched off in the panel (flint-node vpn on to enable)"
+echo "Panel: http://vpn.lan:81/  (PIN from flint.env)"

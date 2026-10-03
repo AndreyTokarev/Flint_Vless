@@ -1,6 +1,6 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="kit/files/www/gru/logo.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="kit/files/www/flint/logo.svg">
     <img src="docs/brand/flint-mark.svg" width="110" alt="Flint VPN">
   </picture>
 </p>
@@ -87,10 +87,8 @@ The screenshots use demo data: documentation IP ranges, made-up servers and keys
 - `iptables` rules (in `/etc/firewall.user`) send client TCP traffic from `br-lan` into Xray's `dokodemo-door`. Local and private networks and the VPN servers' own addresses bypass it.
 - Client DNS queries are forced to the router. With ad blocking on they go to AdGuard Home first, otherwise straight to dnsmasq; then to dnscrypt-proxy (DoH).
 - QUIC (UDP 443) is blocked so that browsers and apps fall back to TCP and enter the tunnel. Other UDP goes direct.
-- The Xray config is rendered from `/etc/xray/template.json` by `gru-node`: selected server, geo filter, own sites. It is validated with `xray -test` before being applied, and the exit IP is checked afterwards.
+- The Xray config is rendered from `/etc/xray/template.json` by `flint-node`: selected server, geo filter, own sites. It is validated with `xray -test` before being applied, and the exit IP is checked afterwards.
 - The router's own traffic (subscription and package updates) goes direct.
-
-The `gru-` prefix of the scripts is historical: the project started for the GruVPN provider. It works with any VLESS + REALITY subscription or server.
 
 ## Requirements
 
@@ -144,13 +142,13 @@ cat ~/.ssh/id_*.pub | ssh root@192.168.8.1 "cat >> /etc/dropbear/authorized_keys
 
 Check: `ssh root@192.168.8.1 echo ok` should print `ok` without asking for a password.
 
-### 4. Fill in `config/gru.env`
+### 4. Fill in `config/flint.env`
 
 ```powershell
-Copy-Item config\gru.env.example config\gru.env     # Windows
+Copy-Item config\flint.env.example config\flint.env     # Windows
 ```
 ```sh
-cp config/gru.env.example config/gru.env              # macOS / Linux
+cp config/flint.env.example config/flint.env              # macOS / Linux
 ```
 
 The minimum to fill in:
@@ -163,14 +161,14 @@ The minimum to fill in:
 | `UPSTREAM_IF` | `sta1` — router on Wi‑Fi (Repeater), `wan` — on a cable |
 | `UPSTREAM_NET` | main router's network, e.g. `192.168.0.0/24` or `192.168.1.0/24` |
 
-All settings are described in [Settings](#settings-configgruenv). `config/gru.env` is never committed.
+All settings are described in [Settings](#settings-configflintenv). `config/flint.env` is never committed.
 
 ### 5. Prepare the server list `config/nodes.conf`
 
 **Option A — from the subscription (recommended).** Requires Python 3:
 
 ```sh
-python tools/sub2nodes.py     # reads SUB_URL from config/gru.env, writes config/nodes.conf
+python tools/sub2nodes.py     # reads SUB_URL from config/flint.env, writes config/nodes.conf
 ```
 
 After installation the router refreshes the list from the subscription by itself, so this is needed only once.
@@ -186,7 +184,7 @@ vless://UUID@ADDRESS:PORT?type=tcp&security=reality&sni=SNI&pbk=PBK&sid=SID&flow
 nl  ADDRESS  SNI  PBK  SID  UUID  PORT
 ```
 
-The comment line above a server is its name in the panel. An empty `sid` is written as `-`. The first field is a short code (`nl`); `DEFAULT_NODE` in `gru.env` must match one of the codes.
+The comment line above a server is its name in the panel. An empty `sid` is written as `-`. The first field is a short code (`nl`); `DEFAULT_NODE` in `flint.env` must match one of the codes.
 
 ### 6. Install
 
@@ -210,16 +208,16 @@ The script packs the kit, uploads it and runs `install.sh` on the router. It tak
 ```
 DNS: ok
 VPN exit IP: 203.0.113.42
-Panel: http://vpn.lan:81/  (PIN from gru.env)
+Panel: http://vpn.lan:81/  (PIN from flint.env)
 ```
 
 `VPN exit IP` is the VPN server's address, not your home one. If you get `VPN: FAIL` instead, see [Troubleshooting](#troubleshooting).
 
 ### 7. Open the panel
 
-Connect to the router's Wi‑Fi and open **http://vpn.lan:81/** (or `http://192.168.8.1:81/`), enter the PIN from `gru.env`. To check the VPN, open any site like [ifconfig.me](https://ifconfig.me): it should show the VPN server's address.
+Connect to the router's Wi‑Fi and open **http://vpn.lan:81/** (or `http://192.168.8.1:81/`), enter the PIN from `flint.env`. To check the VPN, open any site like [ifconfig.me](https://ifconfig.me): it should show the VPN server's address.
 
-You can rerun the installation any number of times — for example after changing `gru.env` or updating the project. Settings made in the panel (own servers, sites, update interval) are kept.
+You can rerun the installation any number of times — for example after changing `flint.env` or updating the project. Settings made in the panel (own servers, sites, update interval) are kept.
 
 ## Web panel
 
@@ -233,9 +231,9 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 | **Routing** | Russia geo filter on/off; own sites, IPs and subnets "always direct" or "always via VPN" |
 | **Ad blocking** | ad blocking on/off and 24-hour stats; devices without blocking; filter lists — ready-made and your own by URL; auto-update and "Update the lists now"; own rules |
 
-The panel speaks English and Russian. On the first visit the language follows the browser (or `UI_LANG` in `gru.env`); after that use the **RU · EN** switch under the menu or on the login page — the choice is remembered in the browser. Messages after panel actions use the same language.
+The panel speaks English and Russian. On the first visit the language follows the browser (or `UI_LANG` in `flint.env`); after that use the **RU · EN** switch under the menu or on the login page — the choice is remembered in the browser. Messages after panel actions use the same language.
 
-## Settings `config/gru.env`
+## Settings `config/flint.env`
 
 | Setting | Description |
 |---|---|
@@ -258,12 +256,12 @@ The panel speaks English and Russian. On the first visit the language follows th
 ## Servers `config/nodes.conf`
 
 ```sh
-python tools/sub2nodes.py           # SUB_URL from config/gru.env -> config/nodes.conf
+python tools/sub2nodes.py           # SUB_URL from config/flint.env -> config/nodes.conf
 python tools/sub2nodes.py --no-ip   # without "white list" servers (bare IPs)
 python tools/sub2nodes.py --grpc    # also gRPC servers
 ```
 
-On the router `gru-sub-update` does the same (panel button and auto-update). VLESS + REALITY over TCP (xtls-rprx-vision) is imported, including bare-IP servers, which go to the "white lists" block. gRPC only with `--grpc` / `SUB_GRPC=1`. Provider announcements disguised as servers (names starting with ❗) are skipped.
+On the router `flint-sub-update` does the same (panel button and auto-update). VLESS + REALITY over TCP (xtls-rprx-vision) is imported, including bare-IP servers, which go to the "white lists" block. gRPC only with `--grpc` / `SUB_GRPC=1`. Provider announcements disguised as servers (names starting with ❗) are skipped.
 
 Line format:
 
@@ -277,14 +275,14 @@ An empty field is `-`; `uuid` defaults to `VLESS_UUID`, port to `443`, transport
 
 ## Failover
 
-`gru-watchdog` runs from cron every 2 minutes: it checks the tunnel (a request to `generate_204` through Xray); on failure it waits 10 seconds and checks again; if the direct internet works (so it's the server, not the ISP), it refreshes the subscription; if the current server still fails, it tries the others in order and stays on the first working one, or returns to the original if none works. The last result is shown in the panel and in `/etc/xray/watchdog-last`. Turn it off in the panel or with `gru-watchdog off`.
+`flint-watchdog` runs from cron every 2 minutes: it checks the tunnel (a request to `generate_204` through Xray); on failure it waits 10 seconds and checks again; if the direct internet works (so it's the server, not the ISP), it refreshes the subscription; if the current server still fails, it tries the others in order and stays on the first working one, or returns to the original if none works. The last result is shown in the panel and in `/etc/xray/watchdog-last`. Turn it off in the panel or with `flint-watchdog off`.
 
 ## Ad blocking
 
 Works at the DNS level for every device on the network, with no apps on the devices. It uses AdGuard Home, which already ships with GL.iNet firmware 4.x (`/usr/bin/AdGuardHome`): the project runs its own instance on `127.0.0.1:5054`. The stock AdGuard Home from the GL admin panel stays off — don't turn both on.
 
 How it works:
-- with blocking on, the firewall (`GRU_DNS` chain) sends client DNS queries to AdGuard Home, which forwards them to dnsmasq, so local names and DoH keep working;
+- with blocking on, the firewall (`FLINT_DNS` chain) sends client DNS queries to AdGuard Home, which forwards them to dnsmasq, so local names and DoH keep working;
 - devices in "Devices without blocking" (by MAC address) go straight to dnsmasq;
 - every 2 minutes cron checks that AdGuard Home answers. If not, it restarts it, and if that fails, DNS bypasses it until it is back. The ad blocker never takes the internet down;
 - the AdGuard Home web UI is not exposed (`127.0.0.1` only); everything is managed from the panel.
@@ -322,7 +320,7 @@ AdGuard Home uses 40–60 MB of RAM; with blocking off it is stopped.
 ./backup.sh --with-binary
 ```
 
-The backup pulls from the router its settings, the own servers and sites from the panel, and the network and Wi‑Fi configs. Fresh `gru.env`, `nodes.conf`, `nodes-custom.conf`, `custom-sites` and the ad blocking files (`adblock-lists`, `adblock-rules`, `adblock-exclude`) are also copied into `config/`.
+The backup pulls from the router its settings, the own servers and sites from the panel, and the network and Wi‑Fi configs. Fresh `flint.env`, `nodes.conf`, `nodes-custom.conf`, `custom-sites` and the ad blocking files (`adblock-lists`, `adblock-rules`, `adblock-exclude`) are also copied into `config/`.
 
 > [!WARNING]
 > `backup/` and the files in `config/` contain your subscription UUID and Wi‑Fi passwords. They are gitignored; keep them separately — in the cloud or on a USB stick.
@@ -340,30 +338,30 @@ The backup pulls from the router its settings, the own servers and sites from th
 ./restore.sh --full
 ```
 
-By default the settings from the backup (`gru.env`, servers, own servers and sites, ad blocking lists, rules and exclusions) go into `config/`, then a normal deploy runs. This works for a reset router too: first connect it to the internet in the GL admin panel. The current `config/` files are saved to `backup/config-before-restore-<time>/` before being replaced.
+By default the settings from the backup (`flint.env`, servers, own servers and sites, ad blocking lists, rules and exclusions) go into `config/`, then a normal deploy runs. This works for a reset router too: first connect it to the internet in the GL admin panel. The current `config/` files are saved to `backup/config-before-restore-<time>/` before being replaced.
 
 `-Full` / `--full` is only for the **same** router: it brings back its network, Wi‑Fi (SSIDs and passwords), firewall, DHCP reservations, cron and SSH keys, then reboots. The script asks for confirmation (`-Yes` / `--yes` skips it).
 
 ## Router commands
 
 ```sh
-gru-node list                  # current server and codes
-gru-node nl                    # switch to server nl (with an exit IP check)
-gru-node routing ru            # geo filter: RU direct (global — everything via VPN)
-gru-node vpn off               # clients go online directly (on — via VPN again)
-gru-node site add direct example.ru     # own site: direct — bypass VPN, proxy — via VPN
-gru-custom link 'vless://...'  # add an own server by link
-gru-sub-update                 # refresh the server list from the subscription
-gru-sub-update interval 1h     # auto-update: off, 30m, 1h, 3h, 6h, 12h, 24h
-gru-watchdog off               # turn failover off (on — turn on)
-gru-geo-update                 # update geoip/geosite manually
-gru-adblock on                 # ad blocking (off — turn off)
-gru-adblock list               # lists: URL, name, rules, last update
-gru-adblock list add https://example.com/list.txt "Name"
-gru-adblock rule add block ads.example.com   # allow — exception
-gru-adblock exclude add aa:bb:cc:dd:ee:ff    # device without blocking
-gru-adblock refresh            # update the lists now
-gru-adblock interval 24        # auto-update: off, 1, 12, 24, 72, 168 hours
+flint-node list                  # current server and codes
+flint-node nl                    # switch to server nl (with an exit IP check)
+flint-node routing ru            # geo filter: RU direct (global — everything via VPN)
+flint-node vpn off               # clients go online directly (on — via VPN again)
+flint-node site add direct example.ru     # own site: direct — bypass VPN, proxy — via VPN
+flint-custom link 'vless://...'  # add an own server by link
+flint-sub-update                 # refresh the server list from the subscription
+flint-sub-update interval 1h     # auto-update: off, 30m, 1h, 3h, 6h, 12h, 24h
+flint-watchdog off               # turn failover off (on — turn on)
+flint-geo-update                 # update geoip/geosite manually
+flint-adblock on                 # ad blocking (off — turn off)
+flint-adblock list               # lists: URL, name, rules, last update
+flint-adblock list add https://example.com/list.txt "Name"
+flint-adblock rule add block ads.example.com   # allow — exception
+flint-adblock exclude add aa:bb:cc:dd:ee:ff    # device without blocking
+flint-adblock refresh            # update the lists now
+flint-adblock interval 24        # auto-update: off, 1, 12, 24, 72, 168 hours
 logread -e xray                # Xray logs
 ```
 
@@ -383,21 +381,21 @@ If you run it on another device, please report the result in [Issues](https://gi
 
 | Symptom | What to check |
 |---|---|
-| `VPN: FAIL` at the end of install | is `VLESS_UUID` correct; is `DEFAULT_NODE` alive (try another: `gru-node <code>`); `logread -e xray` |
-| `DNS: FAIL` | `/etc/init.d/gru-doh restart`, then `nslookup youtube.com 127.0.0.1`; does the router have internet |
-| Panel doesn't open at `vpn.lan` | use `http://192.168.8.1:81/`; disable Private DNS / DoH on the device; `/etc/init.d/gru-ui restart` |
+| `VPN: FAIL` at the end of install | is `VLESS_UUID` correct; is `DEFAULT_NODE` alive (try another: `flint-node <code>`); `logread -e xray` |
+| `DNS: FAIL` | `/etc/init.d/flint-doh restart`, then `nslookup youtube.com 127.0.0.1`; does the router have internet |
+| Panel doesn't open at `vpn.lan` | use `http://192.168.8.1:81/`; disable Private DNS / DoH on the device; `/etc/init.d/flint-ui restart` |
 | No internet after switching servers | the server is down — pick another or enable failover; as a last resort turn the VPN off on the Status tab |
 | A server fails though it works in Happ | the provider rotated keys or SNI — refresh the subscription |
-| A Russian site goes via VPN | geoip/geosite missing (then `global` mode): `gru-geo-update`; or add the site as "direct" |
+| A Russian site goes via VPN | geoip/geosite missing (then `global` mode): `flint-geo-update`; or add the site as "direct" |
 | A site or app broke with ad blocking on | turn blocking off to confirm; if it is the cause, add the domain to own rules as "Allow" or the device to "Devices without blocking" |
 | Ads are not blocked on a device | turn off Private DNS / browser DoH on it; check it is not excluded; ads from the same domain as the video (YouTube) can't be blocked by DNS |
-| `opkg install ... failed` | `/tmp/gru-opkg.log`; router internet; put Xray into `backup/bin/xray` |
+| `opkg install ... failed` | `/tmp/flint-opkg.log`; router internet; put Xray into `backup/bin/xray` |
 
 ## Limitations
 
 - **TCP only.** UDP 443 (QUIC) is blocked so browsers use TCP; other UDP goes direct.
 - **IPv6 is not tunnelled.** If the main router hands out IPv6, disable it for the Flint network.
-- **Xray 1.8.x from opkg:** no XHTTP transport; GruVPN's gRPC "white list" servers fail the REALITY handshake with it, so they are not imported by default.
+- **Xray 1.8.x from opkg:** no XHTTP transport; the gRPC "white list" servers of some providers fail the REALITY handshake with it, so they are not imported by default.
 - **The panel is for the home network:** plain HTTP, the PIN travels in the request URL. Never expose port 81 to the internet.
 
 ## Contributing

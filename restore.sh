@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Restore the router from a backup made by backup.sh (macOS/Linux).
 # Usage: ./restore.sh [--full] [--yes] [backup/2026-10-03_1557] [router_ip] [user]
-#   default: settings from the backup (gru.env, servers, own servers, custom sites) go to config/,
+#   default: settings from the backup (flint.env, servers, own servers, custom sites) go to config/,
 #            then deploy.sh installs packages and the kit - works on a reset router too.
 #   --full   also brings back network, Wi-Fi, firewall, DHCP, hosts, cron and SSH keys from the
 #            backup and reboots. Only for the same router: these replace the current settings.
@@ -31,8 +31,12 @@ ARCHIVE="$BACKUP/router-config.tar.gz"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 tar -xzf "$ARCHIVE" -C "$TMP" etc/xray 2>/dev/null || true
+# Backups made before the rename keep the settings in gru.env.
+if [ -f "$TMP/etc/xray/gru.env" ] && [ ! -f "$TMP/etc/xray/flint.env" ]; then
+	mv "$TMP/etc/xray/gru.env" "$TMP/etc/xray/flint.env"
+fi
 FOUND=""
-for f in gru.env nodes.conf nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
+for f in flint.env nodes.conf nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
 	if [ -f "$TMP/etc/xray/$f" ]; then FOUND="$FOUND $f"; fi
 done
 
@@ -47,7 +51,7 @@ fi
 if [ -n "$FOUND" ]; then
 	KEEP="$ROOT/backup/config-before-restore-$(date +%Y-%m-%d_%H%M%S)"
 	mkdir -p "$KEEP"
-	for f in gru.env nodes.conf nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
+	for f in flint.env nodes.conf nodes-custom.conf custom-sites adblock-lists adblock-rules adblock-exclude; do
 		if [ -f "$ROOT/config/$f" ]; then cp "$ROOT/config/$f" "$KEEP/"; fi
 	done
 	echo "Current config/ saved to $KEEP"
@@ -55,8 +59,8 @@ if [ -n "$FOUND" ]; then
 fi
 
 if [ "$FULL" = 1 ]; then
-	ssh "$TARGET" "cat > /tmp/gru-restore.tgz" < "$ARCHIVE"
-	ssh "$TARGET" 'R=/tmp/gru-restore; rm -rf $R; mkdir -p $R && tar -xzf /tmp/gru-restore.tgz -C $R && rm -f /tmp/gru-restore.tgz &&
+	ssh "$TARGET" "cat > /tmp/flint-restore.tgz" < "$ARCHIVE"
+	ssh "$TARGET" 'R=/tmp/flint-restore; rm -rf $R; mkdir -p $R && tar -xzf /tmp/flint-restore.tgz -C $R && rm -f /tmp/flint-restore.tgz &&
 for f in etc/config/network etc/config/wireless etc/config/firewall etc/config/dhcp etc/hosts etc/rc.local etc/crontabs/root etc/dropbear/authorized_keys; do
 	if [ -f $R/$f ]; then mkdir -p /$(dirname $f) && cp $R/$f /$f && echo restored /$f; fi
 done; rm -rf $R'

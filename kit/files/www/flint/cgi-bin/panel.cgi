@@ -15,7 +15,7 @@ param() {
       printf "%s", out s }')"
 }
 esc() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e "s/'/\&#39;/g"; }
-. /etc/xray/gru.env
+. /etc/xray/flint.env
 
 # Language: ?lang= (remembered in a cookie), then the cookie, then UI_LANG, then the browser's first language.
 lang="$(get lang)"
@@ -28,7 +28,7 @@ case "$lang" in
       case "$(echo "$HTTP_ACCEPT_LANGUAGE" | cut -c1-2 | tr 'A-Z' 'a-z')" in ""|ru) L=ru ;; *) L=en ;; esac
     fi ;;
 esac
-export GRU_LANG="$L"
+export FLINT_LANG="$L"
 T() { if [ "$L" = en ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
 
 echo "Content-Type: text/html; charset=utf-8"
@@ -162,55 +162,55 @@ fi
 
 msg=""; form=""
 if [ -n "$node" ]; then
-  msg="$(gru-node "$node" 2>&1)"
+  msg="$(flint-node "$node" 2>&1)"
 elif [ "$routing" = ru ] || [ "$routing" = global ]; then
-  msg="$(gru-node routing "$routing" 2>&1)"
+  msg="$(flint-node routing "$routing" 2>&1)"
 elif [ "$vpn" = on ] || [ "$vpn" = off ]; then
-  msg="$(gru-node vpn "$vpn" 2>&1)"
+  msg="$(flint-node vpn "$vpn" 2>&1)"
 elif [ "$sub" = 1 ]; then
-  msg="$(gru-sub-update 2>&1)"
+  msg="$(flint-sub-update 2>&1)"
 elif [ -n "$subint" ]; then
-  msg="$(gru-sub-update interval "$subint" 2>&1)"
+  msg="$(flint-sub-update interval "$subint" 2>&1)"
 elif [ "$wd" = on ] || [ "$wd" = off ]; then
-  msg="$(gru-watchdog "$wd" 2>&1)"
+  msg="$(flint-watchdog "$wd" 2>&1)"
 elif [ "$adblock" = on ] || [ "$adblock" = off ]; then
-  msg="$(gru-adblock "$adblock" 2>&1)"
+  msg="$(flint-adblock "$adblock" 2>&1)"
 elif [ -n "$abpreset" ]; then
   pname="$(echo "$PRESETS" | awk -F : -v i="$abpreset" '$1 == i { print $2 }')"
-  [ -n "$pname" ] && msg="$(gru-adblock list add "$PRESET_URL$abpreset.txt" "$pname" 2>&1)"
+  [ -n "$pname" ] && msg="$(flint-adblock list add "$PRESET_URL$abpreset.txt" "$pname" 2>&1)"
 elif [ -n "$ablist" ]; then
-  msg="$(gru-adblock list add "$ablist" "$abname" 2>&1)"
+  msg="$(flint-adblock list add "$ablist" "$abname" 2>&1)"
 elif [ -n "$abldel" ]; then
-  msg="$(gru-adblock list del "$abldel" 2>&1)"
+  msg="$(flint-adblock list del "$abldel" 2>&1)"
 elif [ -n "$abrule" ] && { [ "$abto" = block ] || [ "$abto" = allow ]; }; then
-  msg="$(gru-adblock rule add "$abto" "$abrule" 2>&1)"
+  msg="$(flint-adblock rule add "$abto" "$abrule" 2>&1)"
 elif [ -n "$abrdel" ]; then
-  msg="$(gru-adblock rule del "$abrdel" 2>&1)"
+  msg="$(flint-adblock rule del "$abrdel" 2>&1)"
 elif [ -n "$abint" ]; then
-  msg="$(gru-adblock interval "$abint" 2>&1)"
+  msg="$(flint-adblock interval "$abint" 2>&1)"
 elif [ "$abref" = 1 ]; then
-  msg="$(gru-adblock refresh 2>&1)"
+  msg="$(flint-adblock refresh 2>&1)"
 elif [ -n "$abxadd" ]; then
-  msg="$(gru-adblock exclude add "$abxadd" "$abxname" 2>&1)"
+  msg="$(flint-adblock exclude add "$abxadd" "$abxname" 2>&1)"
 elif [ -n "$abxdel" ]; then
-  msg="$(gru-adblock exclude del "$abxdel" 2>&1)"
+  msg="$(flint-adblock exclude del "$abxdel" 2>&1)"
 elif [ -n "$add" ] && { [ "$to" = direct ] || [ "$to" = proxy ]; }; then
-  msg="$(gru-node site add "$to" "$add" 2>&1)"
+  msg="$(flint-node site add "$to" "$add" 2>&1)"
 elif [ -n "$del" ]; then
-  msg="$(gru-node site del "$del" 2>&1)"
+  msg="$(flint-node site del "$del" 2>&1)"
 elif [ -n "$link" ]; then
-  msg="$(gru-custom link "$link" 2>&1)"
+  msg="$(flint-custom link "$link" 2>&1)"
 elif [ -n "$ndel" ]; then
-  msg="$(gru-custom del "$ndel" 2>&1)"
+  msg="$(flint-custom del "$ndel" 2>&1)"
 elif [ -n "$save" ]; then
   f_name="$(param n)"; f_addr="$(param a)"; f_port="$(param p)"; f_uuid="$(param u)"
   f_sni="$(param s)"; f_pbk="$(param k)"; f_sid="$(param i)"; f_net="$(get t)"; f_svc="$(param g)"
   # On a validation error keep the form open with what was typed.
-  msg="$(gru-custom set "$save" "$f_name" "$f_addr" "$f_port" "$f_uuid" "$f_sni" "$f_pbk" "$f_sid" "$f_net" "$f_svc" 2>&1)" || form="$save"
+  msg="$(flint-custom set "$save" "$f_name" "$f_addr" "$f_port" "$f_uuid" "$f_sni" "$f_pbk" "$f_sid" "$f_net" "$f_svc" 2>&1)" || form="$save"
 elif [ -n "$edit" ] || [ -n "$copy" ]; then
   TAB="$(printf '\t')"
   IFS="$TAB" read -r f_code f_name f_addr f_port f_uuid f_sni f_pbk f_sid f_net f_svc <<EOF
-$(gru-custom show "${edit:-$copy}")
+$(flint-custom show "${edit:-$copy}")
 EOF
   [ "$f_sid" = - ] && f_sid=""
   [ "$f_svc" = - ] && f_svc=""
@@ -220,15 +220,15 @@ elif [ "$newnode" = 1 ]; then
 fi
 
 CUR="$(cat /etc/xray/current-node 2>/dev/null || echo unknown)"
-MODE="$(gru-node routing)"
-VPN="$(gru-node vpn)"
+MODE="$(flint-node routing)"
+VPN="$(flint-node vpn)"
 TAB="$(printf '\t')"
 hidden() { echo "<input type=hidden name=pass value='$pass'><input type=hidden name=tab value='$tab'>"; }
 btn() { echo "<form method=get class=act>$(hidden)<input type=hidden name=$1 value='$2'><button$3>$4</button></form>"; }
 field() { echo "<label>$1<input type=text name=$2 value='$(printf '%s' "$3" | esc)'$4></label>"; }
-NAMES="$(gru-node names | esc)"
+NAMES="$(flint-node names | esc)"
 CUR_NAME="$(echo "$NAMES" | awk -F "$TAB" -v c="$CUR" '$1 == c {print $2}')"
-SITES="$(gru-node site list)"
+SITES="$(flint-node site list)"
 ON="<b class=ok>$(T "включено" "on")</b>"; OFF="<b class=err>$(T "выключено" "off")</b>"
 NEVER="$(T "ещё не было" "never")"
 
@@ -255,18 +255,18 @@ status)
   fi
   echo "</div>"
   [ "$MODE" = ru ] && geo="<b class=ok>$(T "включён" "on")</b>" || geo="<b class=err>$(T "выключен" "off")</b>"
-  total="$(echo "$NAMES" | grep -c .)"; own="$(gru-custom list | grep -c .)"
+  total="$(echo "$NAMES" | grep -c .)"; own="$(flint-custom list | grep -c .)"
   ndirect="$(echo "$SITES" | grep -c '^direct')"; nproxy="$(echo "$SITES" | grep -c '^proxy')"
   CHECKED="$(cat /etc/xray/sub-checked 2>/dev/null | esc)"
   WLAST="$(cat /etc/xray/watchdog-last 2>/dev/null | esc)"
-  [ "$(gru-watchdog state)" = on ] && wds="$ON" || wds="$OFF"
+  [ "$(flint-watchdog state)" = on ] && wds="$ON" || wds="$OFF"
   echo "<div class=card>"
   echo "<div class=stat><span>$(T "Гео-фильтр РФ" "Russia geo filter")</span><span>$geo</span></div>"
   echo "<div class=stat><span>$(T "Свои сайты" "Own sites")</span><a href='?pass=$pass&amp;tab=routing'>$(T "$ndirect напрямую, $nproxy через VPN" "$ndirect direct, $nproxy via VPN")</a></div>"
   echo "<div class=stat><span>$(T "Серверов" "Servers")</span><a href='?pass=$pass&amp;tab=servers'>$(T "$total, из них своих $own" "$total, $own of them own")</a></div>"
   echo "<div class=stat><span>$(T "Проверка подписки" "Subscription check")</span><span>${CHECKED:-$NEVER}</span></div>"
   echo "<div class=stat><span>$(T "Автопереключение при сбое" "Failover")</span><a href='?pass=$pass&amp;tab=servers'>$wds</a></div>"
-  [ "$(gru-adblock state)" = on ] && abs="$ON" || abs="$OFF"
+  [ "$(flint-adblock state)" = on ] && abs="$ON" || abs="$OFF"
   echo "<div class=stat><span>$(T "Блокировка рекламы" "Ad blocking")</span><a href='?pass=$pass&amp;tab=adblock'>$abs</a></div>"
   [ -n "$WLAST" ] && echo "<div class=stat><span>$(T "Последний сбой" "Last failure")</span><span>$WLAST</span></div>"
   echo "</div>"
@@ -290,7 +290,7 @@ servers)
   btn sub 1 "" "$(T "Обновить список серверов сейчас" "Refresh the server list now")"
   CHECKED="$(cat /etc/xray/sub-checked 2>/dev/null | esc)"
   echo "<small>$(T "Последняя проверка" "Last check"): ${CHECKED:-$NEVER}</small>"
-  SI="$(gru-sub-update interval)"
+  SI="$(flint-sub-update interval)"
   echo "<form method=get class=row>$(hidden)<select name=subint>"
   for v in "off:$(T "Автообновление выключено" "Auto-update off")" "30m:$(T "Обновлять каждые 30 минут" "Update every 30 minutes")" \
     "1h:$(T "Обновлять каждый час" "Update every hour")" "3h:$(T "Обновлять каждые 3 часа" "Update every 3 hours")" \
@@ -301,7 +301,7 @@ servers)
   done
   echo "</select><button>$(T "Сохранить" "Save")</button></form></div>"
   echo "<div class=card><h2>$(T "Автопереключение при сбое" "Failover")</h2>"
-  if [ "$(gru-watchdog state)" = on ]; then
+  if [ "$(flint-watchdog state)" = on ]; then
     echo "$ON — $(T "каждые 2 минуты роутер проверяет VPN. Если сервер не отвечает, а интернет есть, он обновляет подписку и при необходимости переходит на первый рабочий сервер." \
       "every 2 minutes the router checks the VPN. If the server does not respond while the internet works, it refreshes the subscription and, if needed, switches to the first working server.")"
     btn wd off "" "$(T "Выключить автопереключение" "Turn failover off")"
@@ -331,7 +331,7 @@ own)
     echo "<form method=get class=act>$(hidden)<button>$(T "Отмена" "Cancel")</button></form></div>"
   fi
   echo "<div class=card><h2>$(T "Свои серверы" "Own servers")</h2><small>$(T "Не из подписки: автообновление их не трогает. Выбираются на вкладке «Серверы»." "Not from the subscription: auto-update leaves them alone. Pick them on the Servers tab.")</small>"
-  OWN="$(gru-custom list | esc)"
+  OWN="$(flint-custom list | esc)"
   [ -n "$OWN" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
   DEL="$(T "Удалить" "Delete")"; EDIT="$(T "Изменить" "Edit")"
   echo "$OWN" | while IFS="$TAB" read -r code name; do
@@ -375,10 +375,10 @@ routing)
   ;;
 adblock)
   echo "<div class=card><h2>$(T "Блокировка рекламы" "Ad blocking")</h2>"
-  if [ "$(gru-adblock state)" = on ]; then
+  if [ "$(flint-adblock state)" = on ]; then
     echo "$ON — $(T "реклама, трекеры и вредоносные сайты блокируются для всех устройств сети на уровне DNS." \
       "ads, trackers and malicious sites are blocked for every device on the network at the DNS level.")"
-    set -- $(gru-adblock stats 2>/dev/null)
+    set -- $(flint-adblock stats 2>/dev/null)
     if [ -n "$1" ]; then
       pct="$(awk -v q="$1" -v b="$2" 'BEGIN { printf "%.1f", q ? b * 100 / q : 0 }')"
       echo "<br><small>$(T "За сутки: запросов $1, заблокировано $2 ($pct%)" "Last 24 hours: $1 queries, $2 blocked ($pct%)")</small>"
@@ -393,14 +393,14 @@ adblock)
   DEL="$(T "Удалить" "Delete")"
   echo "<div class=card><h2>$(T "Устройства без блокировки" "Devices without blocking")</h2><small>$(T "Блокировка действует на все устройства сети, кроме этих. Устройство узнаётся по MAC-адресу." \
     "Blocking applies to every device on the network except these. A device is recognised by its MAC address.")</small>"
-  EXCL="$(gru-adblock exclude | esc)"
+  EXCL="$(flint-adblock exclude | esc)"
   [ -n "$EXCL" ] || echo "<p><small>$(T "нет — блокировка для всех" "none — blocking for everyone")</small></p>"
   echo "$EXCL" | while IFS="$TAB" read -r m name; do
     [ -n "$m" ] || continue
     echo "<div class=item><span>$name<br><small>$m</small></span>"
     echo "<form method=get>$(hidden)<input type=hidden name=abxdel value='$m'><button title='$DEL'>✕</button></form></div>"
   done
-  DEVS="$(gru-adblock devices | esc | awk -F '\t' -v ex="$(gru-adblock exclude | cut -f1 | tr '\n' ' ')" 'index(" " ex, " " $1 " ") == 0')"
+  DEVS="$(flint-adblock devices | esc | awk -F '\t' -v ex="$(flint-adblock exclude | cut -f1 | tr '\n' ' ')" 'index(" " ex, " " $1 " ") == 0')"
   if [ -n "$DEVS" ]; then
     echo "<form method=get class=row>$(hidden)<select name=abxadd>"
     echo "$DEVS" | while IFS="$TAB" read -r m ip name; do echo "<option value='$m'>${name:-$m} — $ip</option>"; done
@@ -410,7 +410,7 @@ adblock)
   echo "<input type=text name=abxname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить по MAC" "Add by MAC")</button></form></div>"
   echo "<div class=card><h2>$(T "Списки фильтров" "Filter lists")</h2><small>$(T "Списки в формате AdGuard или hosts. AdGuard DNS filter — DNS-версия фильтров платного AdGuard: Base, Tracking Protection, Mobile Ads, российские рекламные серверы, EasyList, EasyPrivacy." \
     "Lists in AdGuard or hosts format. AdGuard DNS filter is the DNS version of the filters in paid AdGuard: Base, Tracking Protection, Mobile Ads, Russian ad servers, EasyList, EasyPrivacy.")</small>"
-  LISTS="$(gru-adblock list | esc)"
+  LISTS="$(flint-adblock list | esc)"
   [ -n "$LISTS" ] || echo "<p><small>$(T "пусто" "empty")</small></p>"
   echo "$LISTS" | while IFS="$TAB" read -r url name rc up; do
     [ -n "$url" ] || continue
@@ -426,7 +426,7 @@ adblock)
   echo "<input type=text name=abname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить по ссылке" "Add by link")</button></form></div>"
   echo "<div class=card><h2>$(T "Обновление списков" "List updates")</h2>"
   btn abref 1 "" "$(T "Обновить списки сейчас" "Update the lists now")"
-  AI="$(gru-adblock interval)"
+  AI="$(flint-adblock interval)"
   echo "<form method=get class=row>$(hidden)<select name=abint>"
   for v in "off:$(T "Автообновление выключено" "Auto-update off")" "1:$(T "Обновлять каждый час" "Update every hour")" \
     "12:$(T "Обновлять каждые 12 часов" "Update every 12 hours")" "24:$(T "Обновлять раз в сутки" "Update once a day")" \
@@ -439,7 +439,7 @@ adblock)
     "A domain or link is blocked with its subdomains. \"Allow\" makes an exception when a list blocks a site you need. Patterns use AdGuard syntax: ||ads.*^, /regex/, @@||site.com^.")</small>"
   echo "<form method=get class=row>$(hidden)<input type=text name=abrule placeholder='ads.example.com' required>"
   echo "<select name=abto><option value=block>$(T "Блокировать" "Block")</option><option value=allow>$(T "Разрешить" "Allow")</option></select><button>$(T "Добавить" "Add")</button></form>"
-  RULES="$(gru-adblock rule | esc)"
+  RULES="$(flint-adblock rule | esc)"
   [ -n "$RULES" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
   echo "$RULES" | while IFS= read -r r; do
     [ -n "$r" ] || continue

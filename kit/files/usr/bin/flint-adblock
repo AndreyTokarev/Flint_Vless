@@ -1,37 +1,37 @@
 #!/bin/sh
 # DNS ad blocking with AdGuard Home (the binary ships with GL firmware 4.x).
-# LAN DNS is redirected by the GRU_DNS firewall chain: to AdGuard Home (:5054) when blocking is on,
+# LAN DNS is redirected by the FLINT_DNS firewall chain: to AdGuard Home (:5054) when blocking is on,
 # else to dnsmasq (:53). AdGuard Home forwards to dnsmasq, so local names and DoH keep working.
 # Excluded devices (by MAC) always go straight to dnsmasq. Our own AdGuard Home instance, separate
 # from GL's; lists, rules and exclusions live in /etc/xray, so they survive redeploys and go into backups.
-# Usage: gru-adblock [state]                    print on|off
-#        gru-adblock on|off
-#        gru-adblock list | list add <url> [name] | list del <url>
-#        gru-adblock rule | rule add block|allow <domain, link or AdGuard rule> | rule del <rule>
-#        gru-adblock exclude | exclude add <mac> [name] | exclude del <mac>
-#        gru-adblock devices                         LAN devices: mac, ip, name
-#        gru-adblock interval [off|1|12|24|72|168]   list auto-update period, hours
-#        gru-adblock refresh                         update the lists now
-#        gru-adblock stats                           "<queries> <blocked>" over the last 24 hours
-#        gru-adblock check                           cron: restart AdGuard Home or let DNS bypass it
-#        gru-adblock fw [bypass]                     rebuild the GRU_DNS chain (firewall.user)
-#        gru-adblock config                          write the AdGuard Home config (init script)
+# Usage: flint-adblock [state]                    print on|off
+#        flint-adblock on|off
+#        flint-adblock list | list add <url> [name] | list del <url>
+#        flint-adblock rule | rule add block|allow <domain, link or AdGuard rule> | rule del <rule>
+#        flint-adblock exclude | exclude add <mac> [name] | exclude del <mac>
+#        flint-adblock devices                         LAN devices: mac, ip, name
+#        flint-adblock interval [off|1|12|24|72|168]   list auto-update period, hours
+#        flint-adblock refresh                         update the lists now
+#        flint-adblock stats                           "<queries> <blocked>" over the last 24 hours
+#        flint-adblock check                           cron: restart AdGuard Home or let DNS bypass it
+#        flint-adblock fw [bypass]                     rebuild the FLINT_DNS chain (firewall.user)
+#        flint-adblock config                          write the AdGuard Home config (init script)
 STATE=/etc/xray/adblock
 LISTS=/etc/xray/adblock-lists
 RULES=/etc/xray/adblock-rules
 EXCLUDE=/etc/xray/adblock-exclude
 INTERVAL=/etc/xray/adblock-interval
-DIR=/etc/gru-adguard
+DIR=/etc/flint-adguard
 BIN=/usr/bin/AdGuardHome
 API=http://127.0.0.1:3054/control
 DNS_PORT=5054
 # Answered by AdGuard Home itself, without the upstream: tells "AdGuard is down" from "internet is down".
-CHECK_HOST=adblock-check.gru
+CHECK_HOST=adblock-check.flint
 DEFAULT_LIST="https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt	AdGuard DNS filter"
 TAB="$(printf '\t')"
-. /etc/xray/gru.env 2>/dev/null
-# Message language: GRU_LANG from the panel, else UI_LANG from gru.env, else Russian.
-t() { if [ "${GRU_LANG:-${UI_LANG:-ru}}" = en ]; then echo "$2"; else echo "$1"; fi; }
+. /etc/xray/flint.env 2>/dev/null
+# Message language: FLINT_LANG from the panel, else UI_LANG from flint.env, else Russian.
+t() { if [ "${FLINT_LANG:-${UI_LANG:-ru}}" = en ]; then echo "$2"; else echo "$1"; fi; }
 fail() { echo "$1"; exit 1; }
 
 state() { cat "$STATE" 2>/dev/null || echo off; }
@@ -45,7 +45,7 @@ lan_ip() { ip="$(uci -q get network.lan.ipaddr)"; echo "${ip%%/*}" | grep -E '^[
 yaml() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
 json() { printf '"%s"' "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"; }
 # post <endpoint> <json> [timeout]: prints the HTTP code, the body goes to $OUT.
-OUT=/tmp/gru-adblock.out
+OUT=/tmp/flint-adblock.out
 post() { curl -s -m "${3:-30}" -o "$OUT" -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d "$2" "$API/$1"; }
 # Stable per URL, so the downloaded copy in $DIR/data/filters/<id>.txt is reused after a restart.
 list_id() { printf '%d' "0x$(printf '%s' "$1" | md5sum | cut -c1-7)"; }
@@ -58,17 +58,17 @@ devices() {
 	} | awk -F '\t' '!seen[tolower($1)]++ { print tolower($1) "\t" $2 "\t" $3 }'
 }
 
-# GRU_DNS: excluded MACs -> dnsmasq, everyone else -> AdGuard Home (or dnsmasq when off / bypassed).
+# FLINT_DNS: excluded MACs -> dnsmasq, everyone else -> AdGuard Home (or dnsmasq when off / bypassed).
 fw() {
-	iptables -t nat -N GRU_DNS 2>/dev/null || iptables -t nat -F GRU_DNS
+	iptables -t nat -N FLINT_DNS 2>/dev/null || iptables -t nat -F FLINT_DNS
 	port=53
 	if [ "$(state)" = on ] && [ -x "$BIN" ] && [ "$1" != bypass ]; then
 		excluded | cut -f1 | while read -r m; do
-			for p in udp tcp; do iptables -t nat -A GRU_DNS -p "$p" -m mac --mac-source "$m" -j REDIRECT --to-ports 53; done
+			for p in udp tcp; do iptables -t nat -A FLINT_DNS -p "$p" -m mac --mac-source "$m" -j REDIRECT --to-ports 53; done
 		done
 		port=$DNS_PORT
 	fi
-	for p in udp tcp; do iptables -t nat -A GRU_DNS -p "$p" -j REDIRECT --to-ports "$port"; done
+	for p in udp tcp; do iptables -t nat -A FLINT_DNS -p "$p" -j REDIRECT --to-ports "$port"; done
 }
 
 write_config() {
@@ -135,14 +135,14 @@ case "$1" in
 		[ -x "$BIN" ] || fail "$(t "AdGuard Home не найден ($BIN): нужна прошивка GL 4.x или пакет adguardhome" \
 			"AdGuard Home not found ($BIN): needs GL firmware 4.x or the adguardhome package")"
 		echo on > "$STATE"
-		/etc/init.d/gru-adblock enable
-		/etc/init.d/gru-adblock restart >/dev/null 2>&1
+		/etc/init.d/flint-adblock enable
+		/etc/init.d/flint-adblock restart >/dev/null 2>&1
 		n=0
 		until answers; do
 			n=$((n + 1))
 			if [ "$n" -gt 20 ]; then
 				echo off > "$STATE"
-				/etc/init.d/gru-adblock stop >/dev/null 2>&1
+				/etc/init.d/flint-adblock stop >/dev/null 2>&1
 				fw
 				fail "$(t "AdGuard Home не ответил — блокировка выключена, DNS работает как раньше" \
 					"AdGuard Home did not answer — ad blocking is off, DNS works as before")"
@@ -155,8 +155,8 @@ case "$1" in
 	off)
 		echo off > "$STATE"
 		fw
-		/etc/init.d/gru-adblock stop >/dev/null 2>&1
-		/etc/init.d/gru-adblock disable
+		/etc/init.d/flint-adblock stop >/dev/null 2>&1
+		/etc/init.d/flint-adblock disable
 		t "Блокировка рекламы выключена" "Ad blocking is off"
 		;;
 	list)
@@ -199,14 +199,14 @@ case "$1" in
 				running && post filtering/remove_url "{\"url\":$(json "$3"),\"whitelist\":false}" >/dev/null
 				t "Список удалён" "List removed"
 				;;
-			*) fail "gru-adblock list | list add <url> [name] | list del <url>" ;;
+			*) fail "flint-adblock list | list add <url> [name] | list del <url>" ;;
 		esac
 		;;
 	rule)
 		case "$2" in
 			"") rules ;;
 			add)
-				[ "$3" = block ] || [ "$3" = allow ] || fail "gru-adblock rule add block|allow <rule>"
+				[ "$3" = block ] || [ "$3" = allow ] || fail "flint-adblock rule add block|allow <rule>"
 				r="$(printf '%s' "$4" | tr -d '\r\n\t' | sed 's/^ *//; s/ *$//')"
 				case "$r" in
 					""|"!"*|"#"*) fail "$(t "Это не домен и не правило: $r" "Not a domain or a rule: $r")" ;;
@@ -229,7 +229,7 @@ case "$1" in
 				push_rules
 				t "Правило удалено ($APPLY)" "Rule removed ($APPLY)"
 				;;
-			*) fail "gru-adblock rule | rule add block|allow <rule> | rule del <rule>" ;;
+			*) fail "flint-adblock rule | rule add block|allow <rule> | rule del <rule>" ;;
 		esac
 		;;
 	exclude)
@@ -253,13 +253,13 @@ case "$1" in
 				fw
 				t "Устройство снова с блокировкой" "The device is blocked again"
 				;;
-			*) fail "gru-adblock exclude | exclude add <mac> [name] | exclude del <mac>" ;;
+			*) fail "flint-adblock exclude | exclude add <mac> [name] | exclude del <mac>" ;;
 		esac
 		;;
 	devices) devices ;;
 	interval)
 		[ -n "$2" ] || { interval; exit 0; }
-		case "$2" in off|1|12|24|72|168) ;; *) fail "gru-adblock interval off|1|12|24|72|168" ;; esac
+		case "$2" in off|1|12|24|72|168) ;; *) fail "flint-adblock interval off|1|12|24|72|168" ;; esac
 		echo "$2" > "$INTERVAL"
 		iv="$2"; [ "$iv" = off ] && iv=0
 		running && post filtering/config "{\"enabled\":true,\"interval\":$iv}" >/dev/null
@@ -281,13 +281,13 @@ case "$1" in
 		;;
 	check)
 		[ "$(state)" = on ] || exit 0
-		redirected() { iptables -t nat -S GRU_DNS 2>/dev/null | grep -q -- "--to-ports $DNS_PORT"; }
+		redirected() { iptables -t nat -S FLINT_DNS 2>/dev/null | grep -q -- "--to-ports $DNS_PORT"; }
 		if answers; then redirected || fw; exit 0; fi
-		/etc/init.d/gru-adblock restart >/dev/null 2>&1
+		/etc/init.d/flint-adblock restart >/dev/null 2>&1
 		sleep 8
 		if answers; then redirected || fw; exit 0; fi
 		fw bypass
-		logger -t gru-adblock "AdGuard Home is not answering, DNS bypasses it until it is back"
+		logger -t flint-adblock "AdGuard Home is not answering, DNS bypasses it until it is back"
 		;;
 	fw) fw "$2" ;;
 	config) write_config ;;

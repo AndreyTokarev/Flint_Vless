@@ -1,6 +1,6 @@
 # Restore the router from a backup made by backup.ps1.
 # Usage: .\restore.ps1 [-Backup backup\2026-10-03_1557] [-Router 192.168.8.1] [-Full] [-Yes]
-#   default: settings from the backup (gru.env, servers, own servers, custom sites) go to config\,
+#   default: settings from the backup (flint.env, servers, own servers, custom sites) go to config\,
 #            then deploy.ps1 installs packages and the kit - works on a reset router too.
 #   -Full    also brings back network, Wi-Fi, firewall, DHCP, hosts, cron and SSH keys from the
 #            backup and reboots. Only for the same router: these replace the current settings.
@@ -25,12 +25,17 @@ if (-not $Backup) {
 $archive = Join-Path (Resolve-Path $Backup) "router-config.tar.gz"
 if (-not (Test-Path $archive)) { throw "Missing $archive" }
 
-$files = "gru.env", "nodes.conf", "nodes-custom.conf", "custom-sites", "adblock-lists", "adblock-rules", "adblock-exclude"
-$tmp = Join-Path ([IO.Path]::GetTempPath()) "gru-restore"
+$files = "flint.env", "nodes.conf", "nodes-custom.conf", "custom-sites", "adblock-lists", "adblock-rules", "adblock-exclude"
+$tmp = Join-Path ([IO.Path]::GetTempPath()) "flint-restore"
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory $tmp | Out-Null
 try {
     tar -xzf $archive -C $tmp etc/xray 2>$null
+    # Backups made before the rename keep the settings in gru.env.
+    $oldEnv = Join-Path $tmp "etc\xray\gru.env"
+    if ((Test-Path $oldEnv) -and -not (Test-Path (Join-Path $tmp "etc\xray\flint.env"))) {
+        Rename-Item $oldEnv "flint.env"
+    }
     $found = $files | Where-Object { Test-Path (Join-Path $tmp "etc\xray\$_") }
 
     Write-Host "Backup: $Backup"
@@ -50,9 +55,9 @@ try {
     }
 
     if ($Full) {
-        cmd /c "ssh $target ""cat > /tmp/gru-restore.tgz"" < ""$archive"""
+        cmd /c "ssh $target ""cat > /tmp/flint-restore.tgz"" < ""$archive"""
         if ($LASTEXITCODE) { throw "upload failed" }
-        $remote = "R=/tmp/gru-restore; rm -rf `$R; mkdir -p `$R && tar -xzf /tmp/gru-restore.tgz -C `$R && rm -f /tmp/gru-restore.tgz && " +
+        $remote = "R=/tmp/flint-restore; rm -rf `$R; mkdir -p `$R && tar -xzf /tmp/flint-restore.tgz -C `$R && rm -f /tmp/flint-restore.tgz && " +
             "for f in etc/config/network etc/config/wireless etc/config/firewall etc/config/dhcp etc/hosts etc/rc.local " +
             "etc/crontabs/root etc/dropbear/authorized_keys; do if [ -f `$R/`$f ]; then mkdir -p /`$(dirname `$f) && cp `$R/`$f /`$f && echo restored /`$f; fi; done; rm -rf `$R"
         ssh $target $remote

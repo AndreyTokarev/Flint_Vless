@@ -22,5 +22,5 @@ for f in geoip.dat geosite.dat; do
 		echo "updated: $f ($size bytes)"
 	fi
 done
-[ "$changed" = 1 ] && [ "$(gru-node routing)" = ru ] && gru-node apply
+[ "$changed" = 1 ] && [ "$(flint-node routing)" = ru ] && flint-node apply
 exit 0

@@ -2,10 +2,10 @@
 """Rebuild config/nodes.conf from the provider subscription.
 
 Usage: python tools/sub2nodes.py [--no-ip] [--grpc] [subscription_url]
-The URL defaults to SUB_URL from config/gru.env. Only REALITY links over TCP
+The URL defaults to SUB_URL from config/flint.env. Only REALITY links over TCP
 (+ xtls-rprx-vision) or gRPC are kept: that is what kit/files/etc/xray/template.json supports.
---no-ip skips servers given by a bare IP (GruVPN "white list" nodes).
---grpc also keeps gRPC nodes (or SUB_GRPC=1 in gru.env); off by default because the
+--no-ip skips servers given by a bare IP ("white list" nodes of some providers).
+--grpc also keeps gRPC nodes (or SUB_GRPC=1 in flint.env); off by default because the
 provider's gRPC REALITY servers fail the handshake with the router's Xray 1.8.7.
 Provider notices disguised as nodes (names starting with ❗) are always skipped.
 """
@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-ENV = ROOT / "config" / "gru.env"
+ENV = ROOT / "config" / "flint.env"
 OUT = ROOT / "config" / "nodes.conf"
 USER_AGENT = "Happ/1.0"
 
@@ -62,7 +62,7 @@ def main():
     args = [a for a in args if a not in ("--no-ip", "--include-ip", "--grpc")]
     url = args[0] if args else env.get("SUB_URL", "")
     if not url:
-        sys.exit("No subscription URL: pass it as an argument or set SUB_URL in config/gru.env")
+        sys.exit("No subscription URL: pass it as an argument or set SUB_URL in config/flint.env")
 
     nodes, used = [], set()
     for link in fetch(url):

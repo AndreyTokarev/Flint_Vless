@@ -1,4 +1,4 @@
-config/gru.env
+config/flint.env
 config/nodes.conf
 config/nodes-custom.conf
 config/custom-sites

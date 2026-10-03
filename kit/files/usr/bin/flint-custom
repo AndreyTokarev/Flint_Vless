@@ -1,17 +1,17 @@
 #!/bin/sh
 # Own VLESS REALITY nodes, kept in nodes-custom.conf apart from the subscription list
-# (gru-sub-update never touches them). Same format as nodes.conf.
-# Usage: gru-custom list                  code<TAB>name of own nodes
-#        gru-custom show <code>           code name address port uuid sni pbk sid net service (TAB-separated, any node)
-#        gru-custom link <vless://...>    add a node from a share link
-#        gru-custom set <code|new> <name> <address> <port> <uuid> <sni> <pbk> [sid] [tcp|grpc] [service]
-#        gru-custom del <code>
+# (flint-sub-update never touches them). Same format as nodes.conf.
+# Usage: flint-custom list                  code<TAB>name of own nodes
+#        flint-custom show <code>           code name address port uuid sni pbk sid net service (TAB-separated, any node)
+#        flint-custom link <vless://...>    add a node from a share link
+#        flint-custom set <code|new> <name> <address> <port> <uuid> <sni> <pbk> [sid] [tcp|grpc] [service]
+#        flint-custom del <code>
 set -e
-ENV=/etc/xray/gru.env
+ENV=/etc/xray/flint.env
 NODES=/etc/xray/nodes.conf
 CUSTOM=/etc/xray/nodes-custom.conf
 CUR=/etc/xray/current-node
-PARSER=/usr/share/gru/vless.awk
+PARSER=/usr/share/flint/vless.awk
 TAB="$(printf '\t')"
 
 # "code name address port uuid sni pbk sid net service" (TAB-separated) for every node in the given files.
@@ -37,7 +37,7 @@ check() {
 	case "$2" in *"$NL"*) echo "Bad $1"; exit 1 ;; esac
 	echo "$2" | grep -qE "$3" || { echo "Bad $1: '$2'"; exit 1; }
 }
-reapply() { if [ "$(cat "$CUR" 2>/dev/null)" = "$1" ]; then gru-node apply; fi; }
+reapply() { if [ "$(cat "$CUR" 2>/dev/null)" = "$1" ]; then flint-node apply; fi; }
 
 set_node() {
 	code="$1"; host="$3"; port="$4"; uuid="$5"; sni="$6"; pbk="$7"; sid="${8:--}"; net="${9:-tcp}"; svc="${10:--}"
@@ -88,9 +88,9 @@ EOF
 		without "$2" > "$CUSTOM.new"; mv "$CUSTOM.new" "$CUSTOM"
 		echo "Deleted: $2"
 		if [ "$(cat "$CUR" 2>/dev/null)" = "$2" ]; then
-			first="$(gru-node codes | head -n1)"
+			first="$(flint-node codes | head -n1)"
 			echo "It was the current server, switching to $first"
-			gru-node "$first"
+			flint-node "$first"
 		fi
 		;;
 	*)

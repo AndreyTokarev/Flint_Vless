@@ -1,7 +1,7 @@
-# Gru: transparent Xray for LAN clients, router DNS enforcement, direct access to upstream LAN.
+# Flint: transparent Xray for LAN clients, router DNS enforcement, direct access to upstream LAN.
 # Safe to re-run on every firewall reload.
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
-. /etc/xray/gru.env
+. /etc/xray/flint.env
 
 ensure() {
 	table=$1; chain=$2; shift 2
@@ -33,7 +33,7 @@ for host in $(cat /etc/xray/nodes.conf /etc/xray/nodes-custom.conf 2>/dev/null |
 done
 iptables -t nat -A XRAY -p tcp -j REDIRECT --to-ports 12345
 
-# /etc/xray/vpn-state = off (panel / gru-node vpn off): LAN clients go to the internet directly.
+# /etc/xray/vpn-state = off (panel / flint-node vpn off): LAN clients go to the internet directly.
 if [ "$(cat /etc/xray/vpn-state 2>/dev/null)" = off ]; then
 	remove nat PREROUTING -i br-lan -p tcp -j XRAY
 	remove filter FORWARD -i br-lan -p udp --dport 443 -j DROP
@@ -43,12 +43,12 @@ else
 	# Only TCP goes through Xray; dropping QUIC makes browsers fall back to TCP.
 	ensure filter FORWARD -i br-lan -p udp --dport 443 -j DROP
 fi
-# LAN DNS goes to the router: dnsmasq, or AdGuard Home when ad blocking is on (GRU_DNS, see gru-adblock).
+# LAN DNS goes to the router: dnsmasq, or AdGuard Home when ad blocking is on (FLINT_DNS, see flint-adblock).
 remove nat PREROUTING -i br-lan -p udp --dport 53 -j REDIRECT --to-ports 53
 remove nat PREROUTING -i br-lan -p tcp --dport 53 -j REDIRECT --to-ports 53
-gru-adblock fw
-ensure nat PREROUTING -i br-lan -p udp --dport 53 -j GRU_DNS
-ensure nat PREROUTING -i br-lan -p tcp --dport 53 -j GRU_DNS
+flint-adblock fw
+ensure nat PREROUTING -i br-lan -p udp --dport 53 -j FLINT_DNS
+ensure nat PREROUTING -i br-lan -p tcp --dport 53 -j FLINT_DNS
 
 if [ -n "$UPSTREAM_IF" ] && [ -n "$UPSTREAM_NET" ]; then
 	ensure nat POSTROUTING -o "$UPSTREAM_IF" -d "$UPSTREAM_NET" -j MASQUERADE
@@ -57,4 +57,4 @@ if [ -n "$UPSTREAM_IF" ] && [ -n "$UPSTREAM_NET" ]; then
 fi
 
 mkdir -p /tmp/dnsmasq.d
-cp -f /etc/dnsmasq.d/gru-*.conf /tmp/dnsmasq.d/ 2>/dev/null || true
+cp -f /etc/dnsmasq.d/flint-*.conf /tmp/dnsmasq.d/ 2>/dev/null || true
