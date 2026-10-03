@@ -6,6 +6,13 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+### Changed
+- The Ad blocking tab explains where ads remain (VK, YouTube — ads from the same site) and who bypasses the blocking (Private DNS, browser DoH, a VPN client).
+- README: a "Where ads remain" section (what DNS can't remove, uBlock Origin as a complement, who bypasses the blocking), a "Devices on the network" section in the English README; screenshots re-shot, a "No servers" screen added.
+
+### Fixed
+- The "Add a subscription" and "Add an own server" links in the no-servers mode were barely visible on the dark background — they are buttons now.
+
 ## [1.1.0] — 2026-10-03
 
 ### Added

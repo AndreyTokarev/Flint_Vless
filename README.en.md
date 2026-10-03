@@ -64,8 +64,8 @@ The panel is available in English and Russian: the language follows your browser
 | ![Subscriptions](docs/screenshots/en/subs.png) | ![Routing](docs/screenshots/en/routing.png) |
 | **Ad blocking** | **Phone** |
 | ![Ad blocking](docs/screenshots/en/adblock.png) | ![Phone](docs/screenshots/en/mobile-status.png) |
-| **Phone: servers** | |
-| ![Phone: servers](docs/screenshots/en/mobile-servers.png) | |
+| **Phone: servers** | **No servers** |
+| ![Phone: servers](docs/screenshots/en/mobile-servers.png) | ![No servers](docs/screenshots/en/empty.png) |
 
 The screenshots use demo data: documentation IP ranges, made-up servers and keys.
 
@@ -318,9 +318,24 @@ How it works:
 
 Rules take effect in a few seconds.
 
-**What DNS blocking can't do:** remove ads served from the same domain as the content (YouTube, VK) or hide page elements — only browser extensions like uBlock Origin do that. Devices with Private DNS or DoH in the browser bypass the router's DNS, and therefore the blocking too.
-
 AdGuard Home uses 40–60 MB of RAM; with blocking off it is stopped.
+
+### Where ads remain
+
+DNS blocking sees only the names of the sites a device connects to, not the page content. Hence the limits:
+
+- **Ads from the same domain as the content stay.** VK (ad blocks in the feed and the left column), YouTube (pre-roll and mid-roll ads), Instagram, Facebook, Yandex search and Dzen serve ads from their own servers together with the feed, and the ad images come from the same hosts as post photos. DNS can block such ads only together with the site itself, so a "Block" rule for `vk.com` or `youtube.com` will not help — it just breaks the site.
+- **Page elements are not hidden.** An empty frame or placeholder may stay where a blocked banner was.
+- **In-app ads** (YouTube on a TV, social network apps on a phone) are removed only partly, for the same reason.
+
+On such sites only a blocker on the device itself helps: the [uBlock Origin](https://ublockorigin.com/) extension in a desktop browser, Firefox with uBlock Origin on Android. It hides ad blocks right on the page and complements the router nicely: the router closes ad and tracker domains for every device, TVs and apps included, and the extension handles what comes from the site itself.
+
+**Who bypasses the blocking.** Devices whose DNS queries skip the router:
+- Android with Private DNS on;
+- browsers with secure DNS (DoH): Chrome, Edge, Firefox, Yandex Browser;
+- devices running a VPN client (Happ, v2rayN, Hiddify, etc.): DNS and all traffic go into its tunnel, so neither the blocking nor the router's VPN apply. Behind Flint a VPN client isn't needed — turn it off.
+
+More on device settings in [Devices on the network](#devices-on-the-network). If a site you need broke after turning blocking on, allow its domain in "Own rules" or add the device to "Devices without blocking".
 
 ## Access from the main router's network
 
@@ -386,6 +401,13 @@ flint-adblock interval 24        # auto-update: off, 1, 12, 24, 72, 168 hours
 logread -e xray                # Xray logs
 ```
 
+## Devices on the network
+
+- Devices behind Flint don't need a VPN client. If one is on anyway (e.g. Happ), its connections to the provider's servers leave Flint directly rather than through a second VPN, but such a device bypasses the router's geo filter, own sites and ad blocking: the client decides everything.
+- **Android:** *Settings → Network → Private DNS → Off*, otherwise the phone bypasses the router's DNS.
+- **Windows:** in the Wi‑Fi properties set *DNS server assignment → Automatic (DHCP)*; otherwise DoH bypasses the router's DNS and local names (`nas01`) don't resolve.
+- **Browsers** with secure DNS (DoH) also bypass the router's DNS — the geo filter and own sites by domain still work (Xray reads the domain from TLS), local names and ad blocking don't.
+
 ## Other OpenWrt routers
 
 Built for and tested only on the GL-BE6500. It should work elsewhere if:
@@ -410,7 +432,8 @@ If you run it on another device, please report the result in [Issues](https://gi
 | A subscription is not added | "could not be downloaded" - open the link in a browser, check the router's internet; "no supported servers" - the subscription has no VLESS + REALITY (VMess, Trojan, Shadowsocks, XHTTP are not supported) |
 | A Russian site goes via VPN | geoip/geosite missing (then `global` mode): `flint-geo-update`; or add the site as "direct" |
 | A site or app broke with ad blocking on | turn blocking off to confirm; if it is the cause, add the domain to own rules as "Allow" or the device to "Devices without blocking" |
-| Ads are not blocked on a device | turn off Private DNS / browser DoH on it; check it is not excluded; ads from the same domain as the video (YouTube) can't be blocked by DNS |
+| Ads are not blocked on a device | turn off Private DNS, browser DoH and any VPN client (Happ, etc.) on it; check it is not excluded |
+| Ads remain on VK, YouTube, etc. | they come from the same domain as the content and DNS blocking can't remove them — install uBlock Origin in the browser (see [Where ads remain](#where-ads-remain)) |
 | `opkg install ... failed` | `/tmp/flint-opkg.log`; router internet; put Xray into `backup/bin/xray` |
 
 ## Limitations

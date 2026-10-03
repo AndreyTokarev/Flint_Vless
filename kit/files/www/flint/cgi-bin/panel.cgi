@@ -93,6 +93,9 @@ button{width:100%;padding:12px;border-radius:10px;border:1px solid #374151;backg
 button.on{border-color:#34d399;background:#064e3b}
 button.off{border-color:#f87171;background:#450a0a}
 form.act{margin-top:10px}
+.cta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+a.btn{flex:1 1 200px;padding:12px;border-radius:10px;border:1px solid #374151;background:#111827;color:#e5e7eb;font-size:15px;text-align:center;text-decoration:none}
+a.btn.on{border-color:#34d399;background:#064e3b}
 form.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 form.row input[type=text],form.row select{flex:1 1 200px}
 form.row button{width:auto}
@@ -243,6 +246,7 @@ CUR_NAME="$(echo "$NAMES" | awk -F "$TAB" -v c="$CUR" '$1 == c {print $2}')"
 SITES="$(flint-node site list)"
 ON="<b class=ok>$(T "включено" "on")</b>"; OFF="<b class=err>$(T "выключено" "off")</b>"
 NEVER="$(T "ещё не было" "never")"
+ADD_SERVERS="<div class=cta><a class='btn on' href='?pass=$pass&amp;tab=subs'>🔗 $(T "Добавить подписку" "Add a subscription")</a><a class=btn href='?pass=$pass&amp;tab=own'>⭐ $(T "Добавить свой сервер" "Add an own server")</a></div>"
 
 echo "<div class=layout><nav>$(logo brand)"
 for t in "status:🏠 $(T "Статус" "Status")" "servers:🌍 $(T "Серверы" "Servers")" "own:⭐ $(T "Свои серверы" "Own servers")" \
@@ -258,8 +262,7 @@ status)
   echo "<div class=card>"
   if [ -z "$NAMES" ]; then
     IP="$(curl -s -m 8 https://ifconfig.me 2>/dev/null || echo n/a)"
-    echo "<b class=err>$(T "Серверов пока нет" "No servers yet")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>IP: <b>$IP</b>"
-    echo "<p><a href='?pass=$pass&amp;tab=subs'>$(T "Добавить подписку" "Add a subscription")</a> · <a href='?pass=$pass&amp;tab=own'>$(T "добавить свой сервер" "add an own server")</a></p>"
+    echo "<b class=err>$(T "Серверов пока нет" "No servers yet")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>IP: <b>$IP</b>$ADD_SERVERS"
   elif [ "$VPN" = off ]; then
     IP="$(curl -s -m 8 https://ifconfig.me 2>/dev/null || echo n/a)"
     echo "<b class=err>$(T "VPN выключен" "VPN is off")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>IP: <b>$IP</b>"
@@ -300,8 +303,7 @@ servers)
   }
   card() { [ -n "$2" ] && echo "<div class=card><h2>$1</h2><div class=grid>$2</div></div>"; }
   SERVERS="$(T "Серверы" "Servers")"
-  [ -n "$NAMES" ] || echo "<div class=card><h2>$SERVERS</h2>$(T "Серверов пока нет: устройства ходят в интернет напрямую." "No servers yet: devices go online directly.")
-    <p><a href='?pass=$pass&amp;tab=subs'>$(T "Добавить подписку" "Add a subscription")</a> · <a href='?pass=$pass&amp;tab=own'>$(T "добавить свой сервер" "add an own server")</a></p></div>"
+  [ -n "$NAMES" ] || echo "<div class=card><h2>$SERVERS</h2>$(T "Серверов пока нет: устройства ходят в интернет напрямую." "No servers yet: devices go online directly.")$ADD_SERVERS</div>"
   if [ "$(echo "$SUBLIST" | grep -c .)" -gt 1 ]; then
     echo "$SUBLIST" | while IFS="$TAB" read -r id sname host st info; do card "$sname" "$(grid domain "$id")"; done
   elif [ -n "$SUBLIST" ]; then
@@ -448,6 +450,8 @@ adblock)
       pct="$(awk -v q="$1" -v b="$2" 'BEGIN { printf "%.1f", q ? b * 100 / q : 0 }')"
       echo "<br><small>$(T "За сутки: запросов $1, заблокировано $2 ($pct%)" "Last 24 hours: $1 queries, $2 blocked ($pct%)")</small>"
     fi
+    echo "<br><small>$(T "Реклама, которая идёт с того же сайта, что и контент (ВКонтакте, YouTube), останется — её убирает только блокировщик в браузере, например uBlock Origin. Устройства с «Частным DNS», DoH в браузере или VPN-клиентом (Happ и т. п.) обходят блокировку." \
+      "Ads served from the same site as the content (VK, YouTube) stay — only a browser blocker such as uBlock Origin removes them. Devices with Private DNS, browser DoH or a VPN client (Happ, etc.) bypass the blocking.")</small>"
     btn adblock off "" "$(T "Выключить блокировку" "Turn ad blocking off")"
   else
     echo "$OFF — $(T "устройства видят рекламу как обычно." "devices see ads as usual.")"
