@@ -185,7 +185,7 @@ else
 	/etc/init.d/gru-adblock disable 2>/dev/null || true
 fi
 /etc/init.d/xray enable
-gru-node "$DEFAULT_NODE"
+gru-node use "$DEFAULT_NODE"
 /etc/init.d/gru-ui enable
 /etc/init.d/gru-ui restart
 /etc/init.d/firewall reload
