@@ -69,7 +69,7 @@ small{color:#9ca3af}
 .ok{color:#34d399}.err{color:#f87171}
 .logo{display:flex;align-items:center;gap:.35em;font-size:22px}
 .logo svg{width:2.1em;height:2.1em;flex:none}
-.logo .word{font-weight:800;line-height:1.05;letter-spacing:-.01em;white-space:nowrap;color:#f9fafb;text-align:center;padding-right:.22em}
+.logo .word{font-weight:800;line-height:1.05;letter-spacing:-.01em;white-space:nowrap;color:#f9fafb;text-align:center;padding-right:.12em}
 .logo .word b{color:#f59e0b;font-weight:800}
 .logo .tag{display:flex;align-items:center;gap:.5em;margin-top:.3em;font-size:.36em;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:#d1d5db;white-space:nowrap}
 .logo .tag::before,.logo .tag::after{content:"";flex:1;min-width:.8em;height:2px;background:#f59e0b;border-radius:1px}

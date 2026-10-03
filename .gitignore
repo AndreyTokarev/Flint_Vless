@@ -4,3 +4,4 @@ config/nodes-custom.conf
 config/custom-sites
 backup/
 __pycache__/
+tmp
