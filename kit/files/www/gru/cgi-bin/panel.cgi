@@ -4,7 +4,7 @@ echo "Content-Type: text/html; charset=utf-8"
 echo ""
 qs="$QUERY_STRING"
 get() { echo "$qs" | tr '&' '\n' | sed -n "s/^$1=//p" | head -n1 | tr -cd 'A-Za-z0-9_-'; }
-pass="$(get pass)"; node="$(get node)"
+pass="$(get pass)"; node="$(get node)"; routing="$(get routing)"
 . /etc/xray/gru.env
 CUR="$(cat /etc/xray/current-node 2>/dev/null || echo unknown)"
 cat <<HTML
@@ -30,9 +30,15 @@ msg=""
 if [ -n "$node" ]; then
   msg="$(gru-node "$node" 2>&1)"
   CUR="$(cat /etc/xray/current-node 2>/dev/null || echo "$node")"
+elif [ "$routing" = ru ] || [ "$routing" = global ]; then
+  msg="$(gru-node routing "$routing" 2>&1)"
 fi
+MODE="$(gru-node routing)"
 IP="$(curl -s -m 8 -x http://127.0.0.1:1087 https://ifconfig.me 2>/dev/null || echo n/a)"
-echo "<div class=card>Узел: <b class=ok>$CUR</b><br>IP: <b>$IP</b></div>"
+if [ "$MODE" = ru ]; then MODE_TXT="РФ-сайты напрямую"; NEXT=global; NEXT_TXT="Всё через VPN"
+else MODE_TXT="Всё через VPN"; NEXT=ru; NEXT_TXT="РФ-сайты напрямую"; fi
+echo "<div class=card>Узел: <b class=ok>$CUR</b><br>IP: <b>$IP</b><br>Маршрутизация: <b>$MODE_TXT</b>"
+echo "<form method=get style='margin-top:10px'><input type=hidden name=pass value='$pass'><input type=hidden name=routing value='$NEXT'><button>Переключить: $NEXT_TXT</button></form></div>"
 [ -n "$msg" ] && echo "<div class=card><pre class=ok>$msg</pre></div>"
 echo "<div class=grid>"
 for code in $(gru-node codes); do

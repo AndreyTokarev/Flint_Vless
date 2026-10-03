@@ -3,6 +3,7 @@
 Комплект для GL.iNet GL-BE6500 (Flint), прошивка 4.x, режим Repeater/WISP:
 
 - весь трафик клиентов Wi‑Fi Flint прозрачно идёт через Xray (VLESS REALITY), без настроек на устройствах;
+- маршрутизация как в профиле GruVPN для Happ: российские сайты (`geosite:category-ru`) и IP (`geoip:ru`) идут напрямую, остальное через VPN, `appsflyersdk.com` блокируется (переключается в панели или `ROUTING` в `gru.env`);
 - переключение регионов в веб-панели `http://gru.lan:81/` (по PIN);
 - DNS через DoH (dnscrypt-proxy на `127.0.0.1:5053`) против подмены DNS провайдером;
 - LAN основного роутера (`192.168.0.0/24`) и NAS доступны напрямую, без VPN;
@@ -50,6 +51,7 @@
 - `VLESS_UUID` — UUID из ссылки `vless://UUID@...`.
 - `UI_PIN` — PIN панели (только буквы и цифры).
 - `DEFAULT_NODE` — узел после установки (код из `nodes.conf`).
+- `ROUTING` — `ru` (РФ-сайты напрямую, остальное через VPN) или `global` (всё через VPN). Базы `geoip.dat`/`geosite.dat` (Loyalsoldier) скачиваются в `/usr/share/xray` при установке и обновляются по воскресеньям в 4:30; без них роутер автоматически работает в режиме `global`.
 - `UPSTREAM_IF` / `UPSTREAM_NET` — интерфейс и сеть основного роутера (`sta1` для Wi‑Fi-репитера, `wan` для кабеля).
 - `LOCAL_HOSTS` — локальные имена: `"nas01=192.168.0.145 printer=192.168.0.50"`.
 
@@ -61,6 +63,8 @@
 ```sh
 gru-node list        # текущий узел и коды
 gru-node nl          # переключиться на узел nl
+gru-node routing ru  # РФ напрямую (global — всё через VPN)
+gru-geo-update       # обновить geoip/geosite вручную
 logread -e xray      # логи Xray
 ```
 

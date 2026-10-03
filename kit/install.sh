@@ -63,12 +63,17 @@ cp "$KIT/files/etc/xray/template.json" /etc/xray/
 cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/gru-ui" "$KIT/files/etc/init.d/gru-doh" /etc/init.d/
 cp "$KIT/files/etc/dnscrypt-proxy2/gru-doh.toml" /etc/dnscrypt-proxy2/
 cp "$KIT/files/etc/firewall.user" /etc/firewall.user
-cp "$KIT/files/usr/bin/gru-node" /usr/bin/
+cp "$KIT/files/usr/bin/gru-node" "$KIT/files/usr/bin/gru-geo-update" /usr/bin/
 cp "$KIT/files/www/gru/index.html" /www/gru/
 cp "$KIT/files/www/gru/cgi-bin/panel.cgi" /www/gru/cgi-bin/
-chmod 755 /etc/init.d/xray /etc/init.d/gru-ui /etc/init.d/gru-doh /usr/bin/gru-node /www/gru/cgi-bin/panel.cgi
+chmod 755 /etc/init.d/xray /etc/init.d/gru-ui /etc/init.d/gru-doh /usr/bin/gru-node /usr/bin/gru-geo-update \
+	/www/gru/cgi-bin/panel.cgi
 
 (umask 077; cp "$KIT/config/gru.env" /etc/xray/gru.env; cp "$KIT/config/nodes.conf" /etc/xray/nodes.conf)
+case "${ROUTING:-ru}" in
+	ru|global) echo "${ROUTING:-ru}" > /etc/xray/routing-mode ;;
+	*) die "ROUTING must be ru or global" ;;
+esac
 
 LAN_IP="$(uci -q get network.lan.ipaddr || echo 192.168.8.1)"
 LAN_IP="${LAN_IP%%/*}"
@@ -130,6 +135,17 @@ gru-node "$DEFAULT_NODE"
 /etc/init.d/gru-ui restart
 /etc/init.d/firewall reload
 sh /etc/firewall.user
+
+say "geo files for RU routing (~25 MB)"
+if [ -s /usr/share/xray/geoip.dat ] && [ -s /usr/share/xray/geosite.dat ]; then
+	gru-node apply
+else
+	gru-geo-update
+fi
+grep -q gru-geo-update /etc/crontabs/root 2>/dev/null ||
+	echo "30 4 * * 0 /usr/bin/gru-geo-update >/tmp/gru-geo-update.log 2>&1" >> /etc/crontabs/root
+/etc/init.d/cron enable
+/etc/init.d/cron restart
 
 say "check"
 nslookup youtube.com 127.0.0.1 >/dev/null && echo "DNS: ok" || echo "DNS: FAIL"

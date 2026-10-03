@@ -1,0 +1,26 @@
+#!/bin/sh
+# Download geoip.dat / geosite.dat (Loyalsoldier v2ray-rules-dat) for RU split routing,
+# then re-apply the current node if anything changed. Runs weekly from cron.
+DIR=/usr/share/xray
+BASE=https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download
+mkdir -p "$DIR"
+changed=0
+for f in geoip.dat geosite.dat; do
+	rm -f "$DIR/$f.new"
+	curl -fsSL -m 600 -x http://127.0.0.1:1087 -o "$DIR/$f.new" "$BASE/$f" ||
+		curl -fsSL -m 600 -o "$DIR/$f.new" "$BASE/$f" || true
+	size="$(wc -c < "$DIR/$f.new" 2>/dev/null || echo 0)"
+	if [ "$size" -lt 1000000 ]; then
+		rm -f "$DIR/$f.new"
+		echo "download failed: $f"
+	elif cmp -s "$DIR/$f.new" "$DIR/$f"; then
+		rm -f "$DIR/$f.new"
+		echo "unchanged: $f"
+	else
+		mv "$DIR/$f.new" "$DIR/$f"
+		changed=1
+		echo "updated: $f ($size bytes)"
+	fi
+done
+[ "$changed" = 1 ] && [ "$(gru-node routing)" = ru ] && gru-node apply
+exit 0

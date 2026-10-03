@@ -45,15 +45,12 @@
     { "tag": "block", "protocol": "blackhole" }
   ],
   "routing": {
-    "domainStrategy": "AsIs",
+    "domainStrategy": "__DOMAIN_STRATEGY__",
     "rules": [
-      {
-        "type": "field", "outboundTag": "direct",
-        "ip": [
-          "0.0.0.0/8", "10.0.0.0/8", "127.0.0.0/8", "169.254.0.0/16",
-          "172.16.0.0/12", "192.168.0.0/16", "224.0.0.0/4", "240.0.0.0/4"
-        ]
-      },
+      { "type": "field", "outboundTag": "block", "domain": ["domain:appsflyersdk.com"] },
+      { "type": "field", "outboundTag": "direct", "ip": ["0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16", "224.0.0.0/4", "240.0.0.0/4"] },
+      { "type": "field", "outboundTag": "direct", "domain": ["geosite:category-ru"] },
+      { "type": "field", "outboundTag": "direct", "ip": ["geoip:ru"] },
       { "type": "field", "outboundTag": "proxy", "network": "tcp,udp" }
     ]
   }

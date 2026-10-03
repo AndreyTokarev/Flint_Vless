@@ -1,38 +1,78 @@
 #!/bin/sh
-# Switch the Xray VLESS REALITY node.
-# Usage: gru-node [list|codes|<code>]
+# Switch the Xray VLESS REALITY node and routing mode.
+# Usage: gru-node [list|codes|apply|<code>]
+#        gru-node routing [ru|global]
+#   ru     - Russian sites/IPs go direct, the rest via VPN (needs /usr/share/xray/geo*.dat)
+#   global - everything via VPN
 set -e
 ENV=/etc/xray/gru.env
 NODES=/etc/xray/nodes.conf
 TEMPLATE=/etc/xray/template.json
 CONF=/etc/xray/config.json
 CUR=/etc/xray/current-node
+MODE_FILE=/etc/xray/routing-mode
+GEO=/usr/share/xray
 
 nodes() { grep -v -E '^[[:space:]]*(#|$)' "$NODES"; }
+current() { cat "$CUR" 2>/dev/null || nodes | awk 'NR == 1 {print $1}'; }
+mode() { cat "$MODE_FILE" 2>/dev/null || echo ru; }
+
+render() {
+	line="$(nodes | awk -v c="$1" '$1 == c' | head -n1)"
+	set -- $line
+	uuid="${6:-$VLESS_UUID}"
+	if [ "$RENDER_MODE" = ru ]; then strategy=IPIfNonMatch; else strategy=AsIs; fi
+	umask 077
+	sed -e "s|__UUID__|$uuid|" -e "s|__ADDR__|$2|" -e "s|__SNI__|$3|" \
+		-e "s|__PBK__|$4|" -e "s|__SID__|$5|" -e "s|__DOMAIN_STRATEGY__|$strategy|" \
+		"$TEMPLATE" > "$CONF.new"
+	if [ "$RENDER_MODE" != ru ]; then
+		sed -i -e '/geosite:category-ru/d' -e '/"geoip:ru"/d' "$CONF.new"
+	fi
+	XRAY_LOCATION_ASSET=$GEO xray run -test -format json -c "$CONF.new" >/dev/null 2>&1
+}
+
+apply() {
+	code="$1"
+	nodes | awk '{print $1}' | grep -qx "$code" || { echo "Unknown: $code"; exit 1; }
+	. "$ENV"
+	RENDER_MODE="$(mode)"
+	if ! render "$code"; then
+		if [ "$RENDER_MODE" = ru ]; then
+			echo "RU routing unavailable (geo files missing or broken), using global"
+			RENDER_MODE=global
+			render "$code" || { echo "Config test failed"; exit 1; }
+		else
+			echo "Config test failed"; exit 1
+		fi
+	fi
+	mv "$CONF.new" "$CONF"
+	echo "$code" > "$CUR"
+	/etc/init.d/xray restart
+	echo "Node: $code, routing: $RENDER_MODE"
+}
 
 cmd="${1:-list}"
 case "$cmd" in
 	list)
-		echo "Current: $(cat "$CUR" 2>/dev/null || echo unknown)"
+		echo "Current: $(current), routing: $(mode)"
 		echo "Codes: $(nodes | awk '{print $1}' | tr '\n' ' ')"
-		exit 0 ;;
+		;;
 	codes)
 		nodes | awk '{print $1}'
-		exit 0 ;;
+		;;
+	routing)
+		[ -n "$2" ] || { mode; exit 0; }
+		case "$2" in ru|global) ;; *) echo "Usage: gru-node routing [ru|global]"; exit 1 ;; esac
+		echo "$2" > "$MODE_FILE"
+		apply "$(current)"
+		;;
+	apply)
+		apply "$(current)"
+		;;
+	*)
+		apply "$cmd"
+		sleep 1
+		curl -s -m 15 -x http://127.0.0.1:1087 https://ifconfig.me; echo
+		;;
 esac
-
-line="$(nodes | awk -v c="$cmd" '$1 == c' | head -n1)"
-[ -n "$line" ] || { echo "Unknown: $cmd"; exit 1; }
-. "$ENV"
-set -- $line
-uuid="${6:-$VLESS_UUID}"
-
-umask 077
-sed -e "s|__UUID__|$uuid|" -e "s|__ADDR__|$2|" -e "s|__SNI__|$3|" \
-	-e "s|__PBK__|$4|" -e "s|__SID__|$5|" "$TEMPLATE" > "$CONF.new"
-mv "$CONF.new" "$CONF"
-echo "$cmd" > "$CUR"
-/etc/init.d/xray restart
-sleep 1
-echo "Switched to: $cmd"
-curl -s -m 15 -x http://127.0.0.1:1087 https://ifconfig.me; echo
