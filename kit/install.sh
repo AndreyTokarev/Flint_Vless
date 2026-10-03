@@ -17,24 +17,47 @@ grep -q -E "^[[:space:]]*$DEFAULT_NODE[[:space:]]" "$KIT/config/nodes.conf" ||
 	die "DEFAULT_NODE '$DEFAULT_NODE' not found in nodes.conf"
 
 say "packages"
+[ "$(uname -m)" = aarch64 ] || die "kit expects an aarch64 router, got $(uname -m)"
+# GL firmware arch is aarch64_cortex-a53_neon-vfpv4; xray-core in the feed is built for aarch64_cortex-a53.
 for a in all noarch aarch64_cortex-a53 aarch64_cortex-a53_neon-vfpv4; do
 	grep -q "^arch $a " /etc/opkg.conf || echo "arch $a 10" >> /etc/opkg.conf
 done
-need=""
-command -v xray >/dev/null || need="$need xray-core"
-[ -x /usr/sbin/dnscrypt-proxy ] || need="$need dnscrypt-proxy2"
-command -v curl >/dev/null || need="$need curl"
-if [ -n "$need" ]; then
-	opkg update || true
-	opkg install $need || true
+
+missing() {
+	command -v curl >/dev/null || echo curl
+	[ -s /etc/ssl/certs/ca-certificates.crt ] || echo ca-bundle
+	[ -x /usr/sbin/dnscrypt-proxy ] || echo dnscrypt-proxy2
+	command -v iptables >/dev/null || echo "iptables-nft iptables-mod-nat-extra"
+	command -v unzip >/dev/null || echo unzip
+	command -v xray >/dev/null || echo xray-core
+}
+need="$(missing | tr '\n' ' ')"
+if [ -n "${need% }" ]; then
+	say "opkg install: $need"
+	opkg update > /tmp/gru-opkg.log 2>&1 || echo "opkg update failed, see /tmp/gru-opkg.log"
+	for p in $need; do
+		opkg install "$p" >> /tmp/gru-opkg.log 2>&1 || echo "opkg install $p failed"
+	done
 fi
-if ! command -v xray >/dev/null && [ -f "$KIT/bin/xray" ]; then
-	cp "$KIT/bin/xray" /usr/bin/xray
-	chmod 755 /usr/bin/xray
+
+if ! command -v xray >/dev/null; then
+	if [ -f "$KIT/bin/xray" ]; then
+		say "xray from kit/bin/xray"
+		cp "$KIT/bin/xray" /usr/bin/xray
+	else
+		XRAY_VERSION="${XRAY_VERSION:-v1.8.24}"
+		say "xray $XRAY_VERSION from GitHub"
+		curl -fL -m 300 -o /tmp/xray.zip \
+			"https://github.com/XTLS/Xray-core/releases/download/$XRAY_VERSION/Xray-linux-arm64-v8a.zip" &&
+			unzip -o -q /tmp/xray.zip xray -d /usr/bin || true
+		rm -f /tmp/xray.zip
+	fi
+	if [ -f /usr/bin/xray ]; then chmod 755 /usr/bin/xray; fi
 fi
-command -v xray >/dev/null || die "xray not installed (opkg failed; put an arm64 binary into kit/bin/xray)"
-[ -x /usr/sbin/dnscrypt-proxy ] || die "dnscrypt-proxy not installed"
-command -v curl >/dev/null || die "curl not installed"
+
+left="$(missing | grep -v -x unzip | tr '\n' ' ')"
+[ -z "${left% }" ] || die "still missing: $left (see /tmp/gru-opkg.log)"
+echo "xray: $(xray version | head -n1)"
 
 say "legacy cleanup"
 if [ -x /etc/init.d/gru-ui81 ]; then
@@ -118,6 +141,23 @@ uci set firewall.xray_http.src='lan'
 uci set firewall.xray_http.dest_port='1087'
 uci set firewall.xray_http.proto='tcp'
 uci set firewall.xray_http.target='ACCEPT'
+uci -q delete firewall.gru_upstream_in || true
+uci -q delete firewall.gru_upstream_fwd || true
+if [ -n "$UPSTREAM_NET" ]; then
+	uci set firewall.gru_upstream_in=rule
+	uci set firewall.gru_upstream_in.name='Allow-Upstream-LAN-to-Router'
+	uci set firewall.gru_upstream_in.src='wan'
+	uci set firewall.gru_upstream_in.src_ip="$UPSTREAM_NET"
+	uci set firewall.gru_upstream_in.proto='all'
+	uci set firewall.gru_upstream_in.target='ACCEPT'
+	uci set firewall.gru_upstream_fwd=rule
+	uci set firewall.gru_upstream_fwd.name='Allow-Upstream-LAN-to-LAN'
+	uci set firewall.gru_upstream_fwd.src='wan'
+	uci set firewall.gru_upstream_fwd.dest='lan'
+	uci set firewall.gru_upstream_fwd.src_ip="$UPSTREAM_NET"
+	uci set firewall.gru_upstream_fwd.proto='all'
+	uci set firewall.gru_upstream_fwd.target='ACCEPT'
+fi
 uci commit firewall
 
 say "services"

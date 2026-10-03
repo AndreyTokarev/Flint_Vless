@@ -13,8 +13,8 @@ $dir = Join-Path $root ("backup\" + (Get-Date -Format "yyyy-MM-dd_HHmm"))
 New-Item -ItemType Directory $dir -Force | Out-Null
 
 $paths = "/etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /etc/firewall.user* /etc/init.d/xray /etc/init.d/gru-* " +
-    "/usr/bin/gru-node /www/gru /etc/config/dhcp /etc/config/firewall /etc/config/network /etc/config/wireless " +
-    "/etc/rc.local /etc/hosts /etc/opkg.conf /etc/dropbear/authorized_keys"
+    "/usr/bin/gru-node /usr/bin/gru-geo-update /www/gru /etc/config/dhcp /etc/config/firewall /etc/config/network " +
+    "/etc/config/wireless /etc/rc.local /etc/hosts /etc/opkg.conf /etc/crontabs/root /etc/dropbear/authorized_keys"
 cmd /c "ssh $target ""tar -czf - $paths 2>/dev/null"" > ""$dir\router-config.tar.gz"""
 Write-Host "Saved $dir\router-config.tar.gz"
 

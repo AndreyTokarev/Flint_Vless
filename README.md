@@ -7,6 +7,7 @@
 - переключение регионов в веб-панели `http://gru.lan:81/` (по PIN);
 - DNS через DoH (dnscrypt-proxy на `127.0.0.1:5053`) против подмены DNS провайдером;
 - LAN основного роутера (`192.168.0.0/24`) и NAS доступны напрямую, без VPN;
+- из LAN основного роутера доступны сам Flint и устройства за ним (`192.168.8.0/24`);
 - локальные имена (`nas01` и т.п.) через dnsmasq Flint.
 
 ## Состав
@@ -14,11 +15,12 @@
 | Путь | Что это |
 |---|---|
 | `kit/install.sh` | установщик, запускается на роутере; можно запускать повторно |
+| `kit/upstream-access.sh` | только доступ из сети основного роутера к Flint (то же есть в `install.sh`) |
 | `kit/files/` | файлы, которые кладутся на роутер (шаблон Xray, init-скрипты, firewall, панель) |
 | `config/*.example` | образцы настроек |
 | `config/gru.env`, `config/nodes.conf` | **ваши** настройки и секреты (UUID, PIN, узлы) — в git не попадают |
-| `deploy.ps1` | залить комплект на роутер и установить (с ПК Windows) |
-| `backup.ps1` | снять с роутера резервную копию в `backup\` (в git не попадает) |
+| `deploy.ps1` / `deploy.sh` | залить комплект на роутер и установить (Windows / macOS, Linux) |
+| `backup.ps1` / `backup.sh` | снять с роутера резервную копию в `backup/` (в git не попадает) |
 
 ## Установка с нуля (новый или сброшенный роутер)
 
@@ -26,16 +28,43 @@
 2. Если роутер сбрасывался, удалить старый ключ хоста: `ssh-keygen -R 192.168.8.1`.
 3. (Желательно) добавить SSH-ключ, чтобы не вводить пароль:
    ```powershell
+   # Windows
    Get-Content "$HOME\.ssh\id_rsa.pub" | ssh root@192.168.8.1 "cat >> /etc/dropbear/authorized_keys && chmod 600 /etc/dropbear/authorized_keys"
    ```
-4. Проверить, что есть `config\gru.env` и `config\nodes.conf` (взять из `backup\<дата>\` или заполнить по `*.example`).
+   ```sh
+   # macOS / Linux
+   cat ~/.ssh/id_*.pub | ssh root@192.168.8.1 "cat >> /etc/dropbear/authorized_keys && chmod 600 /etc/dropbear/authorized_keys"
+   ```
+4. Проверить, что есть `config/gru.env` и `config/nodes.conf` (взять из `backup/<дата>/` или заполнить по `*.example`).
 5. Запустить из корня репозитория:
    ```powershell
-   .\deploy.ps1
+   .\deploy.ps1          # Windows
+   ```
+   ```sh
+   ./deploy.sh           # macOS / Linux
    ```
    В конце установщик печатает `DNS: ok`, IP выхода VPN и адрес панели.
 
-Если `opkg` не сможет скачать `xray-core`, сначала сохраните бинарник с рабочего роутера командой `.\backup.ps1 -WithBinary`: `deploy.ps1` сам подложит `backup\bin\xray`.
+### Пакеты
+
+`install.sh` сам ставит недостающее: чинит архитектуры в `/etc/opkg.conf` (фид GL собирает `xray-core` под `aarch64_cortex-a53`, а прошивка объявляет `aarch64_cortex-a53_neon-vfpv4`), затем через `opkg` — `curl`, `ca-bundle`, `dnscrypt-proxy2`, `unzip`, `xray-core`. Лог: `/tmp/gru-opkg.log`.
+
+Если `xray-core` из `opkg` не встал, берётся по порядку:
+1. `backup/bin/xray` — сохраните заранее с рабочего роутера: `.\backup.ps1 -WithBinary` / `./backup.sh --with-binary`;
+2. официальный релиз с GitHub (`XRAY_VERSION`, по умолчанию `v1.8.24`).
+
+## Доступ к Flint из сети основного роутера
+
+`install.sh` разрешает на Flint входящие соединения из `UPSTREAM_NET` (к самому роутеру и к устройствам `192.168.8.x`). Остаётся настроить основной роутер (TP-Link, `http://192.168.0.1`):
+
+- резервирование DHCP для Flint (его MAC в режиме репитера → `192.168.0.111`), чтобы адрес не менялся;
+- статический маршрут: сеть `192.168.8.0`, маска `255.255.255.0`, шлюз `192.168.0.111`.
+
+После этого Flint доступен из сети TP-Link как `192.168.0.111` и как `192.168.8.1`. Если на компьютере включён VPN-клиент (Happ и т.п.), он может забирать `192.168.8.x` в туннель — тогда добавьте маршрут на самом компьютере:
+
+```powershell
+route -p add 192.168.8.0 mask 255.255.255.0 192.168.0.111   # Windows, от администратора
+```
 
 ## Резервная копия
 
@@ -43,8 +72,12 @@
 .\backup.ps1              # конфиги роутера -> backup\<дата>\router-config.tar.gz, обновляет config\
 .\backup.ps1 -WithBinary  # плюс backup\bin\xray (~27 МБ)
 ```
+```sh
+./backup.sh
+./backup.sh --with-binary
+```
 
-Папку `backup\` и `config\gru.env` / `config\nodes.conf` храните отдельно (облако, флешка): в них UUID подписки.
+Папку `backup/` и `config/gru.env` / `config/nodes.conf` храните отдельно (облако, флешка): в них UUID подписки.
 
 ## Настройки `config/gru.env`
 
@@ -54,9 +87,10 @@
 - `ROUTING` — `ru` (РФ-сайты напрямую, остальное через VPN) или `global` (всё через VPN). Базы `geoip.dat`/`geosite.dat` (Loyalsoldier) скачиваются в `/usr/share/xray` при установке и обновляются по воскресеньям в 4:30; без них роутер автоматически работает в режиме `global`.
 - `UPSTREAM_IF` / `UPSTREAM_NET` — интерфейс и сеть основного роутера (`sta1` для Wi‑Fi-репитера, `wan` для кабеля).
 - `LOCAL_HOSTS` — локальные имена: `"nas01=192.168.0.145 printer=192.168.0.50"`.
+- `XRAY_VERSION` — релиз Xray для загрузки с GitHub, если других источников нет.
 
 Узлы — `config/nodes.conf`, по строке на узел: `код адрес sni pbk sid [uuid]`.
-После изменения настроек просто снова запустить `.\deploy.ps1`.
+После изменения настроек просто снова запустить деплой.
 
 ## Полезное на роутере
 

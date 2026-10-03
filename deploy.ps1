@@ -33,7 +33,7 @@ try {
     if ($LASTEXITCODE) { throw "upload failed" }
 
     $remote = "rm -rf /tmp/gru-kit && mkdir -p /tmp/gru-kit && tar -xf /tmp/gru-kit.tar -C /tmp/gru-kit && rm -f /tmp/gru-kit.tar && " +
-        "find /tmp/gru-kit -type f ! -path '*/bin/*' -exec sed -i 's/\r$//' {} + && " +
+        "find /tmp/gru-kit -type f ! -path '/tmp/gru-kit/bin/*' -exec sed -i 's/\r$//' {} + && " +
         "sh /tmp/gru-kit/install.sh; rc=`$?; rm -rf /tmp/gru-kit; exit `$rc"
     ssh $target $remote
     if ($LASTEXITCODE) { throw "install.sh failed (exit $LASTEXITCODE)" }
