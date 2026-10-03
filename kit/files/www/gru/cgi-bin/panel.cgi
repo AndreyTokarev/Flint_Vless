@@ -27,7 +27,7 @@ case "$tab" in status|servers|own|routing) ;; *) tab=status ;; esac
 TITLE="$(echo "${UI_TITLE:-Flint VPN}" | esc)"
 TAGLINE="$(echo "${UI_TAGLINE-Sail the internet}" | esc)"
 SHIELD='<path d="M7 15 29 8l16 8-2 22c-1 9-8 16-19 21C13 54 8 46 7 37Z" fill="url(#lg)" stroke="#e5e7eb" stroke-width="3" stroke-linejoin="round"/><path d="M10 17l18-6 3 13-10 6-11-4Z" fill="#4c6ef5" opacity=".55"/><path d="M14 21l10 6 9-6M24 27v22" fill="none" stroke="#e5e7eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M27 36C35 24 45 13 61 4 56 15 47 26 36 35Z" fill="#f59e0b"/><path d="M23 31C30 21 39 13 52 6 47 14 40 22 31 29Z" fill="#fcd34d"/>'
-FOOTER='<footer>YOUR NETWORK.<br>YOUR RULES.</footer>'
+FOOTER='<footer><span>YOUR NETWORK. <b>YOUR RULES.</b></span></footer>'
 ICON='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M17 31l-5 13 6-2-1 7 6-5ZM47 31l5 13-6-2 1 7-6-5Z" fill="#1e2a7a"/><path d="M17 31c0 12 2 17 7 19v6c4 3 12 3 16 0v-6c5-2 7-7 7-19Z" fill="#e5e7eb"/><path d="M20 38l9 2c0 4-4 5-7 3Z" fill="#111827"/><circle cx="25.5" cy="41.2" r="1.7" fill="#22d3ee"/><path d="M18 35l29 5" stroke="#1e2a7a" stroke-width="2"/><ellipse cx="38.5" cy="41.5" rx="5.2" ry="4.2" fill="#1e2a7a"/><path d="M32 45l-2.2 4h4.4Z" fill="#111827"/><path d="M25 52.5h14M28 50.5v5M31 50.8v5.4M34 50.8v5.4M37 50.5v5" stroke="#4b5563" stroke-width="1"/><path d="M4 19c6 3 11 5 15 6 2-14 24-14 26 0 4-1 9-3 15-6-3 11-14 16-28 16S7 30 4 19Z" fill="#23308f" stroke="#f5b301" stroke-width="2" stroke-linejoin="round"/><path d="M32 15.5l5 3v6l-5 3-5-3v-6Z" fill="#e5e7eb"/><path d="M27 18.5l5 3 5-3M32 21.5v6" fill="none" stroke="#23308f" stroke-width="1.3"/><path d="M33 25l10-11-3 7Z" fill="#f5b301"/></svg>'
 logo() {
   last="${TITLE##* }"; first="${TITLE% *}"
@@ -43,8 +43,11 @@ cat <<HTML
 <link rel=icon href="data:image/svg+xml,$(echo "$ICON" | sed -e 's/"/'"'"'/g' -e 's/#/%23/g' -e 's/</%3C/g' -e 's/>/%3E/g')">
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:#111827;color:#e5e7eb;min-height:100vh;display:flex;flex-direction:column}
-footer{margin-top:auto;padding:28px 20px 24px;box-sizing:border-box;width:100%;max-width:960px;align-self:center;font:600 13px/1.6 ui-monospace,Consolas,"Courier New",monospace;letter-spacing:.25em;color:#94a3b8;opacity:.8}
-main+footer{text-align:center}
+footer{margin-top:auto;padding:32px 0 28px;display:flex;align-items:center;gap:18px;font:700 15px/1 ui-monospace,Consolas,"Courier New",monospace;letter-spacing:.3em;color:#cbd5e1;white-space:nowrap}
+footer::before,footer::after{content:"";flex:1;height:2px;background:linear-gradient(90deg,transparent,#f59e0b)}
+footer::after{background:linear-gradient(90deg,#f59e0b,transparent)}
+footer b{color:#f59e0b}
+@media(max-width:480px){footer{font-size:12px;letter-spacing:.18em;gap:10px}}
 main,.layout{flex-shrink:0}
 main{max-width:640px;width:100%;box-sizing:border-box;margin:0 auto;padding:20px}
 h2{font-size:17px;margin:0 0 8px}
