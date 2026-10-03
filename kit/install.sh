@@ -88,11 +88,11 @@ cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/gru-ui" "$KIT/files/etc/i
 cp "$KIT/files/etc/dnscrypt-proxy2/gru-doh.toml" /etc/dnscrypt-proxy2/
 cp "$KIT/files/etc/firewall.user" /etc/firewall.user
 cp "$KIT/files/usr/bin/gru-node" "$KIT/files/usr/bin/gru-geo-update" "$KIT/files/usr/bin/gru-sub-update" \
-	"$KIT/files/usr/bin/gru-custom" /usr/bin/
+	"$KIT/files/usr/bin/gru-custom" "$KIT/files/usr/bin/gru-watchdog" /usr/bin/
 cp "$KIT/files/www/gru/index.html" /www/gru/
 cp "$KIT/files/www/gru/cgi-bin/panel.cgi" /www/gru/cgi-bin/
 chmod 755 /etc/init.d/xray /etc/init.d/gru-ui /etc/init.d/gru-doh /usr/bin/gru-node /usr/bin/gru-geo-update \
-	/usr/bin/gru-sub-update /usr/bin/gru-custom /www/gru/cgi-bin/panel.cgi
+	/usr/bin/gru-sub-update /usr/bin/gru-custom /usr/bin/gru-watchdog /www/gru/cgi-bin/panel.cgi
 
 (umask 077; cp "$KIT/config/gru.env" /etc/xray/gru.env; cp "$KIT/config/nodes.conf" /etc/xray/nodes.conf)
 # Optional: own nodes and custom sites saved by backup; without them the router's copies stay.
@@ -190,12 +190,10 @@ else
 fi
 grep -q gru-geo-update /etc/crontabs/root 2>/dev/null ||
 	echo "30 4 * * 0 /usr/bin/gru-geo-update >/tmp/gru-geo-update.log 2>&1" >> /etc/crontabs/root
-if [ -n "$SUB_URL" ]; then
-	grep -q gru-sub-update /etc/crontabs/root 2>/dev/null ||
-		echo "15 5 * * * /usr/bin/gru-sub-update >/tmp/gru-sub-update.log 2>&1" >> /etc/crontabs/root
-else
-	sed -i '/gru-sub-update/d' /etc/crontabs/root 2>/dev/null || true
-fi
+# The interval chosen in the panel survives a redeploy; SUB_INTERVAL only seeds a fresh router.
+gru-sub-update interval "$(cat /etc/xray/sub-interval 2>/dev/null || echo "${SUB_INTERVAL:-24h}")"
+grep -q gru-watchdog /etc/crontabs/root 2>/dev/null ||
+	echo "*/2 * * * * /usr/bin/gru-watchdog >/tmp/gru-watchdog.log 2>&1" >> /etc/crontabs/root
 /etc/init.d/cron enable
 /etc/init.d/cron restart
 

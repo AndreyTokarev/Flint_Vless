@@ -20,6 +20,7 @@ esc() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e "s/'/\&#39;/g
 pass="$(get pass)"; node="$(get node)"; routing="$(get routing)"; vpn="$(get vpn)"; sub="$(get sub)"
 add="$(param add)"; to="$(get to)"; del="$(param del)"
 link="$(param link)"; edit="$(get edit)"; copy="$(get copy)"; newnode="$(get newnode)"; save="$(get save)"; ndel="$(get ndel)"
+subint="$(get subint)"; wd="$(get wd)"
 tab="$(get tab)"
 case "$tab" in status|servers|own|routing) ;; *) tab=status ;; esac
 . /etc/xray/gru.env
@@ -72,6 +73,8 @@ nav a.logout{color:#9ca3af;margin-top:16px}
 .stat{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #374151}
 .stat:last-of-type{border-bottom:0}
 .stat a{color:#93c5fd}
+.stat>span:first-child{white-space:nowrap}
+.stat>:last-child{text-align:right}
 @media(max-width:720px){
 .layout{flex-direction:column;gap:12px;padding:12px}
 nav{flex:none;position:static;display:grid;grid-template-columns:1fr 1fr;gap:6px;align-self:stretch}
@@ -102,6 +105,10 @@ elif [ "$vpn" = on ] || [ "$vpn" = off ]; then
   msg="$(gru-node vpn "$vpn" 2>&1)"
 elif [ "$sub" = 1 ]; then
   msg="$(gru-sub-update 2>&1)"
+elif [ -n "$subint" ]; then
+  msg="$(gru-sub-update interval "$subint" 2>&1)"
+elif [ "$wd" = on ] || [ "$wd" = off ]; then
+  msg="$(gru-watchdog "$wd" 2>&1)"
 elif [ -n "$add" ] && { [ "$to" = direct ] || [ "$to" = proxy ]; }; then
   msg="$(gru-node site add "$to" "$add" 2>&1)"
 elif [ -n "$del" ]; then
@@ -161,12 +168,16 @@ status)
   [ "$MODE" = ru ] && geo="<b class=ok>включён</b>" || geo="<b class=err>выключен</b>"
   total="$(echo "$NAMES" | grep -c .)"; own="$(gru-custom list | grep -c .)"
   ndirect="$(echo "$SITES" | grep -c '^direct')"; nproxy="$(echo "$SITES" | grep -c '^proxy')"
-  CHECKED="$(cat /etc/xray/sub-checked 2>/dev/null)"
+  CHECKED="$(cat /etc/xray/sub-checked 2>/dev/null | esc)"
+  WLAST="$(cat /etc/xray/watchdog-last 2>/dev/null | esc)"
+  [ "$(gru-watchdog state)" = on ] && wds="<b class=ok>включено</b>" || wds="<b class=err>выключено</b>"
   echo "<div class=card>"
   echo "<div class=stat><span>Гео-фильтр РФ</span><span>$geo</span></div>"
   echo "<div class=stat><span>Свои сайты</span><a href='?pass=$pass&amp;tab=routing'>$ndirect напрямую, $nproxy через VPN</a></div>"
   echo "<div class=stat><span>Серверов</span><a href='?pass=$pass&amp;tab=servers'>$total, из них своих $own</a></div>"
   echo "<div class=stat><span>Проверка подписки</span><span>${CHECKED:-ещё не было}</span></div>"
+  echo "<div class=stat><span>Автопереключение при сбое</span><a href='?pass=$pass&amp;tab=servers'>$wds</a></div>"
+  [ -n "$WLAST" ] && echo "<div class=stat><span>Последний сбой</span><span>$WLAST</span></div>"
   echo "</div>"
   ;;
 servers)
@@ -176,10 +187,29 @@ servers)
     on=""; [ "$code" = "$CUR" ] && on=" on"
     echo "<form method=get>$(hidden)<input type=hidden name=node value='$code'><button class='$on'>$name</button></form>"
   done
-  echo "</div>"
-  btn sub 1 "" "Обновить список серверов по подписке"
-  CHECKED="$(cat /etc/xray/sub-checked 2>/dev/null)"
-  echo "<small>Автообновление каждый день в 5:15. Последняя проверка: ${CHECKED:-ещё не было}</small></div>"
+  echo "</div></div>"
+  echo "<div class=card><h2>Подписка</h2>"
+  btn sub 1 "" "Обновить список серверов сейчас"
+  CHECKED="$(cat /etc/xray/sub-checked 2>/dev/null | esc)"
+  echo "<small>Последняя проверка: ${CHECKED:-ещё не было}</small>"
+  SI="$(gru-sub-update interval)"
+  echo "<form method=get class=row>$(hidden)<select name=subint>"
+  for v in "off:Автообновление выключено" "30m:Обновлять каждые 30 минут" "1h:Обновлять каждый час" "3h:Обновлять каждые 3 часа" \
+    "6h:Обновлять каждые 6 часов" "12h:Обновлять каждые 12 часов" "24h:Обновлять раз в сутки"; do
+    sel=""; [ "${v%%:*}" = "$SI" ] && sel=" selected"
+    echo "<option value='${v%%:*}'$sel>${v#*:}</option>"
+  done
+  echo "</select><button>Сохранить</button></form></div>"
+  echo "<div class=card><h2>Автопереключение при сбое</h2>"
+  if [ "$(gru-watchdog state)" = on ]; then
+    echo "<b class=ok>включено</b> — каждые 2 минуты роутер проверяет VPN. Если сервер не отвечает, а интернет есть, он обновляет подписку и при необходимости переходит на первый рабочий сервер."
+    btn wd off "" "Выключить автопереключение"
+  else
+    echo "<b class=err>выключено</b> — при сбое сервера интернет пропадёт, пока не выберете другой сервер вручную."
+    btn wd on " class=on" "Включить автопереключение"
+  fi
+  WLAST="$(cat /etc/xray/watchdog-last 2>/dev/null | esc)"
+  echo "<small>Последнее срабатывание: ${WLAST:-не было}</small></div>"
   ;;
 own)
   if [ -n "$form" ]; then

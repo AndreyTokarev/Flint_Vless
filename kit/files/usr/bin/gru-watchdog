@@ -1,0 +1,54 @@
+#!/bin/sh
+# VPN health check, run by cron every 2 minutes. When the current node stops passing traffic
+# while the internet itself works: refresh the subscription (fetched directly, not through the
+# dead tunnel) and, if that does not help, switch to the first node that works.
+# Usage: gru-watchdog              run a check
+#        gru-watchdog on|off       enable / disable (default on)
+#        gru-watchdog state        print on|off
+STATE=/etc/xray/watchdog
+LAST=/etc/xray/watchdog-last
+LOCK=/tmp/gru-watchdog.lock
+
+case "$1" in
+	on|off) echo "$1" > "$STATE"; echo "Автопереключение при сбое: $1"; exit 0 ;;
+	state) cat "$STATE" 2>/dev/null || echo on; exit 0 ;;
+	"") ;;
+	*) sed -n '5,7s/^# \{0,1\}//p' "$0"; exit 1 ;;
+esac
+[ "$(cat "$STATE" 2>/dev/null || echo on)" = on ] || exit 0
+[ "$(gru-node vpn)" = on ] || exit 0
+
+tunnel_ok() { [ "$(curl -s -o /dev/null -m 8 -w '%{http_code}' -x http://127.0.0.1:1087 https://www.google.com/generate_204)" = 204 ]; }
+online() { curl -s -o /dev/null -m 8 https://ya.ru || curl -s -o /dev/null -m 8 https://www.google.com/generate_204; }
+name() { gru-node names | awk -F '\t' -v c="$1" '$1 == c { print $2 }'; }
+log() { echo "$(date '+%Y-%m-%d %H:%M') — $1" > "$LAST"; logger -t gru-watchdog "$1"; echo "$1"; }
+
+tunnel_ok && exit 0
+sleep 10
+tunnel_ok && exit 0
+# The internet itself is down: switching nodes would not help.
+online || exit 0
+
+find /tmp -maxdepth 1 -name gru-watchdog.lock -mmin +30 -exec rm -rf {} + 2>/dev/null
+mkdir "$LOCK" 2>/dev/null || exit 0
+trap 'rm -rf "$LOCK"' EXIT
+
+cur="$(cat /etc/xray/current-node 2>/dev/null)"
+was="$(name "$cur")"; was="${was:-$cur}"
+gru-sub-update >/dev/null 2>&1
+sleep 3
+if tunnel_ok; then
+	log "сервер «$was» не отвечал, помогло обновление подписки"
+	exit 0
+fi
+for code in $(gru-node codes); do
+	[ "$code" = "$cur" ] && continue
+	gru-node use "$code" >/dev/null 2>&1 || continue
+	sleep 3
+	if tunnel_ok; then
+		log "сервер «$was» не отвечал, переключился на «$(name "$code")»"
+		exit 0
+	fi
+done
+gru-node use "$cur" >/dev/null 2>&1
+log "сервер «$was» не отвечал, рабочих серверов не нашлось"

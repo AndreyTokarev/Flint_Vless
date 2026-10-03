@@ -1,6 +1,7 @@
 #!/bin/sh
 # Switch the Xray VLESS REALITY node and routing mode.
 # Usage: gru-node [list|codes|names|apply|<code>]
+#        gru-node use <code>     switch without the exit IP check
 #        gru-node routing [ru|global]
 #        gru-node vpn [on|off]   off = LAN clients go to the internet directly, bypassing Xray
 #        gru-node site list | add direct|proxy <site> | del <site>
@@ -23,12 +24,14 @@ node_files() { for f in "$NODES" "$CUSTOM"; do [ -f "$f" ] && echo "$f"; done; }
 nodes() { cat $(node_files) | grep -v -E '^[[:space:]]*(#|$)'; }
 current() { cat "$CUR" 2>/dev/null || nodes | awk 'NR == 1 {print $1}'; }
 mode() { cat "$MODE_FILE" 2>/dev/null || echo ru; }
+sub_host() { echo "$SUB_URL" | sed -e 's|^[a-zA-Z]*://||' -e 's|[/:?#].*||'; }
 vpn_state() { cat "$VPN_FILE" 2>/dev/null || echo on; }
 
 # Provider server names (address + REALITY SNI of every node) routed direct, so a VPN
 # client on a Flint device (e.g. Happ) does not get tunnelled into the same provider twice.
+# The subscription host goes direct too: Happ on a LAN device must refresh it while the current node is down.
 provider_domains() {
-	nodes | awk '{print $2; print $3}' | grep -v -E '^[0-9.]+$' | sort -u |
+	{ nodes | awk '{print $2; print $3}'; sub_host; } | grep -v -E '^([0-9.]+)?$' | sort -u |
 		sed 's/.*/"full:&"/' | tr '\n' ',' | sed 's/,$//; s/,/, /g'
 }
 
@@ -116,6 +119,9 @@ case "$cmd" in
 		;;
 	apply)
 		apply "$(current)"
+		;;
+	use)
+		apply "$2"
 		;;
 	site)
 		case "$2" in
