@@ -1,21 +1,29 @@
 #!/bin/sh
 # Switch the Xray VLESS REALITY node and routing mode.
-# Usage: gru-node [list|codes|apply|<code>]
+# Usage: gru-node [list|codes|names|apply|<code>]
 #        gru-node routing [ru|global]
+#        gru-node vpn [on|off]   off = LAN clients go to the internet directly, bypassing Xray
+#        gru-node site list | add direct|proxy <site> | del <site>
 #   ru     - Russian sites/IPs go direct, the rest via VPN (needs /usr/share/xray/geo*.dat)
 #   global - everything via VPN
+#   custom sites (domains incl. subdomains, IPv4, CIDR) override the geo filter in both modes
 set -e
 ENV=/etc/xray/gru.env
 NODES=/etc/xray/nodes.conf
+CUSTOM=/etc/xray/nodes-custom.conf
 TEMPLATE=/etc/xray/template.json
 CONF=/etc/xray/config.json
 CUR=/etc/xray/current-node
 MODE_FILE=/etc/xray/routing-mode
+VPN_FILE=/etc/xray/vpn-state
+SITES=/etc/xray/custom-sites
 GEO=/usr/share/xray
 
-nodes() { grep -v -E '^[[:space:]]*(#|$)' "$NODES"; }
+node_files() { for f in "$NODES" "$CUSTOM"; do [ -f "$f" ] && echo "$f"; done; }
+nodes() { cat $(node_files) | grep -v -E '^[[:space:]]*(#|$)'; }
 current() { cat "$CUR" 2>/dev/null || nodes | awk 'NR == 1 {print $1}'; }
 mode() { cat "$MODE_FILE" 2>/dev/null || echo ru; }
+vpn_state() { cat "$VPN_FILE" 2>/dev/null || echo on; }
 
 # Provider server names (address + REALITY SNI of every node) routed direct, so a VPN
 # client on a Flint device (e.g. Happ) does not get tunnelled into the same provider twice.
@@ -24,21 +32,40 @@ provider_domains() {
 		sed 's/.*/"full:&"/' | tr '\n' ',' | sed 's/,$//; s/,/, /g'
 }
 
+# Custom sites as a JSON list: sites_json direct|proxy domain|ip
+sites_json() {
+	[ -f "$SITES" ] || return 0
+	awk -v l="$1" -v t="$2" '$1 == l {
+		ip = ($2 ~ /^[0-9]+(\.[0-9]+){3}(\/[0-9]+)?$/)
+		if (t == "ip" && ip) print "\"" $2 "\""
+		if (t == "domain" && !ip) print "\"domain:" $2 "\""
+	}' "$SITES" | tr '\n' ',' | sed 's/,$//; s/,/, /g'
+}
+
+# "https://www.Example.com:8080/path" -> example.com; IPv4 and CIDR pass through.
+normalize_site() {
+	s="$(echo "$1" | tr 'A-Z' 'a-z' | sed 's|^[a-z]*://||')"
+	if echo "$s" | grep -qE '^[0-9]+(\.[0-9]+){3}(/[0-9]+)?$'; then echo "$s"; return; fi
+	echo "$s" | sed -e 's|[/?#].*$||' -e 's|^www\.||' -e 's|:[0-9]*$||' |
+		grep -E '^([a-z0-9-]+\.)+[a-z0-9-]{2,}$' || true
+}
+
 render() {
 	line="$(nodes | awk -v c="$1" '$1 == c' | head -n1)"
 	set -- $line
 	uuid="${6:-$VLESS_UUID}"
 	port="${7:-443}"
-	if [ "$RENDER_MODE" = ru ]; then strategy=IPIfNonMatch; else strategy=AsIs; fi
-	domains="$(provider_domains)"
+	sid="$5"; [ "$sid" = - ] && sid=""
+	cdi="$(sites_json direct ip)"; cpi="$(sites_json proxy ip)"
+	if [ "$RENDER_MODE" = ru ] || [ -n "$cdi$cpi" ]; then strategy=IPIfNonMatch; else strategy=AsIs; fi
 	umask 077
 	sed -e "s|__UUID__|$uuid|" -e "s|__ADDR__|$2|" -e "s|__PORT__|$port|" -e "s|__SNI__|$3|" \
-		-e "s|__PBK__|$4|" -e "s|__SID__|$5|" -e "s|__DOMAIN_STRATEGY__|$strategy|" \
-		-e "s|__PROVIDER_DOMAINS__|$domains|" \
+		-e "s|__PBK__|$4|" -e "s|__SID__|$sid|" -e "s|__DOMAIN_STRATEGY__|$strategy|" \
+		-e "s|__PROVIDER_DOMAINS__|$(provider_domains)|" \
+		-e "s|__CUSTOM_PROXY_DOMAIN__|$(sites_json proxy domain)|" -e "s|__CUSTOM_PROXY_IP__|$cpi|" \
+		-e "s|__CUSTOM_DIRECT_DOMAIN__|$(sites_json direct domain)|" -e "s|__CUSTOM_DIRECT_IP__|$cdi|" \
 		"$TEMPLATE" > "$CONF.new"
-	if [ -z "$domains" ]; then
-		sed -i '/"domain": \[\]/d' "$CONF.new"
-	fi
+	sed -i '/": \[\] }/d' "$CONF.new"
 	if [ "$RENDER_MODE" != ru ]; then
 		sed -i -e '/geosite:category-ru/d' -e '/"geoip:ru"/d' "$CONF.new"
 	fi
@@ -62,13 +89,14 @@ apply() {
 	mv "$CONF.new" "$CONF"
 	echo "$code" > "$CUR"
 	/etc/init.d/xray restart
+	sh /etc/firewall.user >/dev/null 2>&1 || true
 	echo "Node: $code, routing: $RENDER_MODE"
 }
 
 cmd="${1:-list}"
 case "$cmd" in
 	list)
-		echo "Current: $(current), routing: $(mode)"
+		echo "Current: $(current), routing: $(mode), vpn: $(vpn_state)"
 		echo "Codes: $(nodes | awk '{print $1}' | tr '\n' ' ')"
 		;;
 	codes)
@@ -78,7 +106,7 @@ case "$cmd" in
 		# "code<TAB>name"; the name is the comment line right above the node (see tools/sub2nodes.py).
 		awk '/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
 			/^[[:space:]]*$/ { next }
-			{ print $1 "\t" ((name != "" && name !~ /^Generated/) ? name : $1); name = "" }' "$NODES"
+			{ print $1 "\t" ((name != "" && name !~ /^Generated/) ? name : $1); name = "" }' $(node_files)
 		;;
 	routing)
 		[ -n "$2" ] || { mode; exit 0; }
@@ -88,6 +116,38 @@ case "$cmd" in
 		;;
 	apply)
 		apply "$(current)"
+		;;
+	site)
+		case "$2" in
+			list|"")
+				[ -f "$SITES" ] && awk 'NF == 2 { print $1 "\t" $2 }' "$SITES"
+				exit 0 ;;
+			add)
+				case "$3" in direct|proxy) ;; *) echo "Usage: gru-node site add direct|proxy <site>"; exit 1 ;; esac
+				site="$(normalize_site "$4")"
+				[ -n "$site" ] || { echo "Not a domain or IP: $4"; exit 1; }
+				touch "$SITES"
+				awk -v s="$site" '$2 != s' "$SITES" > "$SITES.new"
+				echo "$3 $site" >> "$SITES.new"
+				mv "$SITES.new" "$SITES"
+				echo "Added: $site -> $3" ;;
+			del)
+				site="$(normalize_site "$3")"
+				[ -n "$site" ] && [ -f "$SITES" ] || { echo "Not found: $3"; exit 1; }
+				awk -v s="$site" '$2 != s' "$SITES" > "$SITES.new"
+				mv "$SITES.new" "$SITES"
+				echo "Removed: $site" ;;
+			*)
+				echo "Usage: gru-node site list | add direct|proxy <site> | del <site>"; exit 1 ;;
+		esac
+		apply "$(current)"
+		;;
+	vpn)
+		[ -n "$2" ] || { vpn_state; exit 0; }
+		case "$2" in on|off) ;; *) echo "Usage: gru-node vpn [on|off]"; exit 1 ;; esac
+		echo "$2" > "$VPN_FILE"
+		sh /etc/firewall.user >/dev/null 2>&1
+		echo "VPN: $2"
 		;;
 	*)
 		apply "$cmd"

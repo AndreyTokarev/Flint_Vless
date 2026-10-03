@@ -12,19 +12,37 @@ append() {
 	iptables -t "$table" -C "$chain" "$@" 2>/dev/null || iptables -t "$table" -A "$chain" "$@"
 }
 
+remove() {
+	table=$1; chain=$2; shift 2
+	while iptables -t "$table" -D "$chain" "$@" 2>/dev/null; do :; done
+}
+
 iptables -t nat -N XRAY 2>/dev/null || iptables -t nat -F XRAY
 for net in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4; do
 	iptables -t nat -A XRAY -d "$net" -j RETURN
 done
+# Provider servers go direct, so a VPN client on a LAN device (e.g. Happ) is not tunnelled twice.
+for host in $(cat /etc/xray/nodes.conf /etc/xray/nodes-custom.conf 2>/dev/null | grep -v -E '^[[:space:]]*(#|$)' | awk '{print $2}' | sort -u); do
+	if echo "$host" | grep -qE '^[0-9]+(\.[0-9]+){3}$'; then ips="$host"
+	else ips="$(nslookup "$host" 127.0.0.1 2>/dev/null | awk '/^Address/ && !/#/ {print $NF}' | grep -E '^[0-9]+(\.[0-9]+){3}$')"; fi
+	for ip in $ips; do
+		iptables -t nat -C XRAY -d "$ip" -j RETURN 2>/dev/null || iptables -t nat -A XRAY -d "$ip" -j RETURN
+	done
+done
 iptables -t nat -A XRAY -p tcp -j REDIRECT --to-ports 12345
 
-# Order matters: DNS redirects must stay above the XRAY jump.
-append nat PREROUTING -i br-lan -p tcp -j XRAY
+# /etc/xray/vpn-state = off (panel / gru-node vpn off): LAN clients go to the internet directly.
+if [ "$(cat /etc/xray/vpn-state 2>/dev/null)" = off ]; then
+	remove nat PREROUTING -i br-lan -p tcp -j XRAY
+	remove filter FORWARD -i br-lan -p udp --dport 443 -j DROP
+else
+	# Order matters: DNS redirects must stay above the XRAY jump.
+	append nat PREROUTING -i br-lan -p tcp -j XRAY
+	# Only TCP goes through Xray; dropping QUIC makes browsers fall back to TCP.
+	ensure filter FORWARD -i br-lan -p udp --dport 443 -j DROP
+fi
 ensure nat PREROUTING -i br-lan -p udp --dport 53 -j REDIRECT --to-ports 53
 ensure nat PREROUTING -i br-lan -p tcp --dport 53 -j REDIRECT --to-ports 53
-
-# Only TCP goes through Xray; dropping QUIC makes browsers fall back to TCP.
-ensure filter FORWARD -i br-lan -p udp --dport 443 -j DROP
 
 if [ -n "$UPSTREAM_IF" ] && [ -n "$UPSTREAM_NET" ]; then
 	ensure nat POSTROUTING -o "$UPSTREAM_IF" -d "$UPSTREAM_NET" -j MASQUERADE

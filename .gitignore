@@ -1,3 +1,5 @@
 config/gru.env
 config/nodes.conf
+config/nodes-custom.conf
+config/custom-sites
 backup/

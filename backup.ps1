@@ -13,13 +13,13 @@ $dir = Join-Path $root ("backup\" + (Get-Date -Format "yyyy-MM-dd_HHmm"))
 New-Item -ItemType Directory $dir -Force | Out-Null
 
 $paths = "/etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /etc/firewall.user* /etc/init.d/xray /etc/init.d/gru-* " +
-    "/usr/bin/gru-node /usr/bin/gru-geo-update /www/gru /etc/config/dhcp /etc/config/firewall /etc/config/network " +
+    "/usr/bin/gru-* /usr/share/gru /www/gru /etc/config/dhcp /etc/config/firewall /etc/config/network " +
     "/etc/config/wireless /etc/rc.local /etc/hosts /etc/opkg.conf /etc/crontabs/root /etc/dropbear/authorized_keys"
 cmd /c "ssh $target ""tar -czf - $paths 2>/dev/null"" > ""$dir\router-config.tar.gz"""
 Write-Host "Saved $dir\router-config.tar.gz"
 
 New-Item -ItemType Directory (Join-Path $root "config") -Force | Out-Null
-foreach ($f in "gru.env", "nodes.conf") {
+foreach ($f in "gru.env", "nodes.conf", "nodes-custom.conf", "custom-sites") {
     ssh $target "test -f /etc/xray/$f"
     if ($LASTEXITCODE -eq 0) {
         cmd /c "ssh $target ""cat /etc/xray/$f"" > ""$root\config\$f"""

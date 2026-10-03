@@ -18,7 +18,9 @@ STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT
 cp -R "$ROOT/kit/." "$STAGING/"
 mkdir -p "$STAGING/config"
-cp "$ROOT/config/gru.env" "$ROOT/config/nodes.conf" "$STAGING/config/"
+for f in gru.env nodes.conf nodes-custom.conf custom-sites; do
+	if [ -f "$ROOT/config/$f" ]; then cp "$ROOT/config/$f" "$STAGING/config/"; fi
+done
 if [ -f "$ROOT/backup/bin/xray" ]; then
 	mkdir -p "$STAGING/bin"
 	cp "$ROOT/backup/bin/xray" "$STAGING/bin/"

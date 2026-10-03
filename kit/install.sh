@@ -81,18 +81,24 @@ if [ -f /etc/nginx/conf.d/gru-ui.conf ]; then
 fi
 
 say "files"
-mkdir -p /etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /www/gru/cgi-bin
+mkdir -p /etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /www/gru/cgi-bin /usr/share/gru
 cp "$KIT/files/etc/xray/template.json" /etc/xray/
+cp "$KIT/files/usr/share/gru/vless.awk" /usr/share/gru/
 cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/gru-ui" "$KIT/files/etc/init.d/gru-doh" /etc/init.d/
 cp "$KIT/files/etc/dnscrypt-proxy2/gru-doh.toml" /etc/dnscrypt-proxy2/
 cp "$KIT/files/etc/firewall.user" /etc/firewall.user
-cp "$KIT/files/usr/bin/gru-node" "$KIT/files/usr/bin/gru-geo-update" /usr/bin/
+cp "$KIT/files/usr/bin/gru-node" "$KIT/files/usr/bin/gru-geo-update" "$KIT/files/usr/bin/gru-sub-update" \
+	"$KIT/files/usr/bin/gru-custom" /usr/bin/
 cp "$KIT/files/www/gru/index.html" /www/gru/
 cp "$KIT/files/www/gru/cgi-bin/panel.cgi" /www/gru/cgi-bin/
 chmod 755 /etc/init.d/xray /etc/init.d/gru-ui /etc/init.d/gru-doh /usr/bin/gru-node /usr/bin/gru-geo-update \
-	/www/gru/cgi-bin/panel.cgi
+	/usr/bin/gru-sub-update /usr/bin/gru-custom /www/gru/cgi-bin/panel.cgi
 
 (umask 077; cp "$KIT/config/gru.env" /etc/xray/gru.env; cp "$KIT/config/nodes.conf" /etc/xray/nodes.conf)
+# Optional: own nodes and custom sites saved by backup; without them the router's copies stay.
+for f in nodes-custom.conf custom-sites; do
+	if [ -f "$KIT/config/$f" ]; then (umask 077; cp "$KIT/config/$f" "/etc/xray/$f"); fi
+done
 case "${ROUTING:-ru}" in
 	ru|global) echo "${ROUTING:-ru}" > /etc/xray/routing-mode ;;
 	*) die "ROUTING must be ru or global" ;;
@@ -184,6 +190,12 @@ else
 fi
 grep -q gru-geo-update /etc/crontabs/root 2>/dev/null ||
 	echo "30 4 * * 0 /usr/bin/gru-geo-update >/tmp/gru-geo-update.log 2>&1" >> /etc/crontabs/root
+if [ -n "$SUB_URL" ]; then
+	grep -q gru-sub-update /etc/crontabs/root 2>/dev/null ||
+		echo "15 5 * * * /usr/bin/gru-sub-update >/tmp/gru-sub-update.log 2>&1" >> /etc/crontabs/root
+else
+	sed -i '/gru-sub-update/d' /etc/crontabs/root 2>/dev/null || true
+fi
 /etc/init.d/cron enable
 /etc/init.d/cron restart
 
@@ -191,4 +203,5 @@ say "check"
 nslookup youtube.com 127.0.0.1 >/dev/null && echo "DNS: ok" || echo "DNS: FAIL"
 ip="$(curl -s -m 15 -x http://127.0.0.1:1087 https://ifconfig.me || true)"
 [ -n "$ip" ] && echo "VPN exit IP: $ip" || echo "VPN: FAIL (check nodes.conf / VLESS_UUID)"
+[ "$(gru-node vpn)" = off ] && echo "NOTE: VPN is switched off in the panel (gru-node vpn on to enable)"
 echo "Panel: http://gru.lan:81/  (PIN from gru.env)"
