@@ -1,0 +1,36 @@
+# Gru: transparent Xray for LAN clients, router DNS enforcement, direct access to upstream LAN.
+# Safe to re-run on every firewall reload.
+. /etc/xray/gru.env
+
+ensure() {
+	table=$1; chain=$2; shift 2
+	iptables -t "$table" -C "$chain" "$@" 2>/dev/null || iptables -t "$table" -I "$chain" 1 "$@"
+}
+
+append() {
+	table=$1; chain=$2; shift 2
+	iptables -t "$table" -C "$chain" "$@" 2>/dev/null || iptables -t "$table" -A "$chain" "$@"
+}
+
+iptables -t nat -N XRAY 2>/dev/null || iptables -t nat -F XRAY
+for net in 0.0.0.0/8 10.0.0.0/8 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4; do
+	iptables -t nat -A XRAY -d "$net" -j RETURN
+done
+iptables -t nat -A XRAY -p tcp -j REDIRECT --to-ports 12345
+
+# Order matters: DNS redirects must stay above the XRAY jump.
+append nat PREROUTING -i br-lan -p tcp -j XRAY
+ensure nat PREROUTING -i br-lan -p udp --dport 53 -j REDIRECT --to-ports 53
+ensure nat PREROUTING -i br-lan -p tcp --dport 53 -j REDIRECT --to-ports 53
+
+# Only TCP goes through Xray; dropping QUIC makes browsers fall back to TCP.
+ensure filter FORWARD -i br-lan -p udp --dport 443 -j DROP
+
+if [ -n "$UPSTREAM_IF" ] && [ -n "$UPSTREAM_NET" ]; then
+	ensure nat POSTROUTING -o "$UPSTREAM_IF" -d "$UPSTREAM_NET" -j MASQUERADE
+	ensure filter FORWARD -i br-lan -o "$UPSTREAM_IF" -d "$UPSTREAM_NET" -j ACCEPT
+	ensure filter FORWARD -i "$UPSTREAM_IF" -o br-lan -s "$UPSTREAM_NET" -j ACCEPT
+fi
+
+mkdir -p /tmp/dnsmasq.d
+cp -f /etc/dnsmasq.d/gru-*.conf /tmp/dnsmasq.d/ 2>/dev/null || true

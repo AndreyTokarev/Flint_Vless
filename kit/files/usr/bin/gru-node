@@ -1,0 +1,38 @@
+#!/bin/sh
+# Switch the Xray VLESS REALITY node.
+# Usage: gru-node [list|codes|<code>]
+set -e
+ENV=/etc/xray/gru.env
+NODES=/etc/xray/nodes.conf
+TEMPLATE=/etc/xray/template.json
+CONF=/etc/xray/config.json
+CUR=/etc/xray/current-node
+
+nodes() { grep -v -E '^[[:space:]]*(#|$)' "$NODES"; }
+
+cmd="${1:-list}"
+case "$cmd" in
+	list)
+		echo "Current: $(cat "$CUR" 2>/dev/null || echo unknown)"
+		echo "Codes: $(nodes | awk '{print $1}' | tr '\n' ' ')"
+		exit 0 ;;
+	codes)
+		nodes | awk '{print $1}'
+		exit 0 ;;
+esac
+
+line="$(nodes | awk -v c="$cmd" '$1 == c' | head -n1)"
+[ -n "$line" ] || { echo "Unknown: $cmd"; exit 1; }
+. "$ENV"
+set -- $line
+uuid="${6:-$VLESS_UUID}"
+
+umask 077
+sed -e "s|__UUID__|$uuid|" -e "s|__ADDR__|$2|" -e "s|__SNI__|$3|" \
+	-e "s|__PBK__|$4|" -e "s|__SID__|$5|" "$TEMPLATE" > "$CONF.new"
+mv "$CONF.new" "$CONF"
+echo "$cmd" > "$CUR"
+/etc/init.d/xray restart
+sleep 1
+echo "Switched to: $cmd"
+curl -s -m 15 -x http://127.0.0.1:1087 https://ifconfig.me; echo

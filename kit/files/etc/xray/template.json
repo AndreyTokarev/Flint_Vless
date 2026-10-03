@@ -1,0 +1,60 @@
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "tag": "socks-in", "listen": "0.0.0.0", "port": 1080, "protocol": "socks",
+      "settings": { "udp": true },
+      "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] }
+    },
+    {
+      "tag": "http-in", "listen": "0.0.0.0", "port": 1087, "protocol": "http",
+      "settings": {},
+      "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] }
+    },
+    {
+      "tag": "transparent", "listen": "0.0.0.0", "port": 12345,
+      "protocol": "dokodemo-door",
+      "settings": { "network": "tcp,udp", "followRedirect": true },
+      "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] },
+      "streamSettings": { "sockopt": { "tproxy": "redirect" } }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "proxy", "protocol": "vless",
+      "settings": {
+        "vnext": [{
+          "address": "__ADDR__", "port": 443,
+          "users": [{
+            "id": "__UUID__",
+            "encryption": "none", "flow": "xtls-rprx-vision"
+          }]
+        }]
+      },
+      "streamSettings": {
+        "network": "tcp", "security": "reality",
+        "realitySettings": {
+          "serverName": "__SNI__",
+          "fingerprint": "firefox",
+          "publicKey": "__PBK__",
+          "shortId": "__SID__"
+        }
+      }
+    },
+    { "tag": "direct", "protocol": "freedom" },
+    { "tag": "block", "protocol": "blackhole" }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field", "outboundTag": "direct",
+        "ip": [
+          "0.0.0.0/8", "10.0.0.0/8", "127.0.0.0/8", "169.254.0.0/16",
+          "172.16.0.0/12", "192.168.0.0/16", "224.0.0.0/4", "240.0.0.0/4"
+        ]
+      },
+      { "type": "field", "outboundTag": "proxy", "network": "tcp,udp" }
+    ]
+  }
+}

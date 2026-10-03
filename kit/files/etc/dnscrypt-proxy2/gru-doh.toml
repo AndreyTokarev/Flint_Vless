@@ -1,0 +1,10 @@
+listen_addresses = ['127.0.0.1:5053']
+server_names = ['cloudflare']
+ipv6_servers = false
+block_ipv6 = true
+require_dnssec = false
+ignore_system_dns = true
+timeout = 5000
+
+[static.'cloudflare']
+stamp = 'sdns://AgcAAAAAAAAABzEuMS4xLjEAEmRucy5jbG91ZGZsYXJlLmNvbQovZG5zLXF1ZXJ5'
