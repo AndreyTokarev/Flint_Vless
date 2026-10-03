@@ -7,17 +7,23 @@
 #        flint-custom set <code|new> <name> <address> <port> <uuid> <sni> <pbk> [sid] [tcp|grpc] [service]
 #        flint-custom del <code>
 set -e
+. /usr/share/flint/lib.sh
 ENV=/etc/xray/flint.env
 NODES=/etc/xray/nodes.conf
+NODES_D=/etc/xray/nodes.d
 CUSTOM=/etc/xray/nodes-custom.conf
 CUR=/etc/xray/current-node
 PARSER=/usr/share/flint/vless.awk
 TAB="$(printf '\t')"
 
+all_node_files() {
+	[ -f "$NODES" ] && echo "$NODES"
+	for f in "$NODES_D"/*.conf; do [ -f "$f" ] && echo "$f"; done
+	[ -f "$CUSTOM" ] && echo "$CUSTOM"
+}
 # "code name address port uuid sni pbk sid net service" (TAB-separated) for every node in the given files.
 entries() {
 	for f in "$@"; do [ -f "$f" ] && cat "$f"; done | awk -v u="$VLESS_UUID" '
-		/^#@/ { next }
 		/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
 		/^[[:space:]]*$/ { next }
 		{ n = (name != "" && name !~ /^Generated/) ? name : $1
@@ -53,7 +59,7 @@ set_node() {
 	check transport "$net" '^(tcp|grpc)$'
 	check "gRPC service" "$svc" '^(-|[A-Za-z0-9._/-]{1,64})$'
 	if [ "$code" = new ]; then
-		i=1; while entries "$NODES" "$CUSTOM" | cut -f1 | grep -qx "my$i"; do i=$((i + 1)); done
+		i=1; while entries $(all_node_files) | cut -f1 | grep -qx "my$i"; do i=$((i + 1)); done
 		code="my$i"
 	else
 		is_custom "$code" || { echo "Not an own node: $code (copy it first)"; exit 1; }
@@ -71,7 +77,7 @@ case "$1" in
 		entries "$CUSTOM" | cut -f1,2
 		;;
 	show)
-		entries "$NODES" "$CUSTOM" | awk -F "$TAB" -v c="$2" '$1 == c' | head -n1
+		entries $(all_node_files) | awk -F "$TAB" -v c="$2" '$1 == c' | head -n1
 		;;
 	link)
 		r="$(printf '%s\n' "$2" | tr -d '\r' | LC_ALL=C awk -f "$PARSER")"
@@ -89,11 +95,7 @@ EOF
 		is_custom "$2" || { echo "Not an own node: $2"; exit 1; }
 		without "$2" > "$CUSTOM.new"; mv "$CUSTOM.new" "$CUSTOM"
 		echo "Deleted: $2"
-		if [ "$(cat "$CUR" 2>/dev/null)" = "$2" ]; then
-			first="$(flint-node codes | head -n1)"
-			[ -z "$first" ] || echo "It was the current server, switching to $first"
-			flint-node "${first:-apply}"
-		fi
+		[ "$(cat "$CUR" 2>/dev/null)" = "$2" ] && flint-node apply
 		;;
 	*)
 		sed -n '4,8s/^# \{0,1\}//p' "$0"; exit 1

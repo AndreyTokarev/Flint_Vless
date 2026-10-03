@@ -283,7 +283,7 @@ An empty field is `-`; `uuid` defaults to `VLESS_UUID`, port to `443`, transport
 You can have several subscriptions from different providers: add, change and delete them on the Subscriptions tab or with `flint-sub-update`. A regular subscription link from Happ, v2rayN or Hiddify works — a list of `vless://` links (plain or base64). On the first run `SUB_URL` from `flint.env` becomes the first subscription.
 
 - A subscription is added only if it downloads and has supported servers (VLESS + REALITY).
-- Servers from all subscriptions are merged into `/etc/xray/nodes.conf`, one block per subscription (a `#@ s1`, `#@ s2`… line). When codes clash, the second server gets a number: `de`, `de2`.
+- Each subscription's servers live in `/etc/xray/nodes.d/<id>.conf`, own servers in `nodes-custom.conf`, manual ones in `nodes.conf`. When codes clash, the second server gets a number: `de`, `de2`.
 - If a subscription fails to download during an update, its servers stay as they were and the panel shows the error.
 - The default subscription name comes from the `profile-title` header, the expiry and traffic from `subscription-userinfo` (most providers send them for Happ).
 - The hosts of all subscriptions bypass the VPN, so refreshing works even when the current server is down.

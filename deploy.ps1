@@ -22,6 +22,8 @@ try {
         $src = Join-Path $root "config\$f"
         if (Test-Path $src) { Copy-Item $src (Join-Path $staging "config") }
     }
+    $nodesD = Join-Path $root "config\nodes.d"
+    if (Test-Path $nodesD) { Copy-Item $nodesD (Join-Path $staging "config\nodes.d") -Recurse }
     $xrayBin = Join-Path $root "backup\bin\xray"
     if (Test-Path $xrayBin) {
         New-Item -ItemType Directory (Join-Path $staging "bin") | Out-Null

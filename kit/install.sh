@@ -93,7 +93,8 @@ rm -rf /etc/xray/nodes
 say "files"
 mkdir -p /etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /www/flint/cgi-bin /usr/share/flint
 cp "$KIT/files/etc/xray/template.json" /etc/xray/
-cp "$KIT/files/usr/share/flint/vless.awk" /usr/share/flint/
+cp "$KIT/files/usr/share/flint/vless.awk" "$KIT/files/usr/share/flint/lib.sh" /usr/share/flint/
+ln -sf /etc/xray/flint.env /usr/share/flint/env
 echo "$VERSION" > /usr/share/flint/version
 cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/flint-ui" "$KIT/files/etc/init.d/flint-doh" \
 	"$KIT/files/etc/init.d/flint-adblock" /etc/init.d/
@@ -101,22 +102,54 @@ cp "$KIT/files/etc/dnscrypt-proxy2/flint-doh.toml" /etc/dnscrypt-proxy2/
 cp "$KIT/files/etc/firewall.user" /etc/firewall.user
 cp "$KIT/files/usr/bin/flint-node" "$KIT/files/usr/bin/flint-geo-update" "$KIT/files/usr/bin/flint-sub-update" \
 	"$KIT/files/usr/bin/flint-custom" "$KIT/files/usr/bin/flint-watchdog" "$KIT/files/usr/bin/flint-adblock" /usr/bin/
-cp "$KIT/files/www/flint/index.html" "$KIT/files/www/flint/logo.svg" "$KIT/files/www/flint/icon.svg" /www/flint/
+cp "$KIT/files/www/flint/index.html" "$KIT/files/www/flint/logo.svg" "$KIT/files/www/flint/icon.svg" \
+	"$KIT/files/www/flint/panel.css" /www/flint/
 cp "$KIT/files/www/flint/cgi-bin/panel.cgi" /www/flint/cgi-bin/
 chmod 755 /etc/init.d/xray /etc/init.d/flint-ui /etc/init.d/flint-doh /etc/init.d/flint-adblock /usr/bin/flint-node \
 	/usr/bin/flint-geo-update /usr/bin/flint-sub-update /usr/bin/flint-custom /usr/bin/flint-watchdog /usr/bin/flint-adblock \
 	/www/flint/cgi-bin/panel.cgi
 
 (umask 077; cp "$KIT/config/flint.env" /etc/xray/flint.env)
-# A router with subscriptions builds nodes.conf itself (all of them, see flint-sub-update): the PC copy
-# would drop the servers of subscriptions added in the panel, so it only seeds a router without them.
+# A router with subscriptions builds nodes.d/ itself: the PC copy only seeds a router without them.
 if [ -f "$KIT/config/nodes.conf" ] && { [ ! -s /etc/xray/nodes.conf ] || [ ! -s /etc/xray/subscriptions ]; }; then
 	(umask 077; cp "$KIT/config/nodes.conf" /etc/xray/nodes.conf)
+fi
+if [ -d "$KIT/config/nodes.d" ] && { [ ! -d /etc/xray/nodes.d ] || [ -z "$(ls /etc/xray/nodes.d 2>/dev/null)" ]; }; then
+	mkdir -p /etc/xray/nodes.d
+	(umask 077; cp "$KIT/config/nodes.d"/*.conf /etc/xray/nodes.d/ 2>/dev/null) || true
 fi
 # Optional: own nodes, custom sites, subscriptions and ad blocking lists/rules saved by backup; without them the router's copies stay.
 for f in nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
 	if [ -f "$KIT/config/$f" ]; then (umask 077; cp "$KIT/config/$f" "/etc/xray/$f"); fi
 done
+# Legacy nodes.conf with "#@ <id>" groups → nodes.d/<id>.conf (keeps nodes.conf.bak).
+if [ -f /etc/xray/nodes.conf ] && grep -q '^#@' /etc/xray/nodes.conf; then
+	say "migrate nodes.conf groups into nodes.d/"
+	mkdir -p /etc/xray/nodes.d
+	cp /etc/xray/nodes.conf /etc/xray/nodes.conf.bak
+	first="$(head -n1 /etc/xray/subscriptions 2>/dev/null | cut -f1)"
+	awk -v dir=/etc/xray/nodes.d -v first="$first" '
+		/^#@/ { g = $2; next }
+		{
+			if (g == "") pend = pend $0 ORS
+			else if (g == "-") manual = manual $0 ORS
+			else { blocks[g] = blocks[g] $0 ORS; ids[g] = 1 }
+		}
+		END {
+			if (pend != "") {
+				if (first != "") { blocks[first] = pend blocks[first]; ids[first] = 1 }
+				else manual = pend manual
+			}
+			for (id in ids) {
+				if (id == "" || id == "-") continue
+				f = dir "/" id ".conf"
+				printf "%s", blocks[id] > f
+				close(f)
+			}
+			printf "%s", manual > dir "/../nodes.conf.migrated"
+		}' /etc/xray/nodes.conf
+	mv /etc/xray/nodes.conf.migrated /etc/xray/nodes.conf
+fi
 case "${ROUTING:-ru}" in
 	ru|global) echo "${ROUTING:-ru}" > /etc/xray/routing-mode ;;
 	*) die "ROUTING must be ru or global" ;;
@@ -202,12 +235,8 @@ else
 fi
 /etc/init.d/xray enable
 # No servers yet but SUB_URL is set: fetch them now.
-[ -n "$(flint-node codes)" ] || [ -z "$(flint-sub-update list)" ] || flint-sub-update || true
-if [ -n "$(flint-node codes)" ]; then
-	flint-node use "$DEFAULT_NODE" || flint-node use "$(flint-node codes | head -n1)"
-else
-	flint-node apply
-fi
+[ -n "$(flint-node codes)" ] || flint-sub-update >/dev/null 2>&1 || true
+flint-node use "$DEFAULT_NODE" 2>/dev/null || flint-node apply
 /etc/init.d/flint-ui enable
 /etc/init.d/flint-ui restart
 /etc/init.d/firewall reload
@@ -215,7 +244,7 @@ sh /etc/firewall.user
 
 say "geo files for RU routing (~25 MB)"
 if [ -s /usr/share/xray/geoip.dat ] && [ -s /usr/share/xray/geosite.dat ]; then
-	[ -z "$(flint-node codes)" ] || flint-node apply
+	flint-node apply
 else
 	flint-geo-update
 fi

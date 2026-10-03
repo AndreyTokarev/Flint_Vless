@@ -27,6 +27,16 @@ foreach ($f in "flint.env", "nodes.conf", "nodes-custom.conf", "custom-sites", "
         Write-Host "Refreshed config\$f"
     }
 }
+ssh $target "test -d /etc/xray/nodes.d && ls /etc/xray/nodes.d/*.conf >/dev/null 2>&1"
+if ($LASTEXITCODE -eq 0) {
+    $localD = Join-Path $root "config\nodes.d"
+    Remove-Item $localD -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory $localD | Out-Null
+    cmd /c "ssh $target ""tar -czf - -C /etc/xray nodes.d"" > ""$dir\nodes.d.tar.gz"""
+    tar -xzf (Join-Path $dir "nodes.d.tar.gz") -C (Join-Path $root "config")
+    Copy-Item $localD (Join-Path $dir "nodes.d") -Recurse
+    Write-Host "Refreshed config\nodes.d"
+}
 
 if ($WithBinary) {
     $bin = Join-Path $root "backup\bin"

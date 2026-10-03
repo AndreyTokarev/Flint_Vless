@@ -2,6 +2,7 @@
 # Switch the Xray VLESS REALITY node and routing mode.
 # Usage: flint-node [list|codes|names|apply|<code>]
 #        flint-node use <code>     switch without the exit IP check
+#        flint-node current        current server code (empty when there are no servers)
 #        flint-node routing [ru|global]
 #        flint-node vpn [on|off]   off = LAN clients go to the internet directly, bypassing Xray
 #                                  (so they do while there are no servers at all)
@@ -10,8 +11,10 @@
 #   global - everything via VPN
 #   custom sites (domains incl. subdomains, IPv4, CIDR) override the geo filter in both modes
 set -e
+. /usr/share/flint/lib.sh
 ENV=/etc/xray/flint.env
 NODES=/etc/xray/nodes.conf
+NODES_D=/etc/xray/nodes.d
 CUSTOM=/etc/xray/nodes-custom.conf
 SUBS=/etc/xray/subscriptions
 TEMPLATE=/etc/xray/template.json
@@ -22,12 +25,29 @@ VPN_FILE=/etc/xray/vpn-state
 SITES=/etc/xray/custom-sites
 GEO=/usr/share/xray
 
-node_files() { for f in "$NODES" "$CUSTOM"; do [ -f "$f" ] && echo "$f"; done; }
-nodes() { [ -n "$(node_files)" ] || return 0; cat $(node_files) | grep -v -E '^[[:space:]]*(#|$)'; }
-current() { cat "$CUR" 2>/dev/null || nodes | awk 'NR == 1 {print $1}'; }
+# Manual nodes.conf, then each subscription file, then own nodes.
+node_files() {
+	[ -f "$NODES" ] && echo "$NODES"
+	for f in "$NODES_D"/*.conf; do [ -f "$f" ] && echo "$f"; done
+	[ -f "$CUSTOM" ] && echo "$CUSTOM"
+}
+nodes() { node_lines $(node_files); }
+# Current server code: empty when there are no servers (panel / flint-node current).
+current() { [ -s "$CONF" ] || return 0; cat "$CUR" 2>/dev/null || true; }
 mode() { cat "$MODE_FILE" 2>/dev/null || echo ru; }
 sub_hosts() { { echo "$SUB_URL"; cut -f2 "$SUBS" 2>/dev/null; } | sed -e 's|^[a-zA-Z]*://||' -e 's|[/:?#].*||'; }
 vpn_state() { cat "$VPN_FILE" 2>/dev/null || echo on; }
+# pick: sets pick_code (and pick_switched=1 when a previous current code is gone).
+pick() {
+	pick_switched=
+	pick_code="$(cat "$CUR" 2>/dev/null || true)"
+	if [ -n "$pick_code" ] && nodes | awk '{print $1}' | grep -qx "$pick_code"; then
+		return 0
+	fi
+	prev="$pick_code"
+	pick_code="$(nodes | awk 'NR == 1 { print $1 }')"
+	if [ -n "$prev" ] && [ -n "$pick_code" ]; then pick_switched=1; fi
+}
 
 # Provider server names (address + REALITY SNI of every node) routed direct, so a VPN
 # client on a Flint device (e.g. Happ) does not get tunnelled into the same provider twice.
@@ -80,22 +100,30 @@ render() {
 	XRAY_LOCATION_ASSET=$GEO xray run -test -format json -c "$CONF.new" > /tmp/flint-xray-test.log 2>&1
 }
 
+# apply [code]: with a code — switch to that server (unknown = error); without — pick() chooses.
+# No servers: Xray stays down and firewall.user lets LAN go direct (message only when leaving a configured state).
 apply() {
-	code="$1"
 	. "$ENV"
-	# No servers at all (none deployed, no subscription yet): Xray stays down and firewall.user lets LAN go direct.
 	if [ -z "$(nodes)" ]; then
+		had=
+		[ -s "$CONF" ] && had=1
 		/etc/init.d/xray stop >/dev/null 2>&1 || true
 		rm -f "$CONF" "$CUR"
 		sh /etc/firewall.user >/dev/null 2>&1 || true
-		if [ "${FLINT_LANG:-${UI_LANG:-ru}}" = en ]; then
-			echo "No servers yet: devices go online directly. Add a subscription on the Subscriptions tab or an own server."
-		else
-			echo "Серверов пока нет: устройства ходят в интернет напрямую. Добавьте подписку на вкладке «Подписки» или свой сервер."
-		fi
+		[ -n "$had" ] || return 0
+		t "Серверов пока нет: устройства ходят в интернет напрямую. Добавьте подписку на вкладке «Подписки» или свой сервер." \
+			"No servers yet: devices go online directly. Add a subscription on the Subscriptions tab or an own server."
 		return 0
 	fi
-	nodes | awk '{print $1}' | grep -qx "$code" || { echo "Unknown: $code"; exit 1; }
+	if [ -n "$1" ]; then
+		code="$1"
+		nodes | awk '{print $1}' | grep -qx "$code" || { echo "Unknown: $code"; exit 1; }
+	else
+		pick
+		code="$pick_code"
+		[ -n "$pick_switched" ] && t "Текущего сервера больше нет, переключаюсь на $code" \
+			"The current server is gone, switching to $code"
+	fi
 	RENDER_MODE="$(mode)"
 	if ! render "$code"; then
 		if [ "$RENDER_MODE" = ru ]; then
@@ -125,22 +153,30 @@ case "$cmd" in
 	names)
 		# "code<TAB>name<TAB>ip|domain<TAB>group"; the name is the comment line right above the node.
 		# "ip" = subscription node with a bare IP (the panel's white list group); own nodes are always "domain".
-		# group: subscription id from the "#@" line (see flint-sub-update), "own" for own nodes.
-		first="$(head -n1 "$SUBS" 2>/dev/null | cut -f1)"
-		awk -v own="$CUSTOM" -v first="${first:--}" 'FNR == 1 { g = (FILENAME == own) ? "own" : first }
-			/^#@/ { if (FILENAME != own) g = $2; name = ""; next }
-			/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
-			/^[[:space:]]*$/ { next }
-			{ print $1 "\t" ((name != "" && name !~ /^Generated/) ? name : $1) "\t" ($2 ~ /^[0-9.]+$/ && FILENAME != own ? "ip" : "domain") "\t" g; name = "" }' $(node_files)
+		# group: subscription id (nodes.d/<id>.conf), "own", or "-" for manual nodes.conf.
+		for f in $(node_files); do
+			case "$f" in
+				"$CUSTOM") g=own ;;
+				"$NODES_D"/*) g="${f##*/}"; g="${g%.conf}" ;;
+				*) g=- ;;
+			esac
+			awk -v g="$g" -v own="$CUSTOM" -v file="$f" '
+				/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
+				/^[[:space:]]*$/ { next }
+				{ print $1 "\t" ((name != "" && name !~ /^Generated/) ? name : $1) "\t" ($2 ~ /^[0-9.]+$/ && file != own ? "ip" : "domain") "\t" g; name = "" }' "$f"
+		done
+		;;
+	current)
+		current
 		;;
 	routing)
 		[ -n "$2" ] || { mode; exit 0; }
 		case "$2" in ru|global) ;; *) echo "Usage: flint-node routing [ru|global]"; exit 1 ;; esac
 		echo "$2" > "$MODE_FILE"
-		apply "$(current)"
+		apply
 		;;
 	apply)
-		apply "$(current)"
+		apply
 		;;
 	use)
 		apply "$2"
@@ -168,7 +204,7 @@ case "$cmd" in
 			*)
 				echo "Usage: flint-node site list | add direct|proxy <site> | del <site>"; exit 1 ;;
 		esac
-		apply "$(current)"
+		apply
 		;;
 	vpn)
 		[ -n "$2" ] || { vpn_state; exit 0; }
@@ -183,3 +219,4 @@ case "$cmd" in
 		curl -s -m 15 -x http://127.0.0.1:1087 https://ifconfig.me; echo
 		;;
 esac
+

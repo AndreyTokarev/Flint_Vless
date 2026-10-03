@@ -19,6 +19,7 @@ mkdir -p "$STAGING/config"
 for f in flint.env nodes.conf nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
 	if [ -f "$ROOT/config/$f" ]; then cp "$ROOT/config/$f" "$STAGING/config/"; fi
 done
+if [ -d "$ROOT/config/nodes.d" ]; then cp -R "$ROOT/config/nodes.d" "$STAGING/config/"; fi
 if [ -f "$ROOT/backup/bin/xray" ]; then
 	mkdir -p "$STAGING/bin"
 	cp "$ROOT/backup/bin/xray" "$STAGING/bin/"

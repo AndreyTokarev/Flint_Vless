@@ -37,21 +37,31 @@ try {
         Rename-Item $oldEnv "flint.env"
     }
     $found = $files | Where-Object { Test-Path (Join-Path $tmp "etc\xray\$_") }
+    $nodesD = Join-Path $tmp "etc\xray\nodes.d"
+    $hasNodesD = (Test-Path $nodesD) -and (Get-ChildItem $nodesD -Filter *.conf -ErrorAction SilentlyContinue)
 
     Write-Host "Backup: $Backup"
-    Write-Host ("Settings from the backup: " + $(if ($found) { $found -join ", " } else { "none (current config\ is kept)" }))
+    $foundLabel = @($found)
+    if ($hasNodesD) { $foundLabel += "nodes.d" }
+    Write-Host ("Settings from the backup: " + $(if ($foundLabel) { $foundLabel -join ", " } else { "none (current config\ is kept)" }))
     if ($Full) { Write-Host "Full: network, Wi-Fi, firewall, DHCP, hosts, cron, SSH keys from the backup, then reboot" }
     if (-not $Yes -and (Read-Host "Restore to $target? [y/N]") -notmatch '^[yY]') { Write-Host "Cancelled"; exit 1 }
 
-    if ($found) {
+    if ($found -or $hasNodesD) {
         $keep = Join-Path $root ("backup\config-before-restore-" + (Get-Date -Format "yyyy-MM-dd_HHmmss"))
         New-Item -ItemType Directory $keep | Out-Null
         foreach ($f in $files) {
             $cur = Join-Path $root "config\$f"
             if (Test-Path $cur) { Copy-Item $cur $keep }
         }
+        $curD = Join-Path $root "config\nodes.d"
+        if (Test-Path $curD) { Copy-Item $curD (Join-Path $keep "nodes.d") -Recurse }
         Write-Host "Current config\ saved to $keep"
         foreach ($f in $found) { Copy-Item (Join-Path $tmp "etc\xray\$f") (Join-Path $root "config\$f") -Force }
+        if ($hasNodesD) {
+            Remove-Item $curD -Recurse -Force -ErrorAction SilentlyContinue
+            Copy-Item $nodesD $curD -Recurse
+        }
     }
 
     if ($Full) {

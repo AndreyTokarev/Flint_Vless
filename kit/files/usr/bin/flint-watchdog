@@ -5,24 +5,25 @@
 # Usage: flint-watchdog              run a check
 #        flint-watchdog on|off       enable / disable (default on)
 #        flint-watchdog state        print on|off
+#        flint-watchdog last         last failure line (for the panel)
 STATE=/etc/xray/watchdog
 LAST=/etc/xray/watchdog-last
 LOCK=/tmp/flint-watchdog.lock
-. /etc/xray/flint.env 2>/dev/null
-# Message language: FLINT_LANG from the panel, else UI_LANG from flint.env, else Russian.
-t() { if [ "${FLINT_LANG:-${UI_LANG:-ru}}" = en ]; then echo "$2"; else echo "$1"; fi; }
+. /usr/share/flint/lib.sh
+. /etc/xray/flint.env 2>/dev/null || true
 
 case "$1" in
 	on|off) echo "$1" > "$STATE"; t "Автопереключение при сбое: $1" "Failover: $1"; exit 0 ;;
 	state) cat "$STATE" 2>/dev/null || echo on; exit 0 ;;
+	last) cat "$LAST" 2>/dev/null || true; exit 0 ;;
 	"") ;;
-	*) sed -n '5,7s/^# \{0,1\}//p' "$0"; exit 1 ;;
+	*) sed -n '5,8s/^# \{0,1\}//p' "$0"; exit 1 ;;
 esac
 # Ad blocking runs in the DNS path, so it is checked even with failover off.
 flint-adblock check >/dev/null 2>&1
 [ "$(cat "$STATE" 2>/dev/null || echo on)" = on ] || exit 0
 [ "$(flint-node vpn)" = on ] || exit 0
-[ -n "$(flint-node codes)" ] || exit 0
+[ -s /etc/xray/config.json ] || exit 0
 
 tunnel_ok() { [ "$(curl -s -o /dev/null -m 8 -w '%{http_code}' -x http://127.0.0.1:1087 https://www.google.com/generate_204)" = 204 ]; }
 online() { curl -s -o /dev/null -m 8 https://ya.ru || curl -s -o /dev/null -m 8 https://www.google.com/generate_204; }

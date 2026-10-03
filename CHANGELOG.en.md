@@ -6,10 +6,34 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-10-04
+
 ### Changed
-- Panel header: logo on the left, the RU | EN switch and "Sign out" in the top right corner on desktop and phone ("Sign out" used to get lost under the menu). The login page has the language switch at the top right too; the version moved to the bottom, under the motto.
-- The Ad blocking tab explains where ads remain (VK, YouTube — ads from the same site) and who bypasses the blocking (Private DNS, browser DoH, a VPN client).
-- README: a "Where ads remain" section (what DNS can't remove, uBlock Origin as a complement, who bypasses the blocking), a "Devices on the network" section in the English README; screenshots re-shot, a "No servers" screen added.
+- Each subscription's servers live in `/etc/xray/nodes.d/<id>.conf`, own servers in `nodes-custom.conf`, manual ones in `nodes.conf`. The `#@` markers in a single file are gone.
+- On install, a legacy `nodes.conf` with `#@` groups is split into files (a copy is kept as `nodes.conf.bak`).
+- Backup, restore and deploy carry the `nodes.d/` directory.
+
+### Added
+- Code quality audit and refactoring plan: `docs/code-quality-audit.md`, `docs/refactoring-plan.md`.
+
+## [1.1.2] — 2026-10-04
+
+### Changed
+- Panel styles moved to `/panel.css`.
+- Panel actions go through an `a=` parameter (one `case` instead of a long `elif` chain).
+- The panel reads state via `flint-node current`, `flint-sub-update status` and `flint-watchdog last`, not by opening `/etc/xray/` files directly.
+
+## [1.1.1] — 2026-10-04
+
+### Added
+- Router test scenarios: `tests/router/` and `tests/run.ps1` / `tests/run.sh` wrappers (no-servers mode, subscription, own server, failover when the current server disappears).
+- Shared library `/usr/share/flint/lib.sh` (`t`, `node_lines`, `host_of`).
+
+### Changed
+- `flint-node apply` picks the server itself: the current one if it is still listed; otherwise the first with a switch message; otherwise the no-servers mode. Firewall and watchdog treat a missing `config.json` as "no servers".
+- Panel header: logo on the left, the RU | EN switch and "Sign out" in the top right on desktop and phone. The login page has the language switch at the top right too; the version moved to the bottom, under the motto.
+- The Ad blocking tab explains where ads remain and who bypasses the blocking.
+- README: a "Where ads remain" section, a "Devices on the network" section in the English README; screenshots re-shot, a "No servers" screen added.
 
 ### Fixed
 - The "Add a subscription" and "Add an own server" links in the no-servers mode were barely visible on the dark background — they are buttons now.
@@ -110,7 +134,10 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.1.2...v1.2.0
+[1.1.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.1.1...v1.1.2
+[1.1.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v0.7.0...v1.0.0
 [0.7.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v0.6.0...v0.7.0

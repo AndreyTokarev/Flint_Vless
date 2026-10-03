@@ -25,6 +25,13 @@ for f in flint.env nodes.conf nodes-custom.conf custom-sites subscriptions adblo
 		echo "Refreshed config/$f"
 	fi
 done
+if ssh "$TARGET" "test -d /etc/xray/nodes.d && ls /etc/xray/nodes.d/*.conf >/dev/null 2>&1"; then
+	rm -rf "$ROOT/config/nodes.d"
+	ssh "$TARGET" "tar -czf - -C /etc/xray nodes.d" > "$DIR/nodes.d.tar.gz"
+	tar -xzf "$DIR/nodes.d.tar.gz" -C "$ROOT/config"
+	cp -R "$ROOT/config/nodes.d" "$DIR/"
+	echo "Refreshed config/nodes.d"
+fi
 
 if [ "$WITH_BINARY" = 1 ]; then
 	mkdir -p "$ROOT/backup/bin"

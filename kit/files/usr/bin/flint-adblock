@@ -29,9 +29,8 @@ DNS_PORT=5054
 CHECK_HOST=adblock-check.flint
 DEFAULT_LIST="https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt	AdGuard DNS filter"
 TAB="$(printf '\t')"
-. /etc/xray/flint.env 2>/dev/null
-# Message language: FLINT_LANG from the panel, else UI_LANG from flint.env, else Russian.
-t() { if [ "${FLINT_LANG:-${UI_LANG:-ru}}" = en ]; then echo "$2"; else echo "$1"; fi; }
+. /usr/share/flint/lib.sh
+. /etc/xray/flint.env 2>/dev/null || true
 fail() { echo "$1"; exit 1; }
 
 state() { cat "$STATE" 2>/dev/null || echo off; }
