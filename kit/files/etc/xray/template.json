@@ -24,7 +24,7 @@
       "tag": "proxy", "protocol": "vless",
       "settings": {
         "vnext": [{
-          "address": "__ADDR__", "port": 443,
+          "address": "__ADDR__", "port": __PORT__,
           "users": [{
             "id": "__UUID__",
             "encryption": "none", "flow": "xtls-rprx-vision"
@@ -48,6 +48,7 @@
     "domainStrategy": "__DOMAIN_STRATEGY__",
     "rules": [
       { "type": "field", "outboundTag": "block", "domain": ["domain:appsflyersdk.com"] },
+      { "type": "field", "outboundTag": "direct", "domain": [__PROVIDER_DOMAINS__] },
       { "type": "field", "outboundTag": "direct", "ip": ["0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16", "224.0.0.0/4", "240.0.0.0/4"] },
       { "type": "field", "outboundTag": "direct", "domain": ["geosite:category-ru"] },
       { "type": "field", "outboundTag": "direct", "ip": ["geoip:ru"] },

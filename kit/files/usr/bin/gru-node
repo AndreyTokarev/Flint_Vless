@@ -17,19 +17,32 @@ nodes() { grep -v -E '^[[:space:]]*(#|$)' "$NODES"; }
 current() { cat "$CUR" 2>/dev/null || nodes | awk 'NR == 1 {print $1}'; }
 mode() { cat "$MODE_FILE" 2>/dev/null || echo ru; }
 
+# Provider server names (address + REALITY SNI of every node) routed direct, so a VPN
+# client on a Flint device (e.g. Happ) does not get tunnelled into the same provider twice.
+provider_domains() {
+	nodes | awk '{print $2; print $3}' | grep -v -E '^[0-9.]+$' | sort -u |
+		sed 's/.*/"full:&"/' | tr '\n' ',' | sed 's/,$//; s/,/, /g'
+}
+
 render() {
 	line="$(nodes | awk -v c="$1" '$1 == c' | head -n1)"
 	set -- $line
 	uuid="${6:-$VLESS_UUID}"
+	port="${7:-443}"
 	if [ "$RENDER_MODE" = ru ]; then strategy=IPIfNonMatch; else strategy=AsIs; fi
+	domains="$(provider_domains)"
 	umask 077
-	sed -e "s|__UUID__|$uuid|" -e "s|__ADDR__|$2|" -e "s|__SNI__|$3|" \
+	sed -e "s|__UUID__|$uuid|" -e "s|__ADDR__|$2|" -e "s|__PORT__|$port|" -e "s|__SNI__|$3|" \
 		-e "s|__PBK__|$4|" -e "s|__SID__|$5|" -e "s|__DOMAIN_STRATEGY__|$strategy|" \
+		-e "s|__PROVIDER_DOMAINS__|$domains|" \
 		"$TEMPLATE" > "$CONF.new"
+	if [ -z "$domains" ]; then
+		sed -i '/"domain": \[\]/d' "$CONF.new"
+	fi
 	if [ "$RENDER_MODE" != ru ]; then
 		sed -i -e '/geosite:category-ru/d' -e '/"geoip:ru"/d' "$CONF.new"
 	fi
-	XRAY_LOCATION_ASSET=$GEO xray run -test -format json -c "$CONF.new" >/dev/null 2>&1
+	XRAY_LOCATION_ASSET=$GEO xray run -test -format json -c "$CONF.new" > /tmp/gru-xray-test.log 2>&1
 }
 
 apply() {
@@ -41,9 +54,9 @@ apply() {
 		if [ "$RENDER_MODE" = ru ]; then
 			echo "RU routing unavailable (geo files missing or broken), using global"
 			RENDER_MODE=global
-			render "$code" || { echo "Config test failed"; exit 1; }
+			render "$code" || { echo "Config test failed:"; tail -n 3 /tmp/gru-xray-test.log; exit 1; }
 		else
-			echo "Config test failed"; exit 1
+			echo "Config test failed:"; tail -n 3 /tmp/gru-xray-test.log; exit 1
 		fi
 	fi
 	mv "$CONF.new" "$CONF"
@@ -60,6 +73,12 @@ case "$cmd" in
 		;;
 	codes)
 		nodes | awk '{print $1}'
+		;;
+	names)
+		# "code<TAB>name"; the name is the comment line right above the node (see tools/sub2nodes.py).
+		awk '/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
+			/^[[:space:]]*$/ { next }
+			{ print $1 "\t" ((name != "" && name !~ /^Generated/) ? name : $1); name = "" }' "$NODES"
 		;;
 	routing)
 		[ -n "$2" ] || { mode; exit 0; }
