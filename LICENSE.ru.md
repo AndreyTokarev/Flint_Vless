@@ -1,6 +1,6 @@
 # Лицензионное соглашение Flint VPN
 
-Flint VPN распространяется по лицензии [PolyForm Noncommercial 1.0.0](LICENSE). Юридически значим английский текст в файле [LICENSE](LICENSE); этот файл — пояснение на русском.
+Flint VPN распространяется по лицензии [PolyForm Noncommercial 1.0.0](LICENSE). Юридически значим английский текст в файле [LICENSE](LICENSE); этот файл — пояснение на русском. English version — [LICENSE.en.md](LICENSE.en.md).
 
 Copyright (c) 2026 Andrey Tokarev, https://github.com/AndreyTokarev/Flint_Vless
 

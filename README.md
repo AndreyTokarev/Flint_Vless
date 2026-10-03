@@ -157,4 +157,4 @@ logread -e xray      # логи Xray
 
 ## Лицензия
 
-Бесплатно для личного и некоммерческого использования, с обязательным указанием исходного проекта; коммерческое — по разрешению автора. Текст лицензии — [LICENSE](LICENSE) (PolyForm Noncommercial 1.0.0), пояснение на русском и условия для pull request'ов — [LICENSE.ru.md](LICENSE.ru.md).
+Бесплатно для личного и некоммерческого использования, с обязательным указанием исходного проекта; коммерческое — по разрешению автора. Текст лицензии — [LICENSE](LICENSE) (PolyForm Noncommercial 1.0.0), пояснение и условия для pull request'ов — [LICENSE.ru.md](LICENSE.ru.md) (по-русски) и [LICENSE.en.md](LICENSE.en.md) (in English).
