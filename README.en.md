@@ -34,7 +34,7 @@ Flint VPN turns a GL.iNet router into a transparent VPN gateway. Every device on
 
 **Why a custom web panel.** The ready-made solution from GitHub I was using simply refused to start on this router. So the Xray setup, server switching and everything else are done here from scratch: a set of shell scripts and a lightweight CGI panel running on the stock `uhttpd`, with no Node.js, Python or other heavy dependencies on the router.
 
-The panel is available in English and Russian: the language follows your browser, and there is an RU · EN switch in the menu.
+The panel is available in English and Russian: the language follows your browser, and there is an RU | EN switch in the top right corner.
 
 ## Features
 
@@ -236,7 +236,7 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 | **Routing** | Russia geo filter on/off; own sites, IPs and subnets "always direct" or "always via VPN" |
 | **Ad blocking** | ad blocking on/off and 24-hour stats; devices without blocking; filter lists — ready-made and your own by URL; auto-update and "Update the lists now"; own rules |
 
-The panel speaks English and Russian. On the first visit the language follows the browser (or `UI_LANG` in `flint.env`); after that use the **RU · EN** switch under the menu or on the login page — the choice is remembered in the browser. Messages after panel actions use the same language.
+The panel speaks English and Russian. On the first visit the language follows the browser (or `UI_LANG` in `flint.env`); after that use the **RU | EN** switch in the top right corner (next to "Sign out"; on the login page too) — the choice is remembered in the browser. Messages after panel actions use the same language.
 
 ## Settings `config/flint.env`
 

@@ -7,6 +7,7 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 ## [Unreleased]
 
 ### Changed
+- Panel header: logo on the left, the RU | EN switch and "Sign out" in the top right corner on desktop and phone ("Sign out" used to get lost under the menu). The login page has the language switch at the top right too; the version moved to the bottom, under the motto.
 - The Ad blocking tab explains where ads remain (VK, YouTube — ads from the same site) and who bypasses the blocking (Private DNS, browser DoH, a VPN client).
 - README: a "Where ads remain" section (what DNS can't remove, uBlock Origin as a complement, who bypasses the blocking), a "Devices on the network" section in the English README; screenshots re-shot, a "No servers" screen added.
 

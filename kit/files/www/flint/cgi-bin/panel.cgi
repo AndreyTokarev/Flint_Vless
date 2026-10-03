@@ -68,9 +68,11 @@ logo() {
 }
 # Language switch; $1 is the link prefix ending in "?" or "&amp;".
 langs() {
-  if [ "$L" = en ]; then echo "<div class=lang><a href='${1}lang=ru'>RU</a> · <b>EN</b></div>"
-  else echo "<div class=lang><b>RU</b> · <a href='${1}lang=en'>EN</a></div>"; fi
+  if [ "$L" = en ]; then echo "<div class=lang><a href='${1}lang=ru'>RU</a><b>EN</b></div>"
+  else echo "<div class=lang><b>RU</b><a href='${1}lang=en'>EN</a></div>"; fi
 }
+# Top bar: $1 = left side (logo or empty), $2 = right side (language switch, sign out).
+top() { echo "<header class=top>$1<div class=tools>$2</div></header>"; }
 cat <<HTML
 <!DOCTYPE html><html lang=$L><head>
 <meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
@@ -83,7 +85,7 @@ footer::before,footer::after{content:"";flex:1;height:2px;background:linear-grad
 footer::after{background:linear-gradient(90deg,#f59e0b,transparent)}
 footer b{color:#f59e0b}
 @media(max-width:480px){footer{font-size:12px;letter-spacing:.18em;gap:10px}}
-main,.layout{flex-shrink:0}
+main,.layout,header{flex-shrink:0}
 main{max-width:640px;width:100%;box-sizing:border-box;margin:0 auto;padding:20px}
 h2{font-size:17px;margin:0 0 8px}
 .card{background:#1f2937;border-radius:12px;padding:14px;margin:12px 0}
@@ -115,12 +117,17 @@ small{color:#9ca3af}
 .logo .tag{display:flex;align-items:center;gap:.5em;margin-top:.3em;font-size:.36em;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:#d1d5db;white-space:nowrap}
 .logo .tag::before,.logo .tag::after{content:"";flex:1;min-width:.8em;height:2px;background:#f59e0b;border-radius:1px}
 .logo.big{font-size:40px;justify-content:center;margin:40px 0 8px}
-.lang{font-size:14px;color:#6b7280;letter-spacing:.05em}
+header.top{display:flex;align-items:center;gap:12px;max-width:960px;width:100%;box-sizing:border-box;margin:0 auto;padding:16px 20px 0}
+header .logo{margin-left:8px}
+.tools{display:flex;align-items:center;gap:8px;margin-left:auto}
+.lang{display:flex;border:1px solid #374151;border-radius:8px;overflow:hidden;font-size:14px;letter-spacing:.05em}
+.lang a,.lang b{padding:7px 11px}
 .lang a{color:#93c5fd;text-decoration:none}
-.lang b{color:#e5e7eb}
-main>.lang{text-align:center;margin-top:4px}
-.ver{font-size:12px;color:#6b7280;padding:6px 12px}
-main>.ver{text-align:center}
+.lang a:hover{background:#1f2937}
+.lang b{background:#1f2937;color:#e5e7eb}
+a.logout{padding:7px 12px;border:1px solid #374151;border-radius:8px;color:#e5e7eb;text-decoration:none;font-size:14px;white-space:nowrap}
+a.logout:hover{background:#1f2937;border-color:#f87171}
+body>.ver{font-size:12px;color:#6b7280;text-align:center;margin:-14px 0 14px}
 .login{max-width:340px;margin-left:auto;margin-right:auto;padding:28px 24px;text-align:center}
 .login{margin-top:16px}
 .lock{font-size:40px}
@@ -131,13 +138,9 @@ main>.ver{text-align:center}
 .login input:focus{outline:none;border-color:#34d399}
 .layout{display:flex;gap:24px;max-width:960px;width:100%;box-sizing:border-box;margin:0 auto;padding:20px}
 nav{flex:0 0 200px;position:sticky;top:20px;align-self:flex-start}
-nav .brand{margin:4px 8px 18px}
 nav a{display:block;padding:10px 12px;margin-bottom:4px;border-radius:10px;color:#e5e7eb;text-decoration:none}
 nav a:hover{background:#1f2937}
 nav a.cur{background:#1f2937;color:#34d399;font-weight:600}
-nav a.logout{color:#9ca3af;margin-top:16px}
-nav .lang{padding:6px 12px}
-nav .lang a{display:inline;padding:0;margin:0;background:none;color:#93c5fd}
 .content{flex:1;min-width:0}
 .content>.card:first-child{margin-top:0}
 .stat{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #374151}
@@ -147,12 +150,11 @@ nav .lang a{display:inline;padding:0;margin:0;background:none;color:#93c5fd}
 summary{cursor:pointer}
 .stat>:last-child{text-align:right}
 @media(max-width:720px){
+header.top{padding:12px 12px 0}
+header .logo{font-size:19px;margin-left:0}
 .layout{flex-direction:column;gap:12px;padding:12px}
 nav{flex:none;position:static;display:grid;grid-template-columns:1fr 1fr;gap:6px;align-self:stretch}
-nav .brand{grid-column:1/-1;margin:0 4px 4px}
 nav a{margin:0;padding:10px;background:#1f2937;text-align:center}
-nav a.logout{grid-column:1/-1;background:none;padding:2px;margin:0;font-size:14px}
-nav .lang,nav .ver{grid-column:1/-1;text-align:center;padding:0}
 .stat{flex-wrap:wrap}
 }
 </style></head><body>
@@ -160,10 +162,10 @@ HTML
 if [ -z "$UI_PIN" ] || [ "$pass" != "$UI_PIN" ]; then
   err=""; [ -n "$pass" ] && err="<p class='err login-err'>$(T "Неверный PIN, попробуйте ещё раз" "Wrong PIN, please try again")</p>"
   cat <<HTML
-<main>$(logo big)<div class="card login"><div class=lock>🔒</div>
+$(top "" "$(langs "?")")<main>$(logo big)<div class="card login"><div class=lock>🔒</div>
 <p class=login-hint>$(T "Введите PIN, чтобы управлять VPN" "Enter the PIN to manage the VPN")</p>$err
 <form method=get><input type=password name=pass placeholder=PIN autocomplete=current-password autofocus required>
-<button class=on>$(T "Войти" "Sign in")</button></form></div>$(langs "?")$VER</main>$FOOTER</body></html>
+<button class=on>$(T "Войти" "Sign in")</button></form></div></main>$FOOTER$VER</body></html>
 HTML
   exit 0
 fi
@@ -248,13 +250,14 @@ ON="<b class=ok>$(T "включено" "on")</b>"; OFF="<b class=err>$(T "вык
 NEVER="$(T "ещё не было" "never")"
 ADD_SERVERS="<div class=cta><a class='btn on' href='?pass=$pass&amp;tab=subs'>🔗 $(T "Добавить подписку" "Add a subscription")</a><a class=btn href='?pass=$pass&amp;tab=own'>⭐ $(T "Добавить свой сервер" "Add an own server")</a></div>"
 
-echo "<div class=layout><nav>$(logo brand)"
+top "$(logo)" "$(langs "?pass=$pass&amp;tab=$tab&amp;")<a href='?' class=logout>$(T "Выйти" "Sign out")</a>"
+echo "<div class=layout><nav>"
 for t in "status:🏠 $(T "Статус" "Status")" "servers:🌍 $(T "Серверы" "Servers")" "own:⭐ $(T "Свои серверы" "Own servers")" \
   "subs:🔗 $(T "Подписки" "Subscriptions")" "routing:🔀 $(T "Маршрутизация" "Routing")" "adblock:🛡️ $(T "Реклама" "Ad blocking")"; do
   cur=""; [ "${t%%:*}" = "$tab" ] && cur=" class=cur"
   echo "<a href='?pass=$pass&amp;tab=${t%%:*}'$cur>${t#*:}</a>"
 done
-echo "<a href='?' class=logout>$(T "Выйти" "Sign out")</a>$(langs "?pass=$pass&amp;tab=$tab&amp;")$VER</nav><div class=content>"
+echo "</nav><div class=content>"
 [ -n "$msg" ] && echo "<div class=card><pre class=ok>$(echo "$msg" | esc)</pre></div>"
 
 case "$tab" in
@@ -517,4 +520,4 @@ adblock)
   echo "</div>"
   ;;
 esac
-echo "</div></div>$FOOTER</body></html>"
+echo "</div></div>$FOOTER$VER</body></html>"
