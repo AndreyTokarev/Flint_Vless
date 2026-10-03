@@ -277,21 +277,38 @@ An empty field is `-`; `uuid` defaults to `VLESS_UUID`, port to `443`, transport
 
 `install.sh` allows incoming connections from `UPSTREAM_NET` to Flint and to devices behind it (`192.168.8.x`). On the main router, add a DHCP reservation for Flint (e.g. `192.168.0.111`) and a static route: network `192.168.8.0`, mask `255.255.255.0`, gateway `192.168.0.111`.
 
-## Backup and restore
+## Backup
 
 ```powershell
 .\backup.ps1               # router configs -> backup\<date>\router-config.tar.gz, refreshes config\
-.\backup.ps1 -WithBinary   # plus backup\bin\xray (~27 MB)
-.\restore.ps1              # latest backup, then a normal deploy
-.\restore.ps1 -Full        # same router only: also network, Wi-Fi, firewall, DHCP, SSH keys, then reboot
+.\backup.ps1 -WithBinary   # plus backup\bin\xray (~27 MB) — useful if opkg is unavailable
 ```
 ```sh
-./backup.sh [--with-binary]
-./restore.sh [backup/<date>] [--full] [--yes]
+./backup.sh
+./backup.sh --with-binary
 ```
 
+The backup pulls from the router its settings, the own servers and sites from the panel, and the network and Wi‑Fi configs. Fresh `gru.env`, `nodes.conf`, `nodes-custom.conf`, `custom-sites` are also copied into `config/`.
+
 > [!WARNING]
-> `backup/` and the files in `config/` contain your subscription UUID and Wi‑Fi passwords. They are gitignored; keep them somewhere safe.
+> `backup/` and the files in `config/` contain your subscription UUID and Wi‑Fi passwords. They are gitignored; keep them separately — in the cloud or on a USB stick.
+
+## Restore from a backup
+
+```powershell
+.\restore.ps1                                   # latest backup\<date>
+.\restore.ps1 -Backup backup\2026-10-03_1557    # a specific one
+.\restore.ps1 -Full                             # plus network, Wi-Fi, firewall, DHCP, SSH keys and a reboot
+```
+```sh
+./restore.sh
+./restore.sh backup/2026-10-03_1557
+./restore.sh --full
+```
+
+By default the settings from the backup (`gru.env`, servers, own servers and sites) go into `config/`, then a normal deploy runs. This works for a reset router too: first connect it to the internet in the GL admin panel. The current `config/` files are saved to `backup/config-before-restore-<time>/` before being replaced.
+
+`-Full` / `--full` is only for the **same** router: it brings back its network, Wi‑Fi (SSIDs and passwords), firewall, DHCP reservations, cron and SSH keys, then reboots. The script asks for confirmation (`-Yes` / `--yes` skips it).
 
 ## Router commands
 
