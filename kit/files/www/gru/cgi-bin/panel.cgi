@@ -45,6 +45,7 @@ cat <<HTML
 body{margin:0;font-family:system-ui,sans-serif;background:#111827;color:#e5e7eb;min-height:100vh;display:flex;flex-direction:column}
 footer{margin-top:auto;padding:28px 20px 24px;box-sizing:border-box;width:100%;max-width:960px;align-self:center;font:600 13px/1.6 ui-monospace,Consolas,"Courier New",monospace;letter-spacing:.25em;color:#94a3b8;opacity:.8}
 main+footer{text-align:center}
+main,.layout{flex-shrink:0}
 main{max-width:640px;width:100%;box-sizing:border-box;margin:0 auto;padding:20px}
 h2{font-size:17px;margin:0 0 8px}
 .card{background:#1f2937;border-radius:12px;padding:14px;margin:12px 0}
@@ -68,7 +69,7 @@ small{color:#9ca3af}
 .ok{color:#34d399}.err{color:#f87171}
 .logo{display:flex;align-items:center;gap:.35em;font-size:22px}
 .logo svg{width:2.1em;height:2.1em;flex:none}
-.logo .word{font-weight:800;line-height:1.05;letter-spacing:-.01em;white-space:nowrap;color:#f9fafb}
+.logo .word{font-weight:800;line-height:1.05;letter-spacing:-.01em;white-space:nowrap;color:#f9fafb;text-align:center}
 .logo .word b{color:#f59e0b;font-weight:800}
 .logo .tag{display:flex;align-items:center;gap:.5em;margin-top:.3em;font-size:.36em;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:#d1d5db;white-space:nowrap}
 .logo .tag::before,.logo .tag::after{content:"";flex:1;min-width:.8em;height:2px;background:#f59e0b;border-radius:1px}
