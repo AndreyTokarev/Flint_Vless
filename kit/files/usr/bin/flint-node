@@ -13,24 +13,13 @@
 set -e
 . /usr/share/flint/lib.sh
 ENV=/etc/xray/flint.env
-NODES=/etc/xray/nodes.conf
-NODES_D=/etc/xray/nodes.d
-CUSTOM=/etc/xray/nodes-custom.conf
-SUBS=/etc/xray/subscriptions
 TEMPLATE=/etc/xray/template.json
 CONF=/etc/xray/config.json
-CUR=/etc/xray/current-node
 MODE_FILE=/etc/xray/routing-mode
 VPN_FILE=/etc/xray/vpn-state
 SITES=/etc/xray/custom-sites
 GEO=/usr/share/xray
 
-# Manual nodes.conf, then each subscription file, then own nodes.
-node_files() {
-	[ -f "$NODES" ] && echo "$NODES"
-	for f in "$NODES_D"/*.conf; do [ -f "$f" ] && echo "$f"; done
-	[ -f "$CUSTOM" ] && echo "$CUSTOM"
-}
 nodes() { node_lines $(node_files); }
 # Current server code: empty when there are no servers (panel / flint-node current).
 current() { [ -s "$CONF" ] || return 0; cat "$CUR" 2>/dev/null || true; }
@@ -76,18 +65,17 @@ normalize_site() {
 }
 
 render() {
-	line="$(nodes | awk -v c="$1" '$1 == c' | head -n1)"
-	set -- $line
-	uuid="${6:-$VLESS_UUID}"
-	port="${7:-443}"
-	sid="$5"; [ "$sid" = - ] && sid=""
-	net="${8:-tcp}"; svc="${9:--}"; [ "$svc" = - ] && svc=""
+	IFS="$TAB" read -r _ _ host port uuid sni pbk sid net svc _ <<EOF
+$(nodes_tsv | awk -F '\t' -v c="$1" '$1 == c' | head -n1)
+EOF
+	[ "$sid" = - ] && sid=""
+	[ "$svc" = - ] && svc=""
 	if [ "$net" = tcp ]; then flow=xtls-rprx-vision; else flow=""; fi
 	cdi="$(sites_json direct ip)"; cpi="$(sites_json proxy ip)"
 	if [ "$RENDER_MODE" = ru ] || [ -n "$cdi$cpi" ]; then strategy=IPIfNonMatch; else strategy=AsIs; fi
 	umask 077
-	sed -e "s|__UUID__|$uuid|" -e "s|__ADDR__|$2|" -e "s|__PORT__|$port|" -e "s|__SNI__|$3|" \
-		-e "s|__PBK__|$4|" -e "s|__SID__|$sid|" -e "s|__DOMAIN_STRATEGY__|$strategy|" \
+	sed -e "s|__UUID__|$uuid|" -e "s|__ADDR__|$host|" -e "s|__PORT__|$port|" -e "s|__SNI__|$sni|" \
+		-e "s|__PBK__|$pbk|" -e "s|__SID__|$sid|" -e "s|__DOMAIN_STRATEGY__|$strategy|" \
 		-e "s|__NET__|$net|" -e "s|__FLOW__|$flow|" -e "s|__GRPC_SERVICE__|$svc|" \
 		-e "s|__PROVIDER_DOMAINS__|$(provider_domains)|" \
 		-e "s|__CUSTOM_PROXY_DOMAIN__|$(sites_json proxy domain)|" -e "s|__CUSTOM_PROXY_IP__|$cpi|" \
@@ -154,17 +142,7 @@ case "$cmd" in
 		# "code<TAB>name<TAB>ip|domain<TAB>group"; the name is the comment line right above the node.
 		# "ip" = subscription node with a bare IP (the panel's white list group); own nodes are always "domain".
 		# group: subscription id (nodes.d/<id>.conf), "own", or "-" for manual nodes.conf.
-		for f in $(node_files); do
-			case "$f" in
-				"$CUSTOM") g=own ;;
-				"$NODES_D"/*) g="${f##*/}"; g="${g%.conf}" ;;
-				*) g=- ;;
-			esac
-			awk -v g="$g" -v own="$CUSTOM" -v file="$f" '
-				/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
-				/^[[:space:]]*$/ { next }
-				{ print $1 "\t" ((name != "" && name !~ /^Generated/) ? name : $1) "\t" ($2 ~ /^[0-9.]+$/ && file != own ? "ip" : "domain") "\t" g; name = "" }' "$f"
-		done
+		nodes_tsv | awk -F '\t' -v OFS='\t' '{ print $1, $2, ($3 ~ /^[0-9.]+$/ && $11 != "own" ? "ip" : "domain"), $11 }'
 		;;
 	current)
 		current

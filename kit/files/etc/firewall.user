@@ -25,7 +25,7 @@ for net in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.
 done
 # Provider servers go direct, so a VPN client on a LAN device (e.g. Happ) is not tunnelled twice.
 # The subscription host is routed direct by name in Xray instead: it may sit on shared CDN IPs.
-servers="$(node_lines /etc/xray/nodes.conf /etc/xray/nodes.d/*.conf /etc/xray/nodes-custom.conf | awk '{print $2}' | sort -u)"
+servers="$(node_lines $(node_files) | awk '{print $2}' | sort -u)"
 for host in $servers; do
 	if echo "$host" | grep -qE '^[0-9]+(\.[0-9]+){3}$'; then ips="$host"
 	else ips="$(nslookup "$host" 127.0.0.1 2>/dev/null | awk '/^Address/ && !/#/ {print $NF}' | grep -E '^[0-9]+(\.[0-9]+){3}$')"; fi

@@ -40,7 +40,7 @@ find /tmp -maxdepth 1 -name flint-watchdog.lock -mmin +30 -exec rm -rf {} + 2>/d
 mkdir "$LOCK" 2>/dev/null || exit 0
 trap 'rm -rf "$LOCK"' EXIT
 
-cur="$(cat /etc/xray/current-node 2>/dev/null)"
+cur="$(flint-node current)"
 was="$(name "$cur")"; was="${was:-$cur}"
 flint-sub-update >/dev/null 2>&1
 sleep 3

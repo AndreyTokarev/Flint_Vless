@@ -1,6 +1,6 @@
 # Upload the kit and the router test scenarios and run them on the router.
 # The empty scenario installs this checkout's kit, so the router ends up with this code (its settings are kept).
-# Usage: .\tests\run.ps1 [-Router 192.168.8.1] [empty subscription own-server failover]
+# Usage: .\tests\run.ps1 [-Router 192.168.8.1] [empty redeploy subscription own-server failover]
 param(
     [string]$Router = "192.168.8.1",
     [string]$User = "root",

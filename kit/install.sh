@@ -1,8 +1,8 @@
 #!/bin/sh
 # Flint kit installer for GL.iNet GL-BE6500 (Flint), firmware 4.x.
 # Run on the router from the unpacked kit dir: sh install.sh
-# Expects config/flint.env next to this script (see config/*.example); config/nodes.conf is optional:
-# without servers LAN devices go online directly until a subscription is added in the panel.
+# Expects config/flint.env next to this script (see config/*.example); servers are optional:
+# without them LAN devices go online directly until a subscription is added in the panel.
 set -e
 KIT="$(cd "$(dirname "$0")" && pwd)"
 say() { echo "== $*"; }
@@ -110,19 +110,16 @@ chmod 755 /etc/init.d/xray /etc/init.d/flint-ui /etc/init.d/flint-doh /etc/init.
 	/www/flint/cgi-bin/panel.cgi
 
 (umask 077; cp "$KIT/config/flint.env" /etc/xray/flint.env)
-# A router with subscriptions builds nodes.d/ itself: the PC copy only seeds a router without them.
-if [ -f "$KIT/config/nodes.conf" ] && { [ ! -s /etc/xray/nodes.conf ] || [ ! -s /etc/xray/subscriptions ]; }; then
-	(umask 077; cp "$KIT/config/nodes.conf" /etc/xray/nodes.conf)
-fi
+# Subscription servers saved by backup only seed a router without them: the router keeps its own list fresh.
 if [ -d "$KIT/config/nodes.d" ] && { [ ! -d /etc/xray/nodes.d ] || [ -z "$(ls /etc/xray/nodes.d 2>/dev/null)" ]; }; then
 	mkdir -p /etc/xray/nodes.d
 	(umask 077; cp "$KIT/config/nodes.d"/*.conf /etc/xray/nodes.d/ 2>/dev/null) || true
 fi
-# Optional: own nodes, custom sites, subscriptions and ad blocking lists/rules saved by backup; without them the router's copies stay.
-for f in nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
+# Optional: manual and own servers, custom sites, subscriptions and ad blocking lists/rules; without them the router's copies stay.
+for f in nodes.conf nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
 	if [ -f "$KIT/config/$f" ]; then (umask 077; cp "$KIT/config/$f" "/etc/xray/$f"); fi
 done
-# Legacy nodes.conf with "#@ <id>" groups → nodes.d/<id>.conf (keeps nodes.conf.bak).
+# Legacy nodes.conf with "#@ <id>" groups → nodes.d/<id>.conf (keeps nodes.conf.bak); existing nodes.d files win.
 if [ -f /etc/xray/nodes.conf ] && grep -q '^#@' /etc/xray/nodes.conf; then
 	say "migrate nodes.conf groups into nodes.d/"
 	mkdir -p /etc/xray/nodes.d
@@ -143,6 +140,7 @@ if [ -f /etc/xray/nodes.conf ] && grep -q '^#@' /etc/xray/nodes.conf; then
 			for (id in ids) {
 				if (id == "" || id == "-") continue
 				f = dir "/" id ".conf"
+				if (system("[ -s " f " ]") == 0) continue
 				printf "%s", blocks[id] > f
 				close(f)
 			}

@@ -28,7 +28,6 @@ DNS_PORT=5054
 # Answered by AdGuard Home itself, without the upstream: tells "AdGuard is down" from "internet is down".
 CHECK_HOST=adblock-check.flint
 DEFAULT_LIST="https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt	AdGuard DNS filter"
-TAB="$(printf '\t')"
 . /usr/share/flint/lib.sh
 . /etc/xray/flint.env 2>/dev/null || true
 fail() { echo "$1"; exit 1; }

@@ -105,8 +105,7 @@ The screenshots use demo data: documentation IP ranges, made-up servers and keys
 - a provider subscription with `vless://` links (VLESS + REALITY), as used by Happ, v2rayN or Hiddify, or your own VLESS + REALITY server.
 
 **Computer for installation**
-- Windows 10/11 with PowerShell and the built-in OpenSSH, **or** macOS / Linux with `ssh` and `tar`;
-- Python 3 — only if you want to build the server list on the computer (`tools/sub2nodes.py`); the router can do it by itself.
+- Windows 10/11 with PowerShell and the built-in OpenSSH, **or** macOS / Linux with `ssh` and `tar`.
 
 ## Quick start
 
@@ -165,19 +164,11 @@ The minimum to fill in:
 
 All settings are described in [Settings](#settings-configflintenv). `config/flint.env` is never committed.
 
-### 5. Prepare the server list `config/nodes.conf` (optional)
+### 5. Set servers manually in `config/nodes.conf` (optional)
 
-You can skip this step. The install also works without servers: devices go online directly until you add a subscription on the Subscriptions tab (or an own server on the Own servers tab), then the VPN turns on by itself. If `SUB_URL` is set, the router downloads the subscription's servers during the install.
+Usually not needed. If `SUB_URL` is set, the router downloads the subscription's servers during the install and keeps the list fresh by itself. The install also works without servers: devices go online directly until you add a subscription on the Subscriptions tab (or an own server on the Own servers tab), then the VPN turns on by itself.
 
-**Option A — from the subscription.** Requires Python 3:
-
-```sh
-python tools/sub2nodes.py     # reads SUB_URL from config/flint.env, writes config/nodes.conf
-```
-
-After installation the router refreshes the list from the subscription by itself, so this is needed only once.
-
-**Option B — manually.** Copy `config/nodes.conf.example` to `config/nodes.conf` and add the server from your link:
+With no subscription, only a server link, copy `config/nodes.conf.example` to `config/nodes.conf` and add the server from the link (or add it after the install on the Own servers tab):
 
 ```
 vless://UUID@ADDRESS:PORT?type=tcp&security=reality&sni=SNI&pbk=PBK&sid=SID&flow=xtls-rprx-vision#NAME
@@ -252,7 +243,7 @@ The panel speaks English and Russian. On the first visit the language follows th
 | `UPSTREAM_IF` | main router interface: `sta1` (Wi‑Fi, Repeater) or `wan` (cable) |
 | `UPSTREAM_NET` | main router's network; reachable from devices behind Flint without the VPN, and Flint is reachable from it |
 | `LOCAL_HOSTS` | local names: `"nas01=192.168.0.145 printer=192.168.0.50"` — `nas01`, `nas01.lan`, `nas01.local` will resolve |
-| `SUB_URL` | optional: the first subscription on a fresh router; more are added on the Subscriptions tab (see [Subscriptions](#subscriptions)). `tools/sub2nodes.py` reads it too |
+| `SUB_URL` | optional: the first subscription on a fresh router; more are added on the Subscriptions tab (see [Subscriptions](#subscriptions)) |
 | `SUB_INTERVAL` | auto-update interval for a fresh router: `off`, `30m`, `1h`, `3h`, `6h`, `12h`, `24h` (default `24h`); later changed in the panel, survives redeploys |
 | `SUB_GRPC` | `1` — also import gRPC servers from the subscription (skipped by default, see [Limitations](#limitations)) |
 | `ADBLOCK` | `on` — turn ad blocking on for a fresh router; later it is switched in the panel, and the choice survives redeploys |
@@ -260,13 +251,7 @@ The panel speaks English and Russian. On the first visit the language follows th
 
 ## Servers `config/nodes.conf`
 
-```sh
-python tools/sub2nodes.py           # SUB_URL from config/flint.env -> config/nodes.conf
-python tools/sub2nodes.py --no-ip   # without "white list" servers (bare IPs)
-python tools/sub2nodes.py --grpc    # also gRPC servers
-```
-
-On the router `flint-sub-update` does the same (panel button and auto-update); once the router has subscriptions, a redeploy no longer replaces its `nodes.conf` with the PC copy. VLESS + REALITY over TCP (xtls-rprx-vision) is imported, including bare-IP servers, which go to the "white lists" block. gRPC only with `--grpc` / `SUB_GRPC=1`. Provider announcements disguised as servers (names starting with ❗) are skipped.
+The router builds subscription servers by itself (`flint-sub-update`, see [Subscriptions](#subscriptions)). `config/nodes.conf` holds only manually set servers; when the file exists, a deploy uploads it to the router, otherwise the router keeps its copy. From subscriptions VLESS + REALITY over TCP (xtls-rprx-vision) is imported, including bare-IP servers, which go to the "white lists" block. gRPC only with `SUB_GRPC=1`. Provider announcements disguised as servers (names starting with ❗) are skipped.
 
 Line format:
 

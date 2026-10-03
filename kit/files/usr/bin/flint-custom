@@ -9,27 +9,8 @@
 set -e
 . /usr/share/flint/lib.sh
 ENV=/etc/xray/flint.env
-NODES=/etc/xray/nodes.conf
-NODES_D=/etc/xray/nodes.d
-CUSTOM=/etc/xray/nodes-custom.conf
-CUR=/etc/xray/current-node
 PARSER=/usr/share/flint/vless.awk
-TAB="$(printf '\t')"
 
-all_node_files() {
-	[ -f "$NODES" ] && echo "$NODES"
-	for f in "$NODES_D"/*.conf; do [ -f "$f" ] && echo "$f"; done
-	[ -f "$CUSTOM" ] && echo "$CUSTOM"
-}
-# "code name address port uuid sni pbk sid net service" (TAB-separated) for every node in the given files.
-entries() {
-	for f in "$@"; do [ -f "$f" ] && cat "$f"; done | awk -v u="$VLESS_UUID" '
-		/^[[:space:]]*#/ { sub(/^[[:space:]]*#[[:space:]]*/, ""); name = $0; next }
-		/^[[:space:]]*$/ { next }
-		{ n = (name != "" && name !~ /^Generated/) ? name : $1
-		  print $1 "\t" n "\t" $2 "\t" ($7 ? $7 : 443) "\t" ($6 ? $6 : u) "\t" $3 "\t" $4 "\t" $5 "\t" ($8 ? $8 : "tcp") "\t" ($9 ? $9 : "-")
-		  name = "" }'
-}
 # nodes-custom.conf without node $1 (and its name line).
 without() {
 	[ -f "$CUSTOM" ] || return 0
@@ -37,7 +18,7 @@ without() {
 		/^[[:space:]]*$/ { next }
 		{ if ($1 != c) printf "%s%s\n", held, $0; held = "" }' "$CUSTOM"
 }
-is_custom() { entries "$CUSTOM" | awk -F "$TAB" -v c="$1" '$1 == c { f = 1 } END { exit !f }'; }
+is_custom() { nodes_tsv "$CUSTOM" | awk -F "$TAB" -v c="$1" '$1 == c { f = 1 } END { exit !f }'; }
 NL='
 '
 check() {
@@ -45,7 +26,10 @@ check() {
 	echo "$2" | grep -qE "$3" || { echo "Bad $1: '$2'"; exit 1; }
 }
 # Also the first server on a router that had none: it becomes the current one.
-reapply() { if [ ! -s "$CUR" ] || [ "$(cat "$CUR")" = "$1" ]; then flint-node apply; fi; }
+reapply() {
+	cur="$(flint-node current)"
+	if [ -z "$cur" ] || [ "$cur" = "$1" ]; then flint-node apply; fi
+}
 
 set_node() {
 	code="$1"; host="$3"; port="$4"; uuid="$5"; sni="$6"; pbk="$7"; sid="${8:--}"; net="${9:-tcp}"; svc="${10:--}"
@@ -59,7 +43,7 @@ set_node() {
 	check transport "$net" '^(tcp|grpc)$'
 	check "gRPC service" "$svc" '^(-|[A-Za-z0-9._/-]{1,64})$'
 	if [ "$code" = new ]; then
-		i=1; while entries $(all_node_files) | cut -f1 | grep -qx "my$i"; do i=$((i + 1)); done
+		i=1; while nodes_tsv | cut -f1 | grep -qx "my$i"; do i=$((i + 1)); done
 		code="my$i"
 	else
 		is_custom "$code" || { echo "Not an own node: $code (copy it first)"; exit 1; }
@@ -74,10 +58,10 @@ set_node() {
 . "$ENV"
 case "$1" in
 	list)
-		entries "$CUSTOM" | cut -f1,2
+		nodes_tsv "$CUSTOM" | cut -f1,2
 		;;
 	show)
-		entries $(all_node_files) | awk -F "$TAB" -v c="$2" '$1 == c' | head -n1
+		nodes_tsv | awk -F "$TAB" -v c="$2" '$1 == c' | cut -f1-10 | head -n1
 		;;
 	link)
 		r="$(printf '%s\n' "$2" | tr -d '\r' | LC_ALL=C awk -f "$PARSER")"
@@ -95,7 +79,7 @@ EOF
 		is_custom "$2" || { echo "Not an own node: $2"; exit 1; }
 		without "$2" > "$CUSTOM.new"; mv "$CUSTOM.new" "$CUSTOM"
 		echo "Deleted: $2"
-		[ "$(cat "$CUR" 2>/dev/null)" = "$2" ] && flint-node apply
+		if [ "$(flint-node current)" = "$2" ]; then flint-node apply; fi
 		;;
 	*)
 		sed -n '4,8s/^# \{0,1\}//p' "$0"; exit 1

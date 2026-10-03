@@ -6,6 +6,22 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.2.1] — 2026-10-04
+
+### Fixed
+- A redeploy no longer replaces subscription servers with a stale copy: `config/nodes.conf` holds only manually set servers, and an old file with `#@` groups no longer overwrites existing `nodes.d/<id>.conf` files.
+- A `nodes.d/<id>.conf` file of a subscription that is not listed (e.g. after a restore) no longer works invisibly: its servers are not used, and the file is removed on update.
+- `flint-custom del` exited with an error when the deleted server was not the current one.
+
+### Removed
+- `tools/sub2nodes.py`: the router builds the subscription server list itself, no Python needed on the computer.
+
+### Changed
+- The server file layout and line parsing live in one place (`/usr/share/flint/lib.sh`), used by `flint-node`, `flint-custom`, `flint-sub-update`, the firewall and the tests.
+
+### Added
+- Second code quality audit and fix plan (in Russian): `docs/code-quality-audit-1.2.md`, `docs/refactoring-plan-1.2.md`.
+
 ## [1.2.0] — 2026-10-04
 
 ### Changed

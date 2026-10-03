@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Upload the kit and the router test scenarios and run them on the router (macOS/Linux).
 # The empty scenario installs this checkout's kit, so the router ends up with this code (its settings are kept).
-# Usage: ./tests/run.sh [router_ip] [empty subscription own-server failover]
+# Usage: ./tests/run.sh [router_ip] [empty redeploy subscription own-server failover]
 set -euo pipefail
 ROUTER="${1:-192.168.8.1}"; shift || true
 TARGET="root@$ROUTER"
