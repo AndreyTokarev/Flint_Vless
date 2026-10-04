@@ -61,17 +61,11 @@ PRESETS="1:AdGuard DNS filter
 18:Phishing Army
 11:Malicious URL Blocklist (URLHaus)"
 TITLE="$(echo "${UI_TITLE:-Flint VPN}" | esc)"
-TAGLINE="$(echo "${UI_TAGLINE-Sail the internet}" | esc)"
 FOOTER='<footer><span>YOUR NETWORK. <b>YOUR RULES.</b></span></footer>'
 VER="$(cat /usr/share/flint/version 2>/dev/null | esc)"
 [ -n "$VER" ] && VER="<div class=ver>Flint VPN v$VER</div>"
-logo() {
-  last="${TITLE##* }"; first="${TITLE% *}"
-  [ "$first" = "$TITLE" ] && last=""
-  [ -n "$last" ] && last=" <b>$last</b>"
-  tag=""; [ -n "$TAGLINE" ] && tag="<div class=tag>$TAGLINE</div>"
-  echo "<div class=\"logo $1\"><img src=/logo.svg alt=\"\"><div><div class=word>$first$last</div>$tag</div></div>"
-}
+# Brand lockup (mascot + name); UI_TITLE stays the browser tab title only.
+logo() { echo "<div class=\"logo $1\"><img src=/logo.jpg alt=\"$TITLE\"></div>"; }
 # Language switch; $1 is the link prefix ending in "?" or "&amp;".
 langs() {
   if [ "$L" = en ]; then echo "<div class=lang><a href='${1}lang=ru'>RU</a><b>EN</b></div>"
@@ -83,7 +77,7 @@ cat <<HTML
 <!DOCTYPE html><html lang=$L><head>
 <meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>$TITLE</title>
-<link rel=icon type=image/svg+xml href=/icon.svg>
+<link rel=icon type=image/png href=/icon.png>
 <link rel=stylesheet href=/panel.css>
 </head><body>
 HTML

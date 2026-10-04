@@ -6,6 +6,11 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.5.3] — 2026-10-04
+
+### Changed
+- Panel logo and favicon: new skeleton-pirate brand image instead of the SVG mark and text. `UI_TITLE` remains the browser tab title.
+
 ## [1.5.2] — 2026-10-04
 
 ### Added

@@ -75,9 +75,10 @@ cp "$KIT/files/etc/firewall.user" /etc/firewall.user
 cp "$KIT/files/usr/bin/flint-node" "$KIT/files/usr/bin/flint-geo-update" "$KIT/files/usr/bin/flint-sub-update" \
 	"$KIT/files/usr/bin/flint-custom" "$KIT/files/usr/bin/flint-watchdog" "$KIT/files/usr/bin/flint-adblock" \
 	"$KIT/files/usr/bin/flint-settings" /usr/bin/
-cp "$KIT/files/www/flint/index.html" "$KIT/files/www/flint/logo.svg" "$KIT/files/www/flint/icon.svg" \
+cp "$KIT/files/www/flint/index.html" "$KIT/files/www/flint/logo.jpg" "$KIT/files/www/flint/icon.png" \
 	"$KIT/files/www/flint/panel.css" /www/flint/
 cp "$KIT/files/www/flint/cgi-bin/panel.cgi" /www/flint/cgi-bin/
+rm -f /www/flint/logo.svg /www/flint/icon.svg
 chmod 755 /etc/init.d/xray /etc/init.d/flint-ui /etc/init.d/flint-doh /etc/init.d/flint-adblock /usr/bin/flint-node \
 	/usr/bin/flint-geo-update /usr/bin/flint-sub-update /usr/bin/flint-custom /usr/bin/flint-watchdog /usr/bin/flint-adblock \
 	/usr/bin/flint-settings \
