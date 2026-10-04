@@ -6,6 +6,8 @@
 
 ## [Не выпущено]
 
+## [1.7.1] — 2026-10-04
+
 ### Изменено
 - Вкладка «DNS»: убраны кнопки «Включить …», которые дублировали «Использовать …».
 
@@ -239,7 +241,20 @@
 - Доступ к сети основного роутера без VPN.
 - Установка пакетов с нуля; деплой и бэкап для Windows, macOS и Linux.
 
-[Не выпущено]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.2.0...HEAD
+[Не выпущено]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.0...v1.7.1
+[1.7.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.6.0...v1.7.0
+[1.6.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.5...v1.6.0
+[1.5.5]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.4...v1.5.5
+[1.5.4]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.3...v1.5.4
+[1.5.3]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.2...v1.5.3
+[1.5.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.1...v1.5.2
+[1.5.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.2.2...v1.3.0
+[1.2.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.2.1...v1.2.2
+[1.2.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.1.0...v1.1.1

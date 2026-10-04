@@ -6,6 +6,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.7.1] — 2026-10-04
+
 ### Changed
 - DNS tab: removed the "Turn on …" buttons that duplicated "Use …".
 
@@ -239,7 +241,20 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.0...v1.7.1
+[1.7.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.6.0...v1.7.0
+[1.6.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.5...v1.6.0
+[1.5.5]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.4...v1.5.5
+[1.5.4]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.3...v1.5.4
+[1.5.3]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.2...v1.5.3
+[1.5.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.1...v1.5.2
+[1.5.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.2.2...v1.3.0
+[1.2.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.2.1...v1.2.2
+[1.2.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.1.0...v1.1.1
