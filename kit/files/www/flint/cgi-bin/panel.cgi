@@ -204,9 +204,9 @@ ADD_SERVERS="<div class=cta><a class='btn on' href='?pass=$pass&amp;tab=subs'>�
 
 top "$(logo)" "$(langs "?pass=$pass&amp;tab=$tab&amp;")<a href='?' class=logout>$(T "Выйти" "Sign out")</a>"
 echo "<div class=layout><nav>"
-for t in "status:🏠 $(T "Статус" "Status")" "servers:🌍 $(T "Серверы" "Servers")" "own:⭐ $(T "Свои серверы" "Own servers")" \
-  "subs:🔗 $(T "Подписки" "Subscriptions")" "routing:🔀 $(T "Маршрутизация" "Routing")" "adblock:🛡️ $(T "Реклама" "Ad blocking")" \
-  "dns:📡 DNS" "settings:⚙️ $(T "Настройки" "Settings")"; do
+for t in "status:🏠 $(T "Статус" "Status")" "subs:🔗 $(T "Подписки" "Subscriptions")" "servers:🌍 $(T "Серверы" "Servers")" \
+  "own:⭐ $(T "Свои серверы" "Own servers")" "dns:📡 DNS" "routing:🔀 $(T "Маршрутизация" "Routing")" \
+  "adblock:🛡️ $(T "Реклама" "Ad blocking")" "settings:⚙️ $(T "Настройки" "Settings")"; do
   cur=""; [ "${t%%:*}" = "$tab" ] && cur=" class=cur"
   echo "<a href='?pass=$pass&amp;tab=${t%%:*}'$cur>${t#*:}</a>"
 done

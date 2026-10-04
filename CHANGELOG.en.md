@@ -6,6 +6,10 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+### Changed
+- Panel tab order: Status, Subscriptions, Servers, Own servers, DNS, Routing, Ad blocking, Settings.
+- The README screenshots are re-shot for the current design; the DNS and Settings tabs are added.
+
 ## [1.7.1] — 2026-10-04
 
 ### Changed
