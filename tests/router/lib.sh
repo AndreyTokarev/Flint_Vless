@@ -22,9 +22,8 @@ restore_state() {
 	rmdir "$LOCK" 2>/dev/null
 	flint-sub-update interval "$(cat /etc/xray/sub-interval 2>/dev/null || echo 24h)" >/dev/null
 	flint-node apply >/dev/null 2>&1
-	# The DoH config is outside /etc/xray: bring it in line with the restored choice.
-	[ "$(sed -n '1s/^# flint-dns: //p' /etc/dnscrypt-proxy2/flint-doh.toml | cut -f1)" = "$(flint-dns)" ] ||
-		flint-dns apply >/dev/null 2>&1
+	# The DoH config and the dnsmasq upstream are outside /etc/xray: bring them in line with the restored choice.
+	flint-dns synced || flint-dns apply >/dev/null 2>&1
 	echo "  restored; vpn: $(vpn_works && echo ok || echo FAIL)"
 }
 finish() {

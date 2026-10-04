@@ -46,7 +46,10 @@ The panel is available in English and Russian: the language follows your browser
 - **Own servers.** Add by `vless://` link, by copying a subscription server, or manually; TCP (xtls-rprx-vision) or gRPC transport.
 - **Failover.** Every 2 minutes the router checks the tunnel; if the server stopped responding while the internet is up, it refreshes the subscription and switches to the first working server.
 - **White lists.** Provider servers given by bare IP (for networks where only a white list is open) are grouped in a separate collapsible block.
-- **DNS over HTTPS** (dnscrypt-proxy) against DNS spoofing; client DNS queries are forced through the router. The server is chosen in the panel: Cloudflare (default), Google, Quad9, AdGuard DNS or your own `https://…` address.
+- **Encrypted DNS** (dnscrypt-proxy) against DNS spoofing; client DNS queries are forced through the router. The panel has three modes, each with its own server:
+  - **DoH** (default): Cloudflare, Google, Quad9, AdGuard DNS or your own `https://…` address;
+  - **DNSCrypt** — a fallback when DoH is blocked on the network: AdGuard, Quad9, dnscry.pt or your own `sdns://…` stamp;
+  - **plain UDP**: Cloudflare, Google, Quad9, AdGuard, Yandex, the main router's DNS or your own IPs.
 - **Ad blocking** for the whole network at the DNS level — AdGuard Home from the GL firmware, one button to turn it on. The default list is AdGuard DNS filter, the DNS version of the filters in paid AdGuard; add your own lists by URL and your own rules. Lists update by themselves, individual devices and sites can be excluded, and a recently blocked domain is allowed with one button.
 - **Home network access.** The main router's LAN, NAS and printer are reachable directly, bypassing the VPN; local names (`nas01`) are served by dnsmasq.
 - **Backup and restore** with one command; redeploying keeps the settings made in the panel. The panel settings can also be downloaded as a file and uploaded to the same or another Flint right from the browser.
@@ -88,7 +91,7 @@ The screenshots use demo data: documentation IP ranges, made-up servers and keys
 ```
 
 - `iptables` rules (in `/etc/firewall.user`) send client TCP traffic from `br-lan` into Xray's `dokodemo-door`. Local and private networks and the VPN servers' own addresses bypass it.
-- Client DNS queries are forced to the router. With ad blocking on they go to AdGuard Home first, otherwise straight to dnsmasq; then to dnscrypt-proxy (DoH).
+- Client DNS queries are forced to the router. With ad blocking on they go to AdGuard Home first, otherwise straight to dnsmasq; then to dnscrypt-proxy (DoH or DNSCrypt) or, in UDP mode, straight to the chosen DNS servers.
 - QUIC (UDP 443) is blocked so that browsers and apps fall back to TCP and enter the tunnel. Other UDP goes direct.
 - The Xray config is rendered from `/etc/xray/template.json` by `flint-node`: selected server, geo filter, own sites. It is validated with `xray -test` before being applied, and the exit IP is checked afterwards.
 - The router's own traffic (subscription and package updates) goes direct.
@@ -226,7 +229,8 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 | **Subscriptions** | VPN provider subscriptions: add by link, change the link or name, delete; last update, number of servers, expiry and traffic; "Update all subscriptions now" and the auto-update interval |
 | **Routing** | Russia geo filter on/off; own sites, IPs and subnets "always direct" or "always via VPN" |
 | **Ad blocking** | ad blocking on/off and 24-hour stats; devices without blocking; sites without blocking and "Recently blocked" with an Allow button; filter lists — ready-made and your own by URL; auto-update and "Update the lists now"; own rules |
-| **Settings** | DNS server (DoH): a preset or your own address; change the PIN; export the settings to a file and import them from a file (subscriptions, servers, sites, ad blocking, DNS, modes; no PIN or network) |
+| **DNS** | DoH, DNSCrypt or plain UDP mode with a server for each — a preset or your own; the mode in use is marked |
+| **Settings** | change the PIN; export the settings to a file and import them from a file (subscriptions, servers, sites, ad blocking, DNS, modes; no PIN or network) |
 
 The panel speaks English and Russian. On the first visit the language follows the browser (or `UI_LANG` in `flint.env`); after that use the **RU | EN** switch in the top right corner (next to "Sign out"; on the login page too) — the choice is remembered in the browser. Messages after panel actions use the same language.
 
@@ -393,8 +397,11 @@ flint-adblock refresh            # update the lists now
 flint-adblock interval 24        # auto-update: off, 1, 12, 24, 72, 168 hours
 flint-settings export > /tmp/s.txt   # export the panel settings (no flint.env)
 flint-settings import /tmp/s.txt     # import: replaces the panel settings and applies them
-flint-dns                            # DNS server (DoH): cloudflare, google, quad9, adguard or an address
-flint-dns doh quad9                  # switch; your own: flint-dns doh https://dns.example.com/dns-query
+flint-dns                            # current DNS: mode and server
+flint-dns doh quad9                  # DoH; your own: flint-dns doh https://dns.example.com/dns-query
+flint-dns dnscrypt quad9             # DNSCrypt; your own: flint-dns dnscrypt sdns://...
+flint-dns udp provider               # plain DNS: a preset, provider or IPs separated by spaces
+flint-dns mode doh                   # switch the mode: doh, dnscrypt, udp
 logread -e xray                # Xray logs
 ```
 

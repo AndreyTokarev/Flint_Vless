@@ -6,6 +6,18 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-10-04
+
+### Added
+- DNS modes on the new DNS panel tab and in `flint-dns`: DoH (default, as before), DNSCrypt and plain DNS over UDP. Each mode keeps its own server; switching the mode does not reset it.
+  - DNSCrypt: AdGuard DNS (filtering and not), Quad9 (filtering and not), dnscry.pt (Moscow, Stockholm) or your own `sdns://…` stamp. A fallback when DoH is blocked on the network.
+  - UDP: Cloudflare, Google, Quad9, AdGuard DNS, Yandex, the main router's DNS or your own IP addresses. dnscrypt-proxy is stopped in this mode.
+- A new DNS setup is checked; if it does not answer within 15 seconds, the previous one comes back.
+
+### Changed
+- The DNS settings moved from Settings to the DNS tab; the DNS link on Status leads there too.
+- The dnsmasq upstream is set by `flint-dns` instead of the installer, so the chosen mode survives a redeploy.
+
 ## [1.6.0] — 2026-10-04
 
 ### Added

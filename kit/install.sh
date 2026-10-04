@@ -107,13 +107,10 @@ for pair in $LOCAL_HOSTS; do
 	done
 done
 
-say "dnsmasq -> DoH 127.0.0.1#5053 ($(flint-dns title))"
-# The DoH server chosen in the panel survives a redeploy.
+say "DNS: $(flint-dns title)"
+# The DNS mode and servers chosen in the panel survive a redeploy: flint-dns sets the dnsmasq upstream.
 flint-dns config
 uci -q batch <<EOF
-set dhcp.@dnsmasq[0].noresolv='1'
-delete dhcp.@dnsmasq[0].server
-add_list dhcp.@dnsmasq[0].server='127.0.0.1#5053'
 set dhcp.@dnsmasq[0].confdir='/etc/dnsmasq.d'
 set dhcp.@dnsmasq[0].rebind_protection='0'
 commit dhcp
@@ -171,8 +168,7 @@ say "services"
 for pid in $(pidof dnscrypt-proxy); do
 	grep -q flint-doh.toml /proc/$pid/cmdline 2>/dev/null || kill "$pid" 2>/dev/null || true
 done
-/etc/init.d/flint-doh enable
-/etc/init.d/flint-doh restart
+flint-dns services
 sleep 2
 /etc/init.d/dnsmasq restart
 sleep 2

@@ -6,7 +6,7 @@ pin="$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')"
 # panel <query>: the Russian page for the query (without pass and lang).
 panel() { wget -qO- "http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&$1"; }
 page_ok() { panel "$1" | grep -c '</html>'; }
-for t in status servers own subs routing adblock settings; do check "tab $t renders" page_ok "tab=$t"; done
+for t in status servers own subs routing adblock dns settings; do check "tab $t renders" page_ok "tab=$t"; done
 check "no hidden action fields" fails sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&tab=servers' | grep -c 'name=a '"
 check "wrong PIN shows the login form" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=bad' | grep -c 'type=password'"
 check "status shows the provider IP" panel_has status 'IP провайдера'
@@ -50,23 +50,51 @@ check "site without blocking listed" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-b
 panel "tab=adblock&abrdel=%40%40%7C%7Czz-allow-test.example%5E" >/dev/null
 check "site without blocking removed" fails sh -c "flint-adblock rule | grep -qF zz-allow-test"
 
-# DNS: a bad address and an unreachable server change nothing; the original server comes back at the end.
-doh="$(flint-dns)"
-check "settings shows the DNS form" panel_has settings 'name=dnsurl'
-panel "tab=settings&dns=google" >/dev/null
-check "DNS switch to a preset" [ "$(flint-dns)" = google ]
-check "DNS answers after the switch" nslookup example.com 127.0.0.1
-panel "tab=settings&dnsurl=ftp%3A%2F%2Fbad.example" >/tmp/flint-test-page
-check "DNS rejects a bad address" grep -q 'Это не адрес DoH-сервера' /tmp/flint-test-page
-panel "tab=settings&dnsurl=https%3A%2F%2F127.0.0.1%3A9%2Fdns-query" >/tmp/flint-test-page
+# DNS: a bad address and an unreachable server change nothing; the original setup comes back at the end.
+dns_mode="$(flint-dns mode)"; doh="$(flint-dns doh)"; dnscrypt="$(flint-dns dnscrypt)"; udp="$(flint-dns udp)"
+dns_title="$(flint-dns title)"
+# dns_answers: an address in the answer (busybox nslookup exits 0 on an empty one too).
+dns_answers() { nslookup example.com 127.0.0.1 | awk '/^Name:/ { n = 1 } n && /^Address/ { f = 1 } END { exit !f }'; }
+check "DNS tab shows the DNS forms" panel_has dns 'name=dnsip'
+check "settings no longer hold the DNS forms" fails panel_has settings 'name=dnsip'
+panel "tab=dns&dns=google" >/dev/null
+check "DoH switch to a preset" [ "$(flint-dns doh)" = google ]
+check "DNS answers after the switch" dns_answers
+panel "tab=dns&dnsurl=ftp%3A%2F%2Fbad.example" >/tmp/flint-test-page
+check "DoH rejects a bad address" grep -q 'Это не адрес DoH-сервера' /tmp/flint-test-page
+panel "tab=dns&dnsurl=https%3A%2F%2F127.0.0.1%3A9%2Fdns-query" >/tmp/flint-test-page
 check "an unreachable DoH server is rolled back" grep -q 'DNS остался прежним' /tmp/flint-test-page
-check "DNS unchanged after the rollback" [ "$(flint-dns)" = google ]
-check "DNS answers after the rollback" nslookup example.com 127.0.0.1
-panel "tab=settings&dnsurl=https%3A%2F%2Fdns.google%2Fdns-query" >/dev/null
-check "DNS switch to an own address" [ "$(flint-dns)" = https://dns.google/dns-query ]
+check "DoH unchanged after the rollback" [ "$(flint-dns doh)" = google ]
+check "DNS answers after the rollback" dns_answers
+panel "tab=dns&dnsurl=https%3A%2F%2Fdns.google%2Fdns-query" >/dev/null
+check "DoH switch to an own address" [ "$(flint-dns doh)" = https://dns.google/dns-query ]
 check "status shows the DNS server" panel_has status 'https://dns.google/dns-query'
-flint-dns doh "$doh" >/dev/null 2>&1
-check "DNS restored after the test" [ "$(flint-dns)" = "$doh" ]
+panel "tab=dns&dnscrypt=quad9-unfiltered" >/dev/null
+check "DNSCrypt switch to a preset" [ "$(flint-dns mode):$(flint-dns dnscrypt)" = dnscrypt:quad9-unfiltered ]
+check "DNSCrypt config has both servers" [ "$(grep -c '^stamp = .sdns://AQ' /etc/dnscrypt-proxy2/flint-doh.toml)" = 2 ]
+check "DNS answers over DNSCrypt" dns_answers
+panel "tab=dns&dnsstamp=https%3A%2F%2Fnot-a-stamp" >/tmp/flint-test-page
+check "DNSCrypt rejects a bad stamp" grep -q 'stamp сервера' /tmp/flint-test-page
+panel "tab=dns&dnsudp=yandex" >/dev/null
+check "UDP switch to a preset" [ "$(flint-dns mode):$(flint-dns udp)" = udp:yandex ]
+check "dnsmasq asks the UDP servers" [ "$(uci -q get dhcp.@dnsmasq[0].server)" = "77.88.8.8 77.88.8.1" ]
+check "DoH resolver stopped in UDP mode" fails sh -c "ps w | grep -v grep | grep -q flint-doh.toml"
+check "DNS answers over UDP" dns_answers
+panel "tab=dns&dnsip=1.1.1" >/tmp/flint-test-page
+check "UDP rejects a bad address" grep -q 'IP-адреса DNS-серверов' /tmp/flint-test-page
+panel "tab=dns&dnsip=192.0.2.1" >/tmp/flint-test-page
+check "an unreachable UDP server is rolled back" grep -q 'DNS остался прежним' /tmp/flint-test-page
+check "UDP unchanged after the rollback" [ "$(flint-dns udp)" = yandex ]
+check "DNS answers after the UDP rollback" dns_answers
+panel "tab=dns&dnsudp=provider" >/dev/null
+check "UDP via the main router's DNS" [ "$(flint-dns udp):$(uci -q get dhcp.@dnsmasq[0].noresolv)" = provider:0 ]
+check "DNS answers via the main router" dns_answers
+panel "tab=dns&dnsmode=doh" >/dev/null
+check "mode switch back to DoH keeps its server" [ "$(flint-dns mode):$(flint-dns doh)" = doh:https://dns.google/dns-query ]
+check "DNS answers after the mode switch" dns_answers
+flint-dns udp "$udp" >/dev/null 2>&1; flint-dns dnscrypt "$dnscrypt" >/dev/null 2>&1
+flint-dns doh "$doh" >/dev/null 2>&1; flint-dns mode "$dns_mode" >/dev/null 2>&1
+check "DNS restored after the test" [ "$(flint-dns title)" = "$dns_title" ]
 rm -f /tmp/flint-test-page
 
 if [ -n "$(flint-node codes)" ]; then

@@ -8,7 +8,7 @@
 . /usr/share/flint/lib.sh
 . /etc/xray/flint.env 2>/dev/null || true
 ENTRIES="subscriptions nodes.d nodes.conf nodes-custom.conf current-node routing-mode vpn-state custom-sites
-sub-interval watchdog adblock adblock-lists adblock-rules adblock-exclude adblock-interval dns-doh"
+sub-interval watchdog adblock adblock-lists adblock-rules adblock-exclude adblock-interval dns-mode dns-doh dns-dnscrypt dns-udp"
 TMP=/tmp/flint-import
 PREV=/tmp/flint-settings-prev.txt
 

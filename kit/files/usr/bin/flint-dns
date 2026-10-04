@@ -1,34 +1,75 @@
 #!/bin/sh
-# DNS over HTTPS: dnsmasq forwards every query to dnscrypt-proxy (flint-doh, 127.0.0.1:5053), which sends it
-# encrypted to one DoH server — a preset or any https:// address. A switch is checked: if the new server
-# does not answer, the previous one comes back. The choice lives in /etc/xray, so it survives redeploys.
-# Usage: flint-dns [doh]                                   print the DoH server: preset name or address
-#        flint-dns doh <preset|https://host[:port][/path]>   switch to another server
-#        flint-dns title                                   the current server, for people
-#        flint-dns presets                                 name, title
-#        flint-dns apply                                   rewrite the config from the saved choice and restart
-#        flint-dns config                                  write the config without a restart (install.sh)
-STATE=/etc/xray/dns-doh
+# DNS for the router and the LAN, in one of three modes:
+#   doh (default) — dnsmasq forwards every query to dnscrypt-proxy (flint-doh, 127.0.0.1:5053), which sends it
+#                   encrypted over HTTPS to a DoH server: a preset or any https:// address;
+#   dnscrypt      — the same dnscrypt-proxy, but over the DNSCrypt protocol: a preset or own sdns:// stamps;
+#   udp           — dnsmasq asks ordinary DNS servers itself: a preset, own IPs or the main router's DNS.
+# Each mode keeps its own server. A switch is checked: if DNS stops answering, the previous setup comes back.
+# The choice lives in /etc/xray, so it survives redeploys.
+# Usage: flint-dns [title]                                    the current mode and server, for people
+#        flint-dns mode [doh|dnscrypt|udp]                    print / switch the mode; each mode keeps its server
+#        flint-dns doh [preset|https://host[:port][/path]]   print / set the DoH server (switches to DoH)
+#        flint-dns dnscrypt [preset|sdns://... [sdns://...]]  print / set the DNSCrypt servers (switches to DNSCrypt)
+#        flint-dns udp [preset|provider|IP [IP...]]           print / set the UDP servers (switches to UDP)
+#        flint-dns presets doh|dnscrypt|udp                   name, title
+#        flint-dns apply                                      apply the saved choice and check it (settings import)
+#        flint-dns config                                     write the configs without restarts (install.sh)
+#        flint-dns services                                   start or stop dnscrypt-proxy for the mode (install.sh)
+#        flint-dns synced                                     exit 0 when the live config matches the saved choice
+MODE_F=/etc/xray/dns-mode
+DOH_F=/etc/xray/dns-doh
+DNSCRYPT_F=/etc/xray/dns-dnscrypt
+UDP_F=/etc/xray/dns-udp
 CONF=/etc/dnscrypt-proxy2/flint-doh.toml
-DEFAULT=cloudflare
 # name, address, host, path. The address in the stamp means no plain-DNS bootstrap lookup is needed.
-SERVERS="cloudflare	1.1.1.1	dns.cloudflare.com	/dns-query
+DOH_SERVERS="cloudflare	1.1.1.1	dns.cloudflare.com	/dns-query
 google	8.8.8.8	dns.google	/dns-query
 quad9	9.9.9.9	dns.quad9.net	/dns-query
 adguard	94.140.14.14	dns.adguard-dns.com	/dns-query"
+# name, stamps (from the DNSCrypt project's public-resolvers list); dnscrypt-proxy picks the fastest.
+DNSCRYPT_SERVERS="adguard-unfiltered	sdns://AQcAAAAAAAAAEjk0LjE0MC4xNC4xNDA6NTQ0MyC16ETWuDo-PhJo62gfvqcN48X6aNvWiBQdvy7AZrLa-iUyLmRuc2NyeXB0LnVuZmlsdGVyZWQubnMxLmFkZ3VhcmQuY29t sdns://AQcAAAAAAAAAEjk0LjE0MC4xNC4xNDE6NTQ0MyC16ETWuDo-PhJo62gfvqcN48X6aNvWiBQdvy7AZrLa-iUyLmRuc2NyeXB0LnVuZmlsdGVyZWQubnMxLmFkZ3VhcmQuY29t
+adguard	sdns://AQMAAAAAAAAAETk0LjE0MC4xNC4xNDo1NDQzINErR_JS3PLCu_iZEIbq95zkSV2LFsigxDIuUso_OQhzIjIuZG5zY3J5cHQuZGVmYXVsdC5uczEuYWRndWFyZC5jb20 sdns://AQMAAAAAAAAAETk0LjE0MC4xNS4xNTo1NDQzINErR_JS3PLCu_iZEIbq95zkSV2LFsigxDIuUso_OQhzIjIuZG5zY3J5cHQuZGVmYXVsdC5uczEuYWRndWFyZC5jb20
+quad9	sdns://AQMAAAAAAAAADDkuOS45Ljk6ODQ0MyBnyEe4yHWM0SAkVUO-dWdG3zTfHYTAC4xHA2jfgh2GPhkyLmRuc2NyeXB0LWNlcnQucXVhZDkubmV0 sdns://AQMAAAAAAAAAEjE0OS4xMTIuMTEyLjk6ODQ0MyBnyEe4yHWM0SAkVUO-dWdG3zTfHYTAC4xHA2jfgh2GPhkyLmRuc2NyeXB0LWNlcnQucXVhZDkubmV0
+quad9-unfiltered	sdns://AQcAAAAAAAAADTkuOS45LjEwOjg0NDMgZ8hHuMh1jNEgJFVDvnVnRt803x2EwAuMRwNo34Idhj4ZMi5kbnNjcnlwdC1jZXJ0LnF1YWQ5Lm5ldA sdns://AQcAAAAAAAAAEzE0OS4xMTIuMTEyLjEwOjg0NDMgZ8hHuMh1jNEgJFVDvnVnRt803x2EwAuMRwNo34Idhj4ZMi5kbnNjcnlwdC1jZXJ0LnF1YWQ5Lm5ldA
+dnscrypt-moscow	sdns://AQcAAAAAAAAADjkzLjE4My4xMDYuMjIyIBQ6uCceRUNVJGFB1kGltuW_Jr2Nsizvc06BfMI30iIBGTIuZG5zY3J5cHQtY2VydC5kbnNjcnkucHQ
+dnscrypt-stockholm	sdns://AQcAAAAAAAAADDE5NS43Mi42MC42NiAqThz9JMW562Y5eX01kif1fVYVwbkzJh7rexM9MiNAXRkyLmRuc2NyeXB0LWNlcnQuZG5zY3J5LnB0"
+DNSCRYPT_DEFAULT=adguard-unfiltered
+UDP_SERVERS="cloudflare	1.1.1.1 1.0.0.1
+google	8.8.8.8 8.8.4.4
+quad9	9.9.9.9 149.112.112.112
+adguard	94.140.14.14 94.140.15.15
+yandex	77.88.8.8 77.88.8.1"
 IPV4='^[0-9]+(\.[0-9]+){3}$'
+IPV4_LIST='^[0-9]+(\.[0-9]+){3}( [0-9]+(\.[0-9]+){3})*$'
+STAMPS='^sdns://[A-Za-z0-9_-]+( sdns://[A-Za-z0-9_-]+)*$'
 . /usr/share/flint/lib.sh
 . /etc/xray/flint.env 2>/dev/null || true
 
 presets() {
-	printf '%s\t%s\n' cloudflare "Cloudflare (1.1.1.1)" google "Google (8.8.8.8)" \
-		quad9 "Quad9 (9.9.9.9) — $(t "блокирует вредоносные сайты" "blocks malicious sites")" \
-		adguard "AdGuard DNS — $(t "блокирует рекламу и трекеры" "blocks ads and trackers")"
+	ADS="$(t "блокирует рекламу и трекеры" "blocks ads and trackers")"
+	MAL="$(t "блокирует вредоносные сайты" "blocks malicious sites")"
+	case "$1" in
+		udp)
+			printf '%s\t%s\n' cloudflare "Cloudflare (1.1.1.1)" google "Google (8.8.8.8)" quad9 "Quad9 (9.9.9.9) — $MAL" \
+				adguard "AdGuard DNS (94.140.14.14) — $ADS" yandex "$(t "Яндекс" "Yandex") (77.88.8.8)" \
+				provider "$(t "DNS основного роутера или провайдера" "The main router's or provider's DNS")" ;;
+		dnscrypt)
+			printf '%s\t%s\n' adguard-unfiltered "AdGuard DNS — $(t "без фильтрации" "no filtering")" adguard "AdGuard DNS — $ADS" \
+				quad9 "Quad9 — $MAL" quad9-unfiltered "Quad9 — $(t "без фильтрации" "no filtering")" \
+				dnscrypt-moscow "dnscry.pt — $(t "Москва" "Moscow")" dnscrypt-stockholm "dnscry.pt — $(t "Стокгольм" "Stockholm")" ;;
+		*)
+			printf '%s\t%s\n' cloudflare "Cloudflare (1.1.1.1)" google "Google (8.8.8.8)" quad9 "Quad9 (9.9.9.9) — $MAL" \
+				adguard "AdGuard DNS — $ADS" ;;
+	esac
 }
-# The saved choice: a preset name, or "<https address><TAB><its IPv4>".
-choice() { line="$(head -n1 "$STATE" 2>/dev/null)"; if [ -n "$(server "$line")" ]; then echo "$line"; else echo "$DEFAULT"; fi; }
-# server <choice>: "address host path" for the stamp; nothing for a broken choice.
-server() {
+mode() { case "$(cat "$MODE_F" 2>/dev/null)" in udp) echo udp ;; dnscrypt) echo dnscrypt ;; *) echo doh ;; esac; }
+# Saved choices. DoH: a preset name or "<https address><TAB><its IPv4>"; DNSCrypt: a preset name or stamps;
+# UDP: a preset name, provider or IPs.
+doh_choice() { line="$(head -n1 "$DOH_F" 2>/dev/null)"; if [ -n "$(doh_server "$line")" ]; then echo "$line"; else echo cloudflare; fi; }
+dnscrypt_choice() { line="$(head -n1 "$DNSCRYPT_F" 2>/dev/null)"; if [ -n "$(dnscrypt_stamps "$line")" ]; then echo "$line"; else echo "$DNSCRYPT_DEFAULT"; fi; }
+udp_choice() { line="$(head -n1 "$UDP_F" 2>/dev/null)"; if [ -n "$(udp_servers "$line")" ]; then echo "$line"; else echo cloudflare; fi; }
+# doh_server <choice>: "address host path" for the stamp; nothing for a broken choice.
+doh_server() {
 	case "$1" in
 		https://*)
 			url="${1%%"$TAB"*}"; ip="${1#*"$TAB"}"
@@ -36,15 +77,38 @@ server() {
 			# dnscrypt-proxy builds the request URL from the host field, so a port goes there too.
 			port=""; case "$hostport" in *:*) port=":${hostport#*:}" ;; esac
 			echo "$ip" | grep -qE "$IPV4" && echo "$ip$port $hostport $path" ;;
-		*) echo "$SERVERS" | awk -F '\t' -v n="$1" 'n != "" && $1 == n { print $2, $3, $4 }' ;;
+		*) echo "$DOH_SERVERS" | awk -F '\t' -v n="$1" 'n != "" && $1 == n { print $2, $3, $4 }' ;;
 	esac
 }
+dnscrypt_stamps() {
+	if echo "$1" | grep -qE "$STAMPS"; then echo "$1"
+	else echo "$DNSCRYPT_SERVERS" | awk -F '\t' -v n="$1" 'n != "" && $1 == n { print $2 }'; fi
+}
+# udp_servers <choice>: the server IPs, "provider", or nothing for a broken choice.
+udp_servers() {
+	if [ "$1" = provider ]; then echo provider
+	elif echo "$1" | grep -qE "$IPV4_LIST"; then echo "$1"
+	else echo "$UDP_SERVERS" | awk -F '\t' -v n="$1" 'n != "" && $1 == n { print $2 }'; fi
+}
+# name_of doh|dnscrypt|udp <choice>: the server for people.
+name_of() {
+	case "$2" in
+		https://*) echo "${2%%"$TAB"*}" ;;
+		sdns://*) t "свой сервер (sdns)" "own server (sdns)" ;;
+		*)
+			if echo "$2" | grep -qE "$IPV4_LIST"; then echo "$2"
+			else presets "$1" | awk -F '\t' -v n="$2" '$1 == n { print $2 }'; fi ;;
+	esac
+}
+# title [mode doh dnscrypt udp]: "DoH: ...", "DNSCrypt: ..." or "UDP: ...", the saved setup by default.
 title() {
-	case "$1" in
-		https://*) echo "${1%%"$TAB"*}" ;;
-		*) presets | awk -F '\t' -v n="$1" '$1 == n { print $2 }' ;;
+	case "${1:-$(mode)}" in
+		udp) echo "UDP: $(name_of udp "${4:-$(udp_choice)}")" ;;
+		dnscrypt) echo "DNSCrypt: $(name_of dnscrypt "${3:-$(dnscrypt_choice)}")" ;;
+		*) echo "DoH: $(name_of doh "${2:-$(doh_choice)}")" ;;
 	esac
 }
+
 lp() { printf "\\$(printf %03o "${#1}")%s" "$1"; }
 # DoH stamp: protocol 2, props (DNSSEC, no log, no filter — informational for a static server),
 # address, no certificate hashes, host, path; URL-safe base64 without padding.
@@ -53,59 +117,111 @@ stamp() {
 	{ printf '\002\007\000\000\000\000\000\000\000'; lp "$1"; printf '\000'; lp "$2"; lp "$3"; } |
 		base64 | tr -d '\n=' | tr '+/' '-_'
 }
-# The first line keeps the choice, so a rollback knows what the previous config was.
+# toml_line <mode> <doh> <dnscrypt>: what the dnscrypt-proxy config serves; UDP mode keeps the DoH config.
+toml_line() { if [ "$1" = dnscrypt ]; then echo "dnscrypt|$3"; else echo "doh|$2"; fi; }
+# write_config <mode> <doh> <dnscrypt>. The first line keeps the choice: "synced" compares it with the saved one.
 write_config() {
-	line="$1"; srv="$(server "$line")"
-	[ -n "$srv" ] || { line="$DEFAULT"; srv="$(server "$DEFAULT")"; }
-	set -- $srv
+	line="$(toml_line "$1" "$2" "$3")"
+	if [ "$1" = dnscrypt ]; then
+		stamps="$(dnscrypt_stamps "$3")"
+		[ -n "$stamps" ] || { line="dnscrypt|$DNSCRYPT_DEFAULT"; stamps="$(dnscrypt_stamps "$DNSCRYPT_DEFAULT")"; }
+	else
+		srv="$(doh_server "$2")"
+		[ -n "$srv" ] || { line="doh|cloudflare"; srv="$(doh_server cloudflare)"; }
+		set -- $srv
+		stamps="$(stamp "$1" "$2" "$3")"
+	fi
+	names=""; i=0
+	for s in $stamps; do i=$((i + 1)); names="$names, 'flint$i'"; done
 	mkdir -p "${CONF%/*}"
-	cat > "$CONF" <<EOF
+	{
+		cat <<EOF
 # flint-dns: $line
 listen_addresses = ['127.0.0.1:5053']
-server_names = ['flint']
+server_names = [${names#, }]
 ipv6_servers = false
 block_ipv6 = true
 require_dnssec = false
 ignore_system_dns = true
 timeout = 5000
-
-[static.'flint']
-stamp = '$(stamp "$1" "$2" "$3")'
 EOF
+		i=0
+		for s in $stamps; do i=$((i + 1)); printf "\n[static.'flint%s']\nstamp = '%s'\n" "$i" "$s"; done
+	} > "$CONF"
+}
+
+# dnsmasq upstream as "<noresolv> [servers...]": dnscrypt-proxy, the chosen servers, or (noresolv 0)
+# the main router's DNS from resolv.conf.auto.
+upstream() {
+	if [ "$1" != udp ]; then echo "1 127.0.0.1#5053"; return; fi
+	s="$(udp_servers "$2")"
+	if [ "$s" = provider ]; then echo 0; else echo "1 $s"; fi
+}
+live_upstream() { echo "$(uci -q get dhcp.@dnsmasq[0].noresolv || echo 0) $(uci -q get dhcp.@dnsmasq[0].server)" | sed 's/ *$//'; }
+set_upstream() {
+	set -- $1
+	nr="$1"; shift
+	{
+		echo "set dhcp.@dnsmasq[0].noresolv='$nr'"
+		echo "delete dhcp.@dnsmasq[0].server"
+		for s in "$@"; do echo "add_list dhcp.@dnsmasq[0].server='$s'"; done
+		echo "commit dhcp"
+	} | uci -q batch
+}
+services() {
+	if [ "$1" = udp ]; then
+		/etc/init.d/flint-doh stop >/dev/null 2>&1
+		/etc/init.d/flint-doh disable
+	else
+		/etc/init.d/flint-doh enable
+		/etc/init.d/flint-doh restart >/dev/null 2>&1
+	fi
 }
 # busybox nslookup exits 0 on an empty answer too: look for an address after the "Name:" line.
-answers() { nslookup example.com 127.0.0.1:5053 2>/dev/null | awk '/^Name:/ { n = 1 } n && /^Address/ { f = 1 } END { exit !f }'; }
-restart() {
-	/etc/init.d/flint-doh restart >/dev/null 2>&1
+answers() { nslookup example.com 127.0.0.1 2>/dev/null | awk '/^Name:/ { n = 1 } n && /^Address/ { f = 1 } END { exit !f }'; }
+# setup <mode> <doh> <dnscrypt> <udp>: write the configs, restart, wait for an answer through dnsmasq.
+setup() {
+	write_config "$1" "$2" "$3"
+	want="$(upstream "$1" "$4")"
+	[ "$1" = udp ] || services "$1"
+	if [ "$(live_upstream)" != "$want" ]; then
+		set_upstream "$want"
+		/etc/init.d/dnsmasq restart >/dev/null 2>&1
+	else
+		# dnsmasq forgets answers from the previous server.
+		killall -HUP dnsmasq 2>/dev/null
+	fi
 	# A deadline, not a count: each lookup against a dead server waits for its own timeout.
 	end=$(($(date +%s) + 15))
 	until answers; do
 		[ "$(date +%s)" -lt "$end" ] || return 1
 		sleep 1
 	done
+	[ "$1" = udp ] && services udp
+	return 0
 }
-saved() { sed -n '1s/^# flint-dns: //p' "$1" 2>/dev/null; }
-# use <choice>: write the config and restart; if the server does not answer, put the previous config back.
-use() {
-	cp "$CONF" "$CONF.prev" 2>/dev/null
-	write_config "$1"
-	if restart; then
-		saved "$CONF" > "$STATE"
-		rm -f "$CONF.prev"
-		# dnsmasq forgets answers from the previous server.
-		killall -HUP dnsmasq 2>/dev/null
+# switch <mode> <doh> <dnscrypt> <udp>: set up and save; if DNS does not answer, the saved setup comes back.
+switch() {
+	pm="$(mode)"; pd="$(doh_choice)"; pc="$(dnscrypt_choice)"; pu="$(udp_choice)"
+	name="$(title "$1" "$2" "$3" "$4")"
+	if setup "$1" "$2" "$3" "$4"; then
+		echo "$1" > "$MODE_F"; echo "$2" > "$DOH_F"; echo "$3" > "$DNSCRYPT_F"; echo "$4" > "$UDP_F"
+		echo "DNS — $name"
 		return 0
 	fi
-	if [ -f "$CONF.prev" ]; then mv "$CONF.prev" "$CONF"; else write_config "$DEFAULT"; fi
-	prev="$(saved "$CONF")"
-	if [ -n "$prev" ]; then echo "$prev" > "$STATE"; else rm -f "$STATE"; fi
-	restart
-	return 1
+	setup "$pm" "$pd" "$pc" "$pu"
+	fail "$(t "$name — нет ответа, DNS остался прежним: $(title)" "$name — no answer, DNS stays as it was: $(title)")"
 }
 
 case "$1" in
-	""|doh)
-		if [ -z "$2" ]; then choice | cut -f1; exit 0; fi
+	""|title) title ;;
+	mode)
+		[ -n "$2" ] || { mode; exit 0; }
+		case "$2" in doh|dnscrypt|udp) ;; *) fail "flint-dns mode doh|dnscrypt|udp" ;; esac
+		switch "$2" "$(doh_choice)" "$(dnscrypt_choice)" "$(udp_choice)"
+		;;
+	doh)
+		[ -n "$2" ] || { doh_choice | cut -f1; exit 0; }
 		arg="$(printf '%s' "$2" | tr -d ' \t\r\n')"
 		case "$arg" in
 			*[:/.]*)
@@ -121,20 +237,43 @@ case "$1" in
 				[ -n "$ip" ] || fail "$(t "Не удалось найти адрес сервера $host" "Could not resolve the server $host")"
 				line="$arg$TAB$ip" ;;
 			*)
-				[ -n "$(server "$arg")" ] ||
-					fail "$(t "Нет такого DNS-сервера: $arg" "No such DNS server: $arg") ($(echo "$SERVERS" | cut -f1 | tr '\n' ' ')https://...)"
+				[ -n "$(doh_server "$arg")" ] ||
+					fail "$(t "Нет такого DoH-сервера: $arg" "No such DoH server: $arg") ($(echo "$DOH_SERVERS" | cut -f1 | tr '\n' ' ')https://...)"
 				line="$arg" ;;
 		esac
-		name="$(title "$line")"
-		use "$line" || fail "$(t "$name не ответил — DNS остался прежним: $(title "$(choice)")" \
-			"$name did not answer — DNS stays as it was: $(title "$(choice)")")"
-		t "DNS-сервер: $name" "DNS server: $name"
+		switch doh "$line" "$(dnscrypt_choice)" "$(udp_choice)"
 		;;
-	title) title "$(choice)" ;;
-	presets) presets ;;
+	dnscrypt)
+		[ -n "$2" ] || { dnscrypt_choice; exit 0; }
+		arg="$(printf '%s' "$2" | tr '\t\r\n' '   ' | tr -s ' ' | sed 's/^ //; s/ $//')"
+		[ -n "$(dnscrypt_stamps "$arg")" ] ||
+			fail "$(t "Нужен вариант из списка или stamp сервера вида sdns://... (несколько — через пробел)" \
+				"Needs a preset or a server stamp like sdns://... (several separated by spaces)")"
+		switch dnscrypt "$(doh_choice)" "$arg" "$(udp_choice)"
+		;;
+	udp)
+		[ -n "$2" ] || { udp_choice; exit 0; }
+		arg="$(printf '%s' "$2" | tr 'A-Z,;\t\r\n' 'a-z     ' | tr -s ' ' | sed 's/^ //; s/ $//')"
+		[ -n "$(udp_servers "$arg")" ] ||
+			fail "$(t "Нужен вариант из списка или IP-адреса DNS-серверов через пробел, например 1.1.1.1 8.8.8.8" \
+				"Needs a preset or DNS server IP addresses separated by spaces, e.g. 1.1.1.1 8.8.8.8")"
+		switch udp "$(doh_choice)" "$(dnscrypt_choice)" "$arg"
+		;;
+	presets) presets "$2" ;;
 	apply)
-		use "$(choice)" || fail "$(t "DNS-сервер не ответил — оставлен прежний" "The DNS server did not answer — the previous one stays")"
+		setup "$(mode)" "$(doh_choice)" "$(dnscrypt_choice)" "$(udp_choice)" && exit 0
+		echo doh > "$MODE_F"; echo cloudflare > "$DOH_F"
+		setup doh cloudflare "$(dnscrypt_choice)" "$(udp_choice)"
+		fail "$(t "DNS из настроек не ответил — включён DoH через Cloudflare" "The saved DNS did not answer — switched to DoH via Cloudflare")"
 		;;
-	config) write_config "$(choice)" ;;
-	*) sed -n '5,10s/^# \{0,1\}//p' "$0"; exit 1 ;;
+	config)
+		write_config "$(mode)" "$(doh_choice)" "$(dnscrypt_choice)"
+		set_upstream "$(upstream "$(mode)" "$(udp_choice)")"
+		;;
+	services) services "$(mode)" ;;
+	synced)
+		[ "$(sed -n '1s/^# flint-dns: //p' "$CONF" 2>/dev/null)" = "$(toml_line "$(mode)" "$(doh_choice)" "$(dnscrypt_choice)")" ] &&
+			[ "$(live_upstream)" = "$(upstream "$(mode)" "$(udp_choice)")" ]
+		;;
+	*) sed -n '9,18s/^# \{0,1\}//p' "$0"; exit 1 ;;
 esac
