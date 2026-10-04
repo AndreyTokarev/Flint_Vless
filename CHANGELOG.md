@@ -6,6 +6,8 @@
 
 ## [Не выпущено]
 
+## [1.7.2] — 2026-10-04
+
 ### Изменено
 - Порядок вкладок панели: Статус, Подписки, Серверы, Свои серверы, DNS, Маршрутизация, Реклама, Настройки.
 - Скриншоты в README пересняты под текущий дизайн, добавлены вкладки DNS и «Настройки».
@@ -245,7 +247,8 @@
 - Доступ к сети основного роутера без VPN.
 - Установка пакетов с нуля; деплой и бэкап для Windows, macOS и Linux.
 
-[Не выпущено]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.1...HEAD
+[Не выпущено]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.2...HEAD
+[1.7.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.5...v1.6.0

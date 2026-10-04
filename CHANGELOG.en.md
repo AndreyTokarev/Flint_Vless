@@ -6,6 +6,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.7.2] — 2026-10-04
+
 ### Changed
 - Panel tab order: Status, Subscriptions, Servers, Own servers, DNS, Routing, Ad blocking, Settings.
 - The README screenshots are re-shot for the current design; the DNS and Settings tabs are added.
@@ -245,7 +247,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.1...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.2...HEAD
+[1.7.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.5.5...v1.6.0
