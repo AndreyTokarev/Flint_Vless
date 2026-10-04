@@ -56,7 +56,7 @@ say "files"
 rm -rf /etc/xray /etc/flint-adguard /www/flint /usr/share/flint
 rm -f /usr/bin/flint-* /etc/init.d/flint-ui /etc/init.d/flint-adblock /etc/init.d/flint-doh \
 	/etc/dnsmasq.d/flint-*.conf /tmp/dnsmasq.d/flint-*.conf /etc/dnscrypt-proxy2/flint-doh.toml \
-	/tmp/flint-*.log /tmp/flint-ip.* /tmp/flint-adblock.out*
+	/tmp/flint-*.log /tmp/flint-ip.* /tmp/flint-adblock.out* /tmp/hosts/flint
 rmdir /etc/dnsmasq.d 2>/dev/null || true
 
 if [ "$KEEP_XRAY" = 1 ]; then

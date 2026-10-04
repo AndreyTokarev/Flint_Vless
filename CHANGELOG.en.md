@@ -8,9 +8,16 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ### Added
 - Uninstall Flint VPN: `uninstall.ps1` / `uninstall.sh` (on the router — `kit/uninstall.sh`). A backup runs first; network, Wi‑Fi and the firmware stay, devices go online directly.
+- Local names for network devices in the panel: DNS → Local names (`nas01` → IP; `nas01.lan` and `nas01.local` work too). On the router — `flint-dns hosts`. The names are part of the settings file.
 
 ### Changed
 - Completed audits and refactoring plans moved to `docs/archive/`.
+- `LOCAL_HOSTS` in `flint.env` only seeds the local names on a fresh router; on update the existing names move to the panel.
+- `restore.ps1` / `restore.sh` bring back every panel setting from the backup: the chosen server, VPN and routing modes, DNS, local names, ad blocking state, intervals and the watchdog. Before, only `flint.env`, servers, sites and ad blocking lists were restored.
+- `flint-settings export <dir>` exports the settings from a copy of `/etc/xray`, e.g. from a backup.
+
+### Fixed
+- A redeploy no longer resets the routing mode chosen in the panel to `ROUTING` from `flint.env`.
 
 ## [1.7.2] — 2026-10-04
 

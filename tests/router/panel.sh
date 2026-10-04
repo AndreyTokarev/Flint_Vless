@@ -95,6 +95,29 @@ check "DNS answers after the mode switch" dns_answers
 flint-dns udp "$udp" >/dev/null 2>&1; flint-dns dnscrypt "$dnscrypt" >/dev/null 2>&1
 flint-dns doh "$doh" >/dev/null 2>&1; flint-dns mode "$dns_mode" >/dev/null 2>&1
 check "DNS restored after the test" [ "$(flint-dns title)" = "$dns_title" ]
+host_ip() { flint-dns hosts | awk -F '\t' -v n="$1" '$1 == n { print $2 }'; }
+# resolves <name> <ip>: dnsmasq answers the name with this address.
+resolves() { nslookup "$1" 127.0.0.1 2>/dev/null | awk -v ip="$2" '/^Name:/ { n = 1 } n && /^Address/ && $NF == ip { f = 1 } END { exit !f }'; }
+check "DNS tab shows the local names form" panel_has dns 'name=hostadd'
+panel "tab=dns&hostadd=ZZ-Flint-Test&hostip=192.0.2.55" >/dev/null
+check "local name added in lower case" [ "$(host_ip zz-flint-test)" = 192.0.2.55 ]
+check "local name resolves" resolves zz-flint-test 192.0.2.55
+check "local name resolves with .lan" resolves zz-flint-test.lan 192.0.2.55
+check "local name resolves with .local" resolves zz-flint-test.local 192.0.2.55
+check "DNS tab lists the local name" panel_has dns 'zz-flint-test'
+panel "tab=dns&hostadd=zz-flint-test&hostip=192.0.2.56" >/dev/null
+check "adding a name again changes its address" [ "$(host_ip zz-flint-test | grep -c .):$(host_ip zz-flint-test)" = 1:192.0.2.56 ]
+check "the new address resolves" resolves zz-flint-test 192.0.2.56
+panel "tab=dns&hostadd=zz.flint.test&hostip=192.0.2.57" >/dev/null
+check "a dotted name resolves as is" resolves zz.flint.test 192.0.2.57
+panel "tab=dns&hostadd=bad_name&hostip=192.0.2.58" >/tmp/flint-test-page
+check "local names reject a bad name" [ "$(grep -c 'латинские буквы' /tmp/flint-test-page):$(host_ip bad_name)" = 1: ]
+panel "tab=dns&hostadd=zz-flint-bad&hostip=192.0.2.300" >/tmp/flint-test-page
+check "local names reject a bad IP" [ "$(grep -c 'IPv4-адрес' /tmp/flint-test-page):$(host_ip zz-flint-bad)" = 1: ]
+panel "tab=dns&hostdel=zz-flint-test" >/dev/null
+panel "tab=dns&hostdel=zz.flint.test" >/dev/null
+check "local names deleted" [ -z "$(host_ip zz-flint-test)$(host_ip zz.flint.test)" ]
+check "a deleted name no longer resolves" fails resolves zz-flint-test 192.0.2.56
 rm -f /tmp/flint-test-page
 
 if [ -n "$(flint-node codes)" ]; then

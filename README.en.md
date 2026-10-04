@@ -51,7 +51,7 @@ The panel is available in English and Russian: the language follows your browser
   - **DNSCrypt** — a fallback when DoH is blocked on the network: AdGuard, Quad9, dnscry.pt or your own `sdns://…` stamp;
   - **plain UDP**: Cloudflare, Google, Quad9, AdGuard, Yandex, the main router's DNS or your own IPs.
 - **Ad blocking** for the whole network at the DNS level — AdGuard Home from the GL firmware, one button to turn it on. The default list is AdGuard DNS filter, the DNS version of the filters in paid AdGuard; add your own lists by URL and your own rules. Lists update by themselves, individual devices and sites can be excluded, and a recently blocked domain is allowed with one button.
-- **Home network access.** The main router's LAN, NAS and printer are reachable directly, bypassing the VPN; local names (`nas01`) are served by dnsmasq.
+- **Home network access.** The main router's LAN, NAS and printer are reachable directly, bypassing the VPN; local names (`nas01`) are set in the panel.
 - **Backup and restore** with one command; redeploying keeps the settings made in the panel. The panel settings can also be downloaded as a file and uploaded to the same or another Flint right from the browser.
 
 ## Screenshots
@@ -229,7 +229,7 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 | **Subscriptions** | VPN provider subscriptions: add by link, change the link or name, delete; last update, number of servers, expiry and traffic; "Update all subscriptions now" and the auto-update interval |
 | **Servers** | one-click server selection — servers grouped by subscription, own servers apart; "White lists" block; failover on/off |
 | **Own servers** | servers not from the subscription: add by `vless://` link, copy a subscription server and edit the copy, enter manually; edit or delete |
-| **DNS** | DoH, DNSCrypt or plain UDP mode with a server for each — a preset or your own; the mode in use is marked |
+| **DNS** | DoH, DNSCrypt or plain UDP mode with a server for each — a preset or your own; the mode in use is marked. Local names for network devices (`nas01` → IP) |
 | **Routing** | Russia geo filter on/off; own sites, IPs and subnets "always direct" or "always via VPN" |
 | **Ad blocking** | ad blocking on/off and 24-hour stats; devices without blocking; sites without blocking and "Recently blocked" with an Allow button; filter lists — ready-made and your own by URL; auto-update and "Update the lists now"; own rules |
 | **Settings** | change the PIN; export the settings to a file and import them from a file (subscriptions, servers, sites, ad blocking, DNS, modes; no PIN or network) |
@@ -246,10 +246,10 @@ The panel speaks English and Russian. On the first visit the language follows th
 | `UI_TAGLINE` | tagline under the logo, default `Sail the internet`; an empty value removes it |
 | `UI_LANG` | default panel language: `ru` or `en`; empty — follow the browser. Background records (last subscription check, last failure) are written in it too |
 | `DEFAULT_NODE` | server code enabled after installation (usually `auto`); the first server if there is no such code |
-| `ROUTING` | `ru` — Russian sites and IPs direct, the rest via VPN; `global` — everything via VPN. The `geoip.dat`/`geosite.dat` databases (Loyalsoldier) are downloaded on install and updated on Sundays at 4:30; without them the router runs in `global` mode |
+| `ROUTING` | `ru` — Russian sites and IPs direct, the rest via VPN; `global` — everything via VPN. The `geoip.dat`/`geosite.dat` databases (Loyalsoldier) are downloaded on install and updated on Sundays at 4:30; without them the router runs in `global` mode. Sets the mode only on a fresh router; after that it is switched in the panel |
 | `UPSTREAM_IF` | main router interface: `sta1` (Wi‑Fi, Repeater) or `wan` (cable) |
 | `UPSTREAM_NET` | main router's network; reachable from devices behind Flint without the VPN, and Flint is reachable from it |
-| `LOCAL_HOSTS` | local names: `"nas01=192.168.0.145 printer=192.168.0.50"` — `nas01`, `nas01.lan`, `nas01.local` will resolve |
+| `LOCAL_HOSTS` | initial list of local names: `"nas01=192.168.0.145 printer=192.168.0.50"` — `nas01`, `nas01.lan`, `nas01.local` will resolve. Applies only to a fresh router; after that the names are edited in the panel (DNS → Local names) |
 | `SUB_URL` | optional: the first subscription on a fresh router; more are added on the Subscriptions tab (see [Subscriptions](#subscriptions)) |
 | `SUB_INTERVAL` | auto-update interval for a fresh router: `off`, `30m`, `1h`, `3h`, `6h`, `12h`, `24h` (default `24h`); later changed in the panel, survives redeploys |
 | `SUB_GRPC` | `1` — also import gRPC servers from the subscription (skipped by default, see [Limitations](#limitations)) |
@@ -335,7 +335,7 @@ More on device settings in [Devices on the network](#devices-on-the-network). If
 
 `install.sh` allows incoming connections from `UPSTREAM_NET` to Flint and to devices behind it (`192.168.8.x`). If the main router's network changes, update `UPSTREAM_IF` / `UPSTREAM_NET` in `config/flint.env` and redeploy. On the main router, add a DHCP reservation for Flint (e.g. `192.168.0.111`) and a static route: network `192.168.8.0`, mask `255.255.255.0`, gateway `192.168.0.111`.
 
-Fix the addresses of the main network's devices you reach through Flint (NAS, printer) as well — with a DHCP reservation on the main router or a static IP on the device. Otherwise a device may get another address after a reboot, and `LOCAL_HOSTS` will point nowhere.
+Fix the addresses of the main network's devices you reach through Flint (NAS, printer) as well — with a DHCP reservation on the main router or a static IP on the device. Otherwise a device may get another address after a reboot, and its local name will point nowhere.
 
 ## Backup
 
@@ -368,7 +368,7 @@ Without a computer, the panel settings can be saved as a file: Settings → "Dow
 ./restore.sh --full
 ```
 
-By default the settings from the backup (`flint.env`, servers, subscriptions, own servers and sites, ad blocking lists, rules and exclusions) go into `config/`, then a normal deploy runs. This works for a reset router too: first connect it to the internet in the GL admin panel. The current `config/` files are saved to `backup/config-before-restore-<time>/` before being replaced.
+By default `flint.env`, servers, subscriptions, own servers and sites, ad blocking lists, rules and exclusions from the backup go into `config/`, then a normal deploy runs, and after it every panel setting from the backup comes back to the router: the chosen server, VPN and routing modes, DNS, local names, ad blocking, intervals and the watchdog. This works for a reset router too: first connect it to the internet in the GL admin panel. The current `config/` files are saved to `backup/config-before-restore-<time>/` before being replaced.
 
 `-Full` / `--full` is only for the **same** router: it brings back its network, Wi‑Fi (SSIDs and passwords), firewall, DHCP reservations, cron and SSH keys, then reboots. The script asks for confirmation (`-Yes` / `--yes` skips it).
 
@@ -423,6 +423,7 @@ flint-dns doh quad9                  # DoH; your own: flint-dns doh https://dns.
 flint-dns dnscrypt quad9             # DNSCrypt; your own: flint-dns dnscrypt sdns://...
 flint-dns udp provider               # plain DNS: a preset, provider or IPs separated by spaces
 flint-dns mode doh                   # switch the mode: doh, dnscrypt, udp
+flint-dns hosts                      # local names; add: flint-dns hosts add nas01 192.168.0.145, delete: hosts del nas01
 logread -e xray                # Xray logs
 ```
 
@@ -458,7 +459,7 @@ If you run it on another device, please report the result in [Issues](https://gi
 | A Russian site goes via VPN | geoip/geosite missing (then `global` mode): `flint-geo-update`; or add the site as "direct" |
 | A site or app broke with ad blocking on | turn blocking off to confirm; if it is the cause, allow the domain in "Sites without blocking" ("Recently blocked" gives a hint) or add the device to "Devices without blocking" |
 | Forgot the PIN | see it: `ssh root@192.168.8.1 "grep UI_PIN /etc/xray/flint.env"`. Set a new one (here `1234`, letters and digits only): `ssh root@192.168.8.1 "sed -i '/^UI_PIN=/d' /etc/xray/flint.env && echo UI_PIN=1234 >> /etc/xray/flint.env"` — it works at once, nothing needs a restart; put it into `config/flint.env` too, or a deploy brings the old one back. Or just redeploy — the PIN becomes the one in `config/flint.env` |
-| A NAS or other device of the main network doesn't open | find it in the main router's client list: it may have a new address after a reboot. Fix the address (DHCP reservation or static IP on the device) and check `LOCAL_HOSTS` |
+| A NAS or other device of the main network doesn't open | find it in the main router's client list: it may have a new address after a reboot. Fix the address (DHCP reservation or static IP on the device) and update its name on the DNS → Local names tab |
 | Ads are not blocked on a device | turn off Private DNS, browser DoH and any VPN client (Happ, etc.) on it; check it is not excluded |
 | Ads remain on VK, YouTube, etc. | they come from the same domain as the content and DNS blocking can't remove them — install uBlock Origin in the browser (see [Where ads remain](#where-ads-remain)) |
 | `opkg install ... failed` | `/tmp/flint-opkg.log`; router internet; put Xray into `backup/bin/xray` |

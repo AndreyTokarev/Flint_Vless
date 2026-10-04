@@ -91,21 +91,21 @@ grep -v -E '^(#|$)' "$KIT/state-files" | while read -r f; do
 	(umask 077; cp -R "$KIT/config/$f" "/etc/xray/$f")
 done
 migrate_nodes_groups
-case "${ROUTING:-ru}" in
-	ru|global) echo "${ROUTING:-ru}" > /etc/xray/routing-mode ;;
-	*) die "ROUTING must be ru or global" ;;
-esac
+case "${ROUTING:-ru}" in ru|global) ;; *) die "ROUTING must be ru or global" ;; esac
+# The routing mode chosen in the panel survives a redeploy; ROUTING only seeds a fresh router.
+[ -f /etc/xray/routing-mode ] || echo "${ROUTING:-ru}" > /etc/xray/routing-mode
 
 LAN_IP="$(uci -q get network.lan.ipaddr || echo 192.168.8.1)"
 LAN_IP="${LAN_IP%%/*}"
 sed "s/__LAN_IP__/$LAN_IP/g" "$KIT/files/etc/dnsmasq.d/flint-names.conf" > /etc/dnsmasq.d/flint-names.conf
-: > /etc/dnsmasq.d/flint-hosts.conf
-for pair in $LOCAL_HOSTS; do
-	name="${pair%%=*}"; ip="${pair#*=}"
-	for n in "$name" "$name.lan" "$name.local"; do
-		echo "address=/$n/$ip" >> /etc/dnsmasq.d/flint-hosts.conf
+# Local names live in /etc/xray/dns-hosts (panel, DNS tab); LOCAL_HOSTS only seeds a router without the list.
+if [ ! -f /etc/xray/dns-hosts ]; then
+	: > /etc/xray/dns-hosts
+	for pair in $LOCAL_HOSTS; do
+		flint-dns hosts add "${pair%%=*}" "${pair#*=}" >/dev/null || echo "LOCAL_HOSTS: skipped $pair"
 	done
-done
+fi
+flint-dns hosts apply
 
 say "DNS: $(flint-dns title)"
 # The DNS mode and servers chosen in the panel survive a redeploy: flint-dns sets the dnsmasq upstream.

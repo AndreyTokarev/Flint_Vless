@@ -1,7 +1,8 @@
 # Restore the router from a backup made by backup.ps1.
 # Usage: .\restore.ps1 [-Backup backup\2026-10-03_1557] [-Router 192.168.8.1] [-Full] [-Yes]
-#   default: settings from the backup (flint.env, servers, own servers, custom sites) go to config\,
-#            then deploy.ps1 installs packages and the kit - works on a reset router too.
+#   default: flint.env and the other config\ files (kit\state-files) come from the backup, deploy.ps1 installs
+#            packages and the kit, then every panel setting from the backup is imported (flint-settings) -
+#            works on a reset router too.
 #   -Full    also brings back network, Wi-Fi, firewall, DHCP, hosts, cron and SSH keys from the
 #            backup and reboots. Only for the same router: these replace the current settings.
 #   -Backup  defaults to the newest backup\<date> folder.
@@ -58,17 +59,20 @@ try {
         }
     }
 
+    cmd /c "ssh $target ""rm -rf /tmp/flint-restore && mkdir -p /tmp/flint-restore && tar -xzf - -C /tmp/flint-restore"" < ""$archive"""
+    if ($LASTEXITCODE) { throw "upload failed" }
     if ($Full) {
-        cmd /c "ssh $target ""cat > /tmp/flint-restore.tgz"" < ""$archive"""
-        if ($LASTEXITCODE) { throw "upload failed" }
-        $remote = "R=/tmp/flint-restore; rm -rf `$R; mkdir -p `$R && tar -xzf /tmp/flint-restore.tgz -C `$R && rm -f /tmp/flint-restore.tgz && " +
-            "for f in etc/config/network etc/config/wireless etc/config/firewall etc/config/dhcp etc/hosts etc/rc.local " +
-            "etc/crontabs/root etc/dropbear/authorized_keys; do if [ -f `$R/`$f ]; then mkdir -p /`$(dirname `$f) && cp `$R/`$f /`$f && echo restored /`$f; fi; done; rm -rf `$R"
+        $remote = "R=/tmp/flint-restore; for f in etc/config/network etc/config/wireless etc/config/firewall etc/config/dhcp etc/hosts etc/rc.local " +
+            "etc/crontabs/root etc/dropbear/authorized_keys; do if [ -f `$R/`$f ]; then mkdir -p /`$(dirname `$f) && cp `$R/`$f /`$f && echo restored /`$f; fi; done"
         ssh $target $remote
         if ($LASTEXITCODE) { throw "restoring system files failed" }
     }
 
     & (Join-Path $root "deploy.ps1") -Router $Router -User $User
+
+    # Panel settings outside config\ (modes, DNS, ad blocking, local names, intervals) come from the backup's /etc/xray.
+    ssh $target "R=/tmp/flint-restore; if [ -d `$R/etc/xray ]; then flint-settings export `$R/etc/xray > `$R/settings.txt && flint-settings import `$R/settings.txt; fi; rc=`$?; rm -rf `$R; exit `$rc"
+    if ($LASTEXITCODE) { throw "importing the panel settings failed" }
 
     if ($Full) {
         Write-Host "Rebooting the router to apply network and Wi-Fi settings..."

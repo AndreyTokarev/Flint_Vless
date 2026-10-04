@@ -16,11 +16,17 @@
 #        flint-dns config                                     write the configs without restarts (install.sh)
 #        flint-dns services                                   start or stop dnscrypt-proxy for the mode (install.sh)
 #        flint-dns synced                                     exit 0 when the live config matches the saved choice
+#        flint-dns hosts [add <name> <IP> | del <name>]       local names for LAN devices: list (name, IP) / add / delete
+#        flint-dns hosts apply                                write the names for dnsmasq (boot, settings import)
 MODE_F=/etc/xray/dns-mode
 DOH_F=/etc/xray/dns-doh
 DNSCRYPT_F=/etc/xray/dns-dnscrypt
 UDP_F=/etc/xray/dns-udp
 CONF=/etc/dnscrypt-proxy2/flint-doh.toml
+HOSTS_F=/etc/xray/dns-hosts
+# dnsmasq reads every file in /tmp/hosts (addn-hosts) and rereads them on SIGHUP, no restart needed.
+HOSTS_OUT=/tmp/hosts/flint
+HOST_NAME='^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$'
 # name, address, host, path. The address in the stamp means no plain-DNS bootstrap lookup is needed.
 DOH_SERVERS="cloudflare	1.1.1.1	dns.cloudflare.com	/dns-query
 google	8.8.8.8	dns.google	/dns-query
@@ -200,6 +206,18 @@ setup() {
 	[ "$1" = udp ] && services udp
 	return 0
 }
+hosts() { [ -f "$HOSTS_F" ] && grep -v '^$' "$HOSTS_F"; }
+valid_ip() { echo "$1" | grep -qE "$IPV4" && echo "$1" | awk -F . '{ for (i = 1; i <= 4; i++) if ($i > 255) exit 1 }'; }
+# A name without a dot also answers as name.local; dnsmasq adds name.lan itself (expand-hosts, domain lan).
+hosts_apply() {
+	mkdir -p "${HOSTS_OUT%/*}"
+	hosts | awk -F '\t' '{ if (index($1, ".")) print $2, $1; else print $2, $1, $1 ".local" }' > "$HOSTS_OUT"
+	killall -HUP dnsmasq 2>/dev/null
+	return 0
+}
+# hosts_save: the list from stdin, sorted by name, then applied.
+hosts_save() { sort -t "$TAB" -k1,1 > "$HOSTS_F.new" && mv "$HOSTS_F.new" "$HOSTS_F" && hosts_apply; }
+
 # switch <mode> <doh> <dnscrypt> <udp>: set up and save; if DNS does not answer, the saved setup comes back.
 switch() {
 	pm="$(mode)"; pd="$(doh_choice)"; pc="$(dnscrypt_choice)"; pu="$(udp_choice)"
@@ -275,5 +293,26 @@ case "$1" in
 		[ "$(sed -n '1s/^# flint-dns: //p' "$CONF" 2>/dev/null)" = "$(toml_line "$(mode)" "$(doh_choice)" "$(dnscrypt_choice)")" ] &&
 			[ "$(live_upstream)" = "$(upstream "$(mode)" "$(udp_choice)")" ]
 		;;
-	*) sed -n '9,18s/^# \{0,1\}//p' "$0"; exit 1 ;;
+	hosts)
+		n="$(printf '%s' "$3" | tr 'A-Z' 'a-z' | tr -d ' \t\r\n')"; n="${n%.}"
+		case "$2" in
+			"") hosts ;;
+			apply) hosts_apply ;;
+			add)
+				ip="$(printf '%s' "$4" | tr -d ' \t\r\n')"
+				echo "$n" | grep -qE "$HOST_NAME" ||
+					fail "$(t "Имя — латинские буквы, цифры и дефис, части через точку: nas01 или nas.home" \
+						"A name is Latin letters, digits and hyphens, parts separated by dots: nas01 or nas.home")"
+				valid_ip "$ip" || fail "$(t "Нужен IPv4-адрес устройства, например 192.168.0.145" "Needs the device's IPv4 address, e.g. 192.168.0.145")"
+				{ hosts | awk -F '\t' -v n="$n" '$1 != n'; printf '%s\t%s\n' "$n" "$ip"; } | hosts_save
+				t "Имя $n → $ip" "Name $n → $ip"
+				;;
+			del)
+				hosts | awk -F '\t' -v n="$n" '$1 != n' | hosts_save
+				t "Имя $n удалено" "Name $n deleted"
+				;;
+			*) fail "flint-dns hosts [add <name> <IP> | del <name> | apply]" ;;
+		esac
+		;;
+	*) sed -n '9,20s/^# \{0,1\}//p' "$0"; exit 1 ;;
 esac

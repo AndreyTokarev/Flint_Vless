@@ -24,6 +24,7 @@ restore_state() {
 	flint-node apply >/dev/null 2>&1
 	# The DoH config and the dnsmasq upstream are outside /etc/xray: bring them in line with the restored choice.
 	flint-dns synced || flint-dns apply >/dev/null 2>&1
+	flint-dns hosts apply
 	echo "  restored; vpn: $(vpn_works && echo ok || echo FAIL)"
 }
 finish() {

@@ -99,7 +99,7 @@ HTML
 fi
 
 # The action is the first non-empty parameter from this list; every form sends exactly one of them.
-ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsurl dnscrypt dnsstamp dnsudp dnsip "
+ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsurl dnscrypt dnsstamp dnsudp dnsip hostadd hostdel "
 a="$(echo "$qs" | tr '&' '\n' | awk -F = -v l="$ACTIONS" '$2 != "" && index(l, " " $1 " ") { print $1; exit }')"
 msg=""; form=""; subedit=""; subsave=""
 case "$a" in
@@ -185,6 +185,8 @@ EOF
   dnsstamp) msg="$(flint-dns dnscrypt "$(param dnsstamp)" 2>&1)" ;;
   dnsudp) msg="$(flint-dns udp "$(get dnsudp)" 2>&1)" ;;
   dnsip) msg="$(flint-dns udp "$(param dnsip)" 2>&1)" ;;
+  hostadd) msg="$(flint-dns hosts add "$(param hostadd)" "$(param hostip)" 2>&1)" ;;
+  hostdel) msg="$(flint-dns hosts del "$(param hostdel)" 2>&1)" ;;
 esac
 
 CUR="$(flint-node current)"
@@ -537,6 +539,20 @@ dns)
   ips=""; echo "$UDP" | grep -qE '^[0-9. ]+$' && ips="$UDP"
   echo "<form method=get class=row>$(hidden)<input type=text name=dnsip value='$ips' placeholder='1.1.1.1 8.8.8.8' required>"
   echo "<button>$(T "Свои DNS-серверы" "Own DNS servers")</button></form></div>"
+  DEL="$(T "Удалить" "Delete")"
+  echo "<div class=card><h2>$(T "Локальные имена" "Local names")</h2><small>$(T "Устройство в сети открывается по имени вместо IP: nas01, nas01.lan и nas01.local. Имя с точкой, например nas.home, работает как есть. Повторное добавление имени меняет его адрес. Закрепите за устройством постоянный IP на роутере, который его выдаёт, иначе имя может перестать работать после перезагрузки." \
+    "A device on the network opens by name instead of IP: nas01, nas01.lan and nas01.local. A name with a dot, such as nas.home, works as is. Adding a name again changes its address. Give the device a fixed IP on the router that hands it out, or the name may stop working after a reboot.")</small>"
+  HOSTS="$(flint-dns hosts | esc)"
+  [ -n "$HOSTS" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
+  echo "$HOSTS" | while IFS="$TAB" read -r n ip; do
+    [ -n "$n" ] || continue
+    echo "<form method=get class=item>$(hidden)<input type=hidden name=hostdel value='$n'><span>$n<br><small>$ip</small></span><button title='$DEL'>✕</button></form>"
+  done
+  echo "<form method=get class=row>$(hidden)<input type=text name=hostadd placeholder='nas01' required>"
+  echo "<input type=text name=hostip placeholder='192.168.0.145' list=lan-devices required><button>$(T "Добавить имя" "Add a name")</button></form>"
+  echo "<datalist id=lan-devices>"
+  flint-adblock devices | esc | while IFS="$TAB" read -r m ip name; do echo "<option value='$ip'>${name:-$m}</option>"; done
+  echo "</datalist></div>"
   ;;
 settings)
   echo "<div class=card><h2>$(T "Сменить PIN" "Change PIN")</h2><small>$(T "Только буквы и цифры. PIN хранится в flint.env на роутере; при деплое с компьютера снова подставится PIN из config/flint.env." \
@@ -546,8 +562,8 @@ settings)
   echo "<input type=password name=pinnew placeholder='$(T "новый PIN" "new PIN")' autocomplete=new-password required>"
   echo "<input type=password name=pinok placeholder='$(T "ещё раз новый PIN" "new PIN again")' autocomplete=new-password required>"
   echo "<button>$(T "Сменить PIN" "Change PIN")</button></form></div>"
-  echo "<div class=card><h2>$(T "Экспорт настроек" "Export settings")</h2><small>$(T "Подписки, свои и ручные серверы, сайты, блокировка рекламы, DNS-сервер, режимы и интервалы. PIN и сеть (flint.env) в файл не входят, поэтому его можно загрузить и на другой Flint. В файле ссылки подписок и данные серверов — храните его как пароль." \
-    "Subscriptions, own and manual servers, sites, ad blocking, DNS server, modes and intervals. The PIN and network (flint.env) are not included, so the file also fits another Flint. It holds subscription links and server data — keep it like a password.")</small>"
+  echo "<div class=card><h2>$(T "Экспорт настроек" "Export settings")</h2><small>$(T "Подписки, свои и ручные серверы, сайты, блокировка рекламы, DNS-сервер, локальные имена, режимы и интервалы. PIN и сеть (flint.env) в файл не входят, поэтому его можно загрузить и на другой Flint. В файле ссылки подписок и данные серверов — храните его как пароль." \
+    "Subscriptions, own and manual servers, sites, ad blocking, DNS server, local names, modes and intervals. The PIN and network (flint.env) are not included, so the file also fits another Flint. It holds subscription links and server data — keep it like a password.")</small>"
   echo "<div class=cta><a class='btn on' href='?pass=$pass&amp;export=1'>⬇️ $(T "Скачать файл настроек" "Download the settings file")</a></div></div>"
   ASK="$(T "Заменить текущие настройки настройками из файла?" "Replace the current settings with the ones from the file?")"
   echo "<div class=card><h2>$(T "Импорт настроек" "Import settings")</h2><small>$(T "Все настройки из списка выше заменятся настройками из файла и сразу применятся. Прежние сохраняются на роутере в /tmp/flint-settings-prev.txt до перезагрузки." \

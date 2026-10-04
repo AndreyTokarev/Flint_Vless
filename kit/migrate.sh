@@ -34,6 +34,8 @@ migrate_legacy_files() {
 	rm -rf /etc/xray/nodes
 	# Up to 1.3.0 the panel read flint.env through this link.
 	rm -f /usr/share/flint/env
+	# Up to 1.7.x LOCAL_HOSTS became address= lines here; now they seed /etc/xray/dns-hosts (flint-dns hosts).
+	rm -f /etc/dnsmasq.d/flint-hosts.conf /tmp/dnsmasq.d/flint-hosts.conf
 }
 
 # 1.1.x kept every server in nodes.conf with "#@ <id>" group lines: split it into nodes.d/<id>.conf

@@ -1,31 +1,33 @@
 #!/bin/sh
 # Export and import the settings made in the panel: subscriptions, manual and own servers, sites,
-# ad blocking, DNS server, modes and intervals. flint.env (PIN, network) is not included, so a file fits another Flint.
+# ad blocking, DNS server, local names, modes and intervals. flint.env (PIN, network) is not included, so a file fits another Flint.
 # File format: a "# Flint VPN settings" first line, then "[<file in /etc/xray>]" sections with every
 # content line prefixed by "|". Import replaces all these settings; the previous ones go to $PREV.
-# Usage: flint-settings export              print the settings
+# Usage: flint-settings export [dir]        print the settings (from another copy of /etc/xray, e.g. a backup)
 #        flint-settings import [file]       load settings from the file (default: stdin) and apply them
 . /usr/share/flint/lib.sh
 . /etc/xray/flint.env 2>/dev/null || true
 ENTRIES="subscriptions nodes.d nodes.conf nodes-custom.conf current-node routing-mode vpn-state custom-sites
-sub-interval watchdog adblock adblock-lists adblock-rules adblock-exclude adblock-interval dns-mode dns-doh dns-dnscrypt dns-udp"
+sub-interval watchdog adblock adblock-lists adblock-rules adblock-exclude adblock-interval dns-mode dns-doh dns-dnscrypt dns-udp dns-hosts"
 TMP=/tmp/flint-import
 PREV=/tmp/flint-settings-prev.txt
 
 section() { echo "[$1]"; sed 's/^/|/' "$2"; }
 export_settings() {
+	d="${1:-/etc/xray}"
+	[ -d "$d" ] || fail "No $d"
 	echo "# Flint VPN settings $(cat /usr/share/flint/version 2>/dev/null), $(date '+%Y-%m-%d %H:%M'). Subscription links and servers inside: keep it private."
 	for e in $ENTRIES; do
 		if [ "$e" = nodes.d ]; then
-			for f in "$NODES_D"/*.conf; do if [ -f "$f" ]; then section "nodes.d/${f##*/}" "$f"; fi; done
-		elif [ -f "/etc/xray/$e" ]; then
-			section "$e" "/etc/xray/$e"
+			for f in "$d/nodes.d"/*.conf; do if [ -f "$f" ]; then section "nodes.d/${f##*/}" "$f"; fi; done
+		elif [ -f "$d/$e" ]; then
+			section "$e" "$d/$e"
 		fi
 	done
 }
 
 case "$1" in
-	export) export_settings ;;
+	export) export_settings "$2" ;;
 	import)
 		rm -rf "$TMP"; mkdir -p "$TMP/x/nodes.d" || fail "Cannot create $TMP"
 		if [ -n "$2" ]; then tr -d '\r' < "$2"; else tr -d '\r'; fi > "$TMP/in"
@@ -51,6 +53,7 @@ case "$1" in
 		# Subscriptions without their server files: fetch them now.
 		[ -n "$(flint-node codes)" ] || flint-sub-update >/dev/null 2>&1
 		flint-dns apply >/dev/null 2>&1
+		flint-dns hosts apply
 		flint-node apply >/dev/null 2>&1
 		sh /etc/firewall.user >/dev/null 2>&1
 		if [ "$(flint-adblock state)" = on ]; then flint-adblock on >/dev/null 2>&1; else flint-adblock off >/dev/null 2>&1; fi

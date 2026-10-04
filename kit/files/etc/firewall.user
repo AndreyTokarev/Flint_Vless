@@ -58,3 +58,5 @@ fi
 
 mkdir -p /tmp/dnsmasq.d
 cp -f /etc/dnsmasq.d/flint-*.conf /tmp/dnsmasq.d/ 2>/dev/null || true
+# /tmp is empty after a reboot: write the local names for dnsmasq again.
+flint-dns hosts apply
