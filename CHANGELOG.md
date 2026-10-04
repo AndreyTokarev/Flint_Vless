@@ -9,6 +9,9 @@
 ### Добавлено
 - Удаление Flint VPN: `uninstall.ps1` / `uninstall.sh` (на роутере — `kit/uninstall.sh`). Перед удалением делается бэкап; сеть, Wi‑Fi и прошивка остаются, устройства ходят в интернет напрямую.
 
+### Изменено
+- Выполненные аудиты и планы рефакторинга перенесены в `docs/archive/`.
+
 ## [1.7.2] — 2026-10-04
 
 ### Изменено
@@ -120,7 +123,7 @@
 - Раскладка файлов серверов и разбор их строк — в одном месте (`/usr/share/flint/lib.sh`), его используют `flint-node`, `flint-custom`, `flint-sub-update`, firewall и тесты.
 
 ### Добавлено
-- Второй аудит качества кода и план исправлений: `docs/code-quality-audit-1.2.md`, `docs/refactoring-plan-1.2.md`.
+- Второй аудит качества кода и план исправлений: `docs/archive/code-quality-audit-1.2.md`, `docs/archive/refactoring-plan-1.2.md`.
 
 ## [1.2.0] — 2026-10-04
 
@@ -130,7 +133,7 @@
 - Бэкап, восстановление и деплой переносят каталог `nodes.d/`.
 
 ### Добавлено
-- План и отчёт по качеству кода: `docs/code-quality-audit.md`, `docs/refactoring-plan.md`.
+- План и отчёт по качеству кода: `docs/archive/code-quality-audit.md`, `docs/archive/refactoring-plan.md`.
 
 ## [1.1.2] — 2026-10-04
 

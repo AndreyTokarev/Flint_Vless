@@ -9,6 +9,9 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 ### Added
 - Uninstall Flint VPN: `uninstall.ps1` / `uninstall.sh` (on the router — `kit/uninstall.sh`). A backup runs first; network, Wi‑Fi and the firmware stay, devices go online directly.
 
+### Changed
+- Completed audits and refactoring plans moved to `docs/archive/`.
+
 ## [1.7.2] — 2026-10-04
 
 ### Changed
@@ -120,7 +123,7 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - The server file layout and line parsing live in one place (`/usr/share/flint/lib.sh`), used by `flint-node`, `flint-custom`, `flint-sub-update`, the firewall and the tests.
 
 ### Added
-- Second code quality audit and fix plan (in Russian): `docs/code-quality-audit-1.2.md`, `docs/refactoring-plan-1.2.md`.
+- Second code quality audit and fix plan (in Russian): `docs/archive/code-quality-audit-1.2.md`, `docs/archive/refactoring-plan-1.2.md`.
 
 ## [1.2.0] — 2026-10-04
 
@@ -130,7 +133,7 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Backup, restore and deploy carry the `nodes.d/` directory.
 
 ### Added
-- Code quality audit and refactoring plan: `docs/code-quality-audit.md`, `docs/refactoring-plan.md`.
+- Code quality audit and refactoring plan: `docs/archive/code-quality-audit.md`, `docs/archive/refactoring-plan.md`.
 
 ## [1.1.2] — 2026-10-04
 

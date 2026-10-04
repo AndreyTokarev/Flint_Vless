@@ -545,7 +545,7 @@ logread -e xray                # логи Xray
 | `uninstall.ps1` / `uninstall.sh` | удалить Flint VPN с роутера (на роутере работает `kit/uninstall.sh`) |
 | `kit/VERSION` | номер версии |
 | `CHANGELOG.md` | история изменений |
-| `docs/` | скриншоты, логотип, аудиты кода и планы рефакторинга |
+| `docs/` | скриншоты, логотип; выполненные аудиты и планы — в `docs/archive/` |
 
 ## Версии
 
