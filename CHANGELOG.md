@@ -6,7 +6,10 @@
 
 ## [Не выпущено]
 
+## [1.8.1] — 2026-10-04
+
 ### Изменено
+- `install.sh` больше не показывает предупреждения firewall прошивки (`[!] ...`) про собственные правила GL; ошибка перезагрузки firewall по-прежнему видна и останавливает установку.
 - `tests/run.ps1` / `tests/run.sh`: установка и сценарии идут в фоне на роутере (`tests/router/job.sh`), скрипт следит за логом и переживает обрыв связи. Повторный запуск того же кода с теми же сценариями дочитывает уже идущий или завершённый прогон, а не начинает заново; `-Force` / `--force` запускает заново. Ключ `deploy -KeepKit` / `--keep-kit` заменён на `-UploadOnly` / `--upload-only`: залить комплект без установки.
 
 ## [1.8.0] — 2026-10-04
@@ -265,7 +268,8 @@
 - Доступ к сети основного роутера без VPN.
 - Установка пакетов с нуля; деплой и бэкап для Windows, macOS и Linux.
 
-[Не выпущено]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.0...HEAD
+[Не выпущено]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.1...HEAD
+[1.8.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.0...v1.7.1

@@ -6,7 +6,10 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.8.1] — 2026-10-04
+
 ### Changed
+- `install.sh` no longer shows the firmware firewall warnings (`[!] ...`) about GL's own rules; a failed firewall reload is still shown and stops the install.
 - `tests/run.ps1` / `tests/run.sh`: install and the scenarios run in the background on the router (`tests/router/job.sh`); the script follows the log and survives a dropped connection. Running the same code with the same scenarios again follows the run in progress or the finished one instead of starting over; `-Force` / `--force` starts a new run. The `deploy -KeepKit` / `--keep-kit` switch is replaced with `-UploadOnly` / `--upload-only`: upload the kit without installing.
 
 ## [1.8.0] — 2026-10-04
@@ -265,7 +268,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.1...HEAD
+[1.8.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.0...v1.7.1
