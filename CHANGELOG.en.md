@@ -6,6 +6,15 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-10-04
+
+### Added
+- Settings tab: export the settings to a file and import them from a file (works from a phone too). The file holds subscriptions, own and manual servers, sites, ad blocking, modes and intervals; the PIN and network (`flint.env`) are not included, so the file also fits another Flint. Import replaces these settings and applies them at once; the previous ones stay in `/tmp/flint-settings-prev.txt` until a reboot.
+- Command `flint-settings export` / `flint-settings import [file]`.
+
+### Fixed
+- Test scenarios no longer run at the same time (lock `/tmp/flint-test.lock`), each has its own `/etc/xray` snapshot, and `/etc/xray` is never removed without one. Two parallel runs could wipe the router's settings before.
+
 ## [1.4.0] — 2026-10-04
 
 ### Added

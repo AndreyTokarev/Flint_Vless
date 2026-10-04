@@ -42,4 +42,20 @@ if [ -n "$(flint-node codes)" ]; then
 	check "server switch" current_is "$code"
 	panel "tab=servers&node=$cur" >/dev/null
 fi
+
+# Settings export and import: a round trip brings back what changed after the export.
+n="$(flint-node codes | wc -l)"
+panel "export=1" > /tmp/flint-test-settings.txt
+check "export downloads a settings file" grep -q '^# Flint VPN settings' /tmp/flint-test-settings.txt
+check "export has no flint.env" fails grep -q '^\[flint.env\]' /tmp/flint-test-settings.txt
+flint-node site add proxy zz-import-test.example >/dev/null 2>&1
+curl -s -m 120 -F "file=@/tmp/flint-test-settings.txt;type=text/plain" \
+	"http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=settings&import=1" > /tmp/flint-test-page
+check "import through the panel reports success" grep -q 'Настройки загружены' /tmp/flint-test-page
+check "import brings back the exported sites" fails sh -c "flint-node site list | grep -q zz-import-test"
+check "import keeps the servers" [ "$(flint-node codes | wc -l)" = "$n" ]
+check "import rejects a foreign file" fails sh -c "echo hello | flint-settings import"
+check "import rejects an unsafe section" fails sh -c "printf '# Flint VPN settings\n[../../etc/passwd]\n|x\n' | flint-settings import"
+check "a rejected import changes nothing" [ "$(flint-node codes | wc -l)" = "$n" ]
+rm -f /tmp/flint-test-settings.txt /tmp/flint-test-page
 finish

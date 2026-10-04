@@ -1,0 +1,61 @@
+#!/bin/sh
+# Export and import the settings made in the panel: subscriptions, manual and own servers, sites,
+# ad blocking, modes and intervals. flint.env (PIN, network) is not included, so a file fits another Flint.
+# File format: a "# Flint VPN settings" first line, then "[<file in /etc/xray>]" sections with every
+# content line prefixed by "|". Import replaces all these settings; the previous ones go to $PREV.
+# Usage: flint-settings export              print the settings
+#        flint-settings import [file]       load settings from the file (default: stdin) and apply them
+. /usr/share/flint/lib.sh
+. /etc/xray/flint.env 2>/dev/null || true
+ENTRIES="subscriptions nodes.d nodes.conf nodes-custom.conf current-node routing-mode vpn-state custom-sites
+sub-interval watchdog adblock adblock-lists adblock-rules adblock-exclude adblock-interval"
+TMP=/tmp/flint-import
+PREV=/tmp/flint-settings-prev.txt
+
+section() { echo "[$1]"; sed 's/^/|/' "$2"; }
+export_settings() {
+	echo "# Flint VPN settings $(cat /usr/share/flint/version 2>/dev/null), $(date '+%Y-%m-%d %H:%M'). Subscription links and servers inside: keep it private."
+	for e in $ENTRIES; do
+		if [ "$e" = nodes.d ]; then
+			for f in "$NODES_D"/*.conf; do if [ -f "$f" ]; then section "nodes.d/${f##*/}" "$f"; fi; done
+		elif [ -f "/etc/xray/$e" ]; then
+			section "$e" "/etc/xray/$e"
+		fi
+	done
+}
+
+case "$1" in
+	export) export_settings ;;
+	import)
+		rm -rf "$TMP"; mkdir -p "$TMP/x/nodes.d" || fail "Cannot create $TMP"
+		if [ -n "$2" ]; then tr -d '\r' < "$2"; else tr -d '\r'; fi > "$TMP/in"
+		trap 'rm -rf "$TMP"' EXIT
+		head -n1 "$TMP/in" | grep -q '^# Flint VPN settings' ||
+			fail "$(t "Это не файл настроек Flint VPN" "This is not a Flint VPN settings file")"
+		# Sections are created (also empty ones); an unknown name stops the import before anything changes.
+		bad="$(awk -v dir="$TMP/x" -v ok=" $(echo $ENTRIES) " '
+			/^\[.*\]$/ {
+				n = substr($0, 2, length($0) - 2)
+				if ((n != "nodes.d" && index(ok, " " n " ")) || n ~ /^nodes\.d\/[A-Za-z0-9_-]+\.conf$/) { f = dir "/" n; printf "" > f; next }
+				print n; exit
+			}
+			/^\|/ && f != "" { print substr($0, 2) > f }
+		' "$TMP/in" 2>&1)"
+		[ -z "$bad" ] || fail "$(t "Неизвестный раздел в файле: $bad" "Unknown section in the file: $bad")"
+		[ -n "$(find "$TMP/x" -type f)" ] || fail "$(t "В файле нет настроек" "The file has no settings")"
+		export_settings > "$PREV"
+		for e in $ENTRIES; do rm -rf "/etc/xray/$e"; done
+		mkdir -p "$NODES_D"
+		(umask 077; cp -R "$TMP/x/." /etc/xray/) || fail "$(t "Не удалось записать настройки" "Cannot write the settings")"
+		flint-sub-update interval "$(flint-sub-update interval)" >/dev/null
+		# Subscriptions without their server files: fetch them now.
+		[ -n "$(flint-node codes)" ] || flint-sub-update >/dev/null 2>&1
+		flint-node apply >/dev/null 2>&1
+		sh /etc/firewall.user >/dev/null 2>&1
+		if [ "$(flint-adblock state)" = on ]; then flint-adblock on >/dev/null 2>&1; else flint-adblock off >/dev/null 2>&1; fi
+		subs="$(grep -c . "$SUBS" 2>/dev/null)"; nodes="$(flint-node codes | grep -c .)"
+		t "Настройки загружены: подписок ${subs:-0}, серверов $nodes. Прежние настройки — в $PREV до перезагрузки." \
+			"Settings loaded: ${subs:-0} subscriptions, $nodes servers. The previous settings are in $PREV until a reboot."
+		;;
+	*) sed -n '6,7s/^# \{0,1\}//p' "$0"; exit 1 ;;
+esac

@@ -226,6 +226,7 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 | **Subscriptions** | VPN provider subscriptions: add by link, change the link or name, delete; last update, number of servers, expiry and traffic; "Update all subscriptions now" and the auto-update interval |
 | **Routing** | Russia geo filter on/off; own sites, IPs and subnets "always direct" or "always via VPN" |
 | **Ad blocking** | ad blocking on/off and 24-hour stats; devices without blocking; sites without blocking and "Recently blocked" with an Allow button; filter lists — ready-made and your own by URL; auto-update and "Update the lists now"; own rules |
+| **Settings** | export the settings to a file and import them from a file (subscriptions, servers, sites, ad blocking, modes; no PIN or network) |
 
 The panel speaks English and Russian. On the first visit the language follows the browser (or `UI_LANG` in `flint.env`); after that use the **RU | EN** switch in the top right corner (next to "Sign out"; on the login page too) — the choice is remembered in the browser. Messages after panel actions use the same language.
 
@@ -381,6 +382,7 @@ flint-adblock list               # lists: URL, name, rules, last update
 flint-adblock list add https://example.com/list.txt "Name"
 flint-adblock rule add block ads.example.com   # allow — exception
 flint-adblock blocked                          # recently blocked domains and devices
+flint-settings export > /tmp/s.txt             # export the panel settings (no flint.env); import /tmp/s.txt — import
 flint-adblock exclude add aa:bb:cc:dd:ee:ff    # device without blocking
 flint-adblock refresh            # update the lists now
 flint-adblock interval 24        # auto-update: off, 1, 12, 24, 72, 168 hours

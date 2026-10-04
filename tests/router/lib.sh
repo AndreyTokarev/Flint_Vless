@@ -2,18 +2,24 @@
 # A scenario snapshots /etc/xray first and puts it back at the end, also when it stops early.
 # Output never contains subscription links, UUIDs or the PIN.
 . /usr/share/flint/lib.sh
-STATE=/tmp/flint-test-state.tgz
+STATE=/tmp/flint-test-state.$$.tgz
+LOCK=/tmp/flint-test.lock
 PASS=0
 FAIL=0
 
-# Without a good snapshot the scenario must not start: restore_state replaces /etc/xray with it.
+# One scenario at a time, and only with a good snapshot: restore_state replaces /etc/xray with it.
 save_state() {
-	[ -s /etc/xray/flint.env ] && tar -C /etc -czf "$STATE" xray || { echo "  cannot snapshot /etc/xray, scenario skipped"; exit 1; }
+	mkdir "$LOCK" 2>/dev/null || { echo "  another test is running on the router ($LOCK), scenario skipped"; exit 1; }
+	if ! { [ -s /etc/xray/flint.env ] && tar -C /etc -czf "$STATE" xray; }; then
+		rmdir "$LOCK"; echo "  cannot snapshot /etc/xray, scenario skipped"; exit 1
+	fi
 	trap restore_state EXIT
 }
 restore_state() {
 	trap - EXIT
-	rm -rf /etc/xray && tar -C /etc -xzf "$STATE" && rm -f "$STATE"
+	if [ -s "$STATE" ]; then rm -rf /etc/xray && tar -C /etc -xzf "$STATE" && rm -f "$STATE"
+	else echo "  snapshot $STATE is gone, /etc/xray left as is"; fi
+	rmdir "$LOCK" 2>/dev/null
 	flint-sub-update interval "$(cat /etc/xray/sub-interval 2>/dev/null || echo 24h)" >/dev/null
 	flint-node apply >/dev/null 2>&1
 	echo "  restored; vpn: $(vpn_works && echo ok || echo FAIL)"

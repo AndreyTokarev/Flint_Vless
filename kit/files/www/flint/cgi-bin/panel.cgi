@@ -16,6 +16,11 @@ param() {
 }
 esc() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e "s/'/\&#39;/g"; }
 TAB="$(printf '\t')"
+if [ ! -f /etc/xray/flint.env ]; then
+  printf 'Content-Type: text/plain; charset=utf-8\n\n%s\n' \
+    "Flint VPN: /etc/xray/flint.env is missing. Redeploy (deploy.ps1) or restore a backup (restore.ps1)."
+  exit 0
+fi
 . /etc/xray/flint.env
 
 # Language: ?lang= (remembered in a cookie), then the cookie, then UI_LANG, then the browser's first language.
@@ -32,12 +37,20 @@ esac
 export FLINT_LANG="$L"
 T() { if [ "$L" = en ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
 
+pass="$(get pass)"; tab="$(get tab)"
+if [ -n "$UI_PIN" ] && [ "$pass" = "$UI_PIN" ] && [ -n "$(get export)" ]; then
+  echo "Content-Type: text/plain; charset=utf-8"
+  echo "Content-Disposition: attachment; filename=flint-settings-$(date +%Y%m%d-%H%M).txt"
+  echo ""
+  flint-settings export
+  exit 0
+fi
+
 echo "Content-Type: text/html; charset=utf-8"
 [ "$lang" = "$L" ] && echo "Set-Cookie: lang=$L; Path=/; Max-Age=31536000; SameSite=Lax"
 echo ""
 
-pass="$(get pass)"; tab="$(get tab)"
-case "$tab" in status|servers|own|subs|routing|adblock) ;; *) tab=status ;; esac
+case "$tab" in status|servers|own|subs|routing|adblock|settings) ;; *) tab=status ;; esac
 # Ready-made lists from AdGuard's registry of DNS blocklists: id:name.
 PRESET_URL=https://adguardteam.github.io/HostlistsRegistry/assets/filter_
 PRESETS="1:AdGuard DNS filter
@@ -86,7 +99,7 @@ HTML
 fi
 
 # The action is the first non-empty parameter from this list; every form sends exactly one of them.
-ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode "
+ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import "
 a="$(echo "$qs" | tr '&' '\n' | awk -F = -v l="$ACTIONS" '$2 != "" && index(l, " " $1 " ") { print $1; exit }')"
 msg=""; form=""; subedit=""; subsave=""
 case "$a" in
@@ -139,6 +152,19 @@ EOF
     [ "$f_svc" = - ] && f_svc=""
     if [ "$a" = edit ]; then form="$code"; else form=new; f_name="$f_name ($(T "копия" "copy"))"; fi ;;
   newnode) form=new; f_port=443 ;;
+  import)
+    # The settings file comes as the "file" part of a multipart POST (the form keeps pass/tab in the URL).
+    if [ "$REQUEST_METHOD" = POST ] && [ "${CONTENT_LENGTH:-0}" -gt 0 ] && [ "${CONTENT_LENGTH:-0}" -le 1048576 ]; then
+      b="--$(echo "$CONTENT_TYPE" | sed -n 's/.*boundary=//p' | tr -d '"')"
+      msg="$(head -c "$CONTENT_LENGTH" | awk -v b="$b" '
+        { sub(/\r$/, "") }
+        index($0, b) == 1 { if (body) exit; hdr = 0; next }
+        body { print; next }
+        hdr && $0 == "" { body = 1; next }
+        /^Content-Disposition:/ && /name="file"/ { hdr = 1 }' | flint-settings import 2>&1)"
+    else
+      msg="$(T "Выберите файл настроек (не больше 1 МБ)" "Choose a settings file (up to 1 MB)")"
+    fi ;;
 esac
 
 CUR="$(flint-node current)"
@@ -159,7 +185,8 @@ ADD_SERVERS="<div class=cta><a class='btn on' href='?pass=$pass&amp;tab=subs'>�
 top "$(logo)" "$(langs "?pass=$pass&amp;tab=$tab&amp;")<a href='?' class=logout>$(T "Выйти" "Sign out")</a>"
 echo "<div class=layout><nav>"
 for t in "status:🏠 $(T "Статус" "Status")" "servers:🌍 $(T "Серверы" "Servers")" "own:⭐ $(T "Свои серверы" "Own servers")" \
-  "subs:🔗 $(T "Подписки" "Subscriptions")" "routing:🔀 $(T "Маршрутизация" "Routing")" "adblock:🛡️ $(T "Реклама" "Ad blocking")"; do
+  "subs:🔗 $(T "Подписки" "Subscriptions")" "routing:🔀 $(T "Маршрутизация" "Routing")" "adblock:🛡️ $(T "Реклама" "Ad blocking")" \
+  "settings:⚙️ $(T "Настройки" "Settings")"; do
   cur=""; [ "${t%%:*}" = "$tab" ] && cur=" class=cur"
   echo "<a href='?pass=$pass&amp;tab=${t%%:*}'$cur>${t#*:}</a>"
 done
@@ -445,6 +472,16 @@ adblock)
     echo "<form method=get class=item>$(hidden)<input type=hidden name=abrdel value='$r'><span>$r</span><button title='$DEL'>✕</button></form>"
   done
   echo "</div>"
+  ;;
+settings)
+  echo "<div class=card><h2>$(T "Экспорт настроек" "Export settings")</h2><small>$(T "Подписки, свои и ручные серверы, сайты, блокировка рекламы, режимы и интервалы. PIN и сеть (flint.env) в файл не входят, поэтому его можно загрузить и на другой Flint. В файле ссылки подписок и данные серверов — храните его как пароль." \
+    "Subscriptions, own and manual servers, sites, ad blocking, modes and intervals. The PIN and network (flint.env) are not included, so the file also fits another Flint. It holds subscription links and server data — keep it like a password.")</small>"
+  echo "<div class=cta><a class='btn on' href='?pass=$pass&amp;export=1'>⬇️ $(T "Скачать файл настроек" "Download the settings file")</a></div></div>"
+  ASK="$(T "Заменить текущие настройки настройками из файла?" "Replace the current settings with the ones from the file?")"
+  echo "<div class=card><h2>$(T "Импорт настроек" "Import settings")</h2><small>$(T "Все настройки из списка выше заменятся настройками из файла и сразу применятся. Прежние сохраняются на роутере в /tmp/flint-settings-prev.txt до перезагрузки." \
+    "All the settings listed above are replaced with the ones from the file and applied at once. The previous ones stay on the router in /tmp/flint-settings-prev.txt until a reboot.")</small>"
+  echo "<form method=post enctype=multipart/form-data action='?pass=$pass&amp;tab=settings&amp;import=1' class=row onsubmit=\"return confirm('$ASK')\">"
+  echo "<input type=file name=file accept='.txt,text/plain' required><button>$(T "Загрузить настройки" "Upload settings")</button></form></div>"
   ;;
 esac
 echo "</div></div>$FOOTER$VER</body></html>"
