@@ -6,6 +6,11 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.5.5] — 2026-10-04
+
+### Fixed
+- PIN change: characters other than letters and digits are rejected with a message instead of being silently dropped (`ab#12` used to be saved as `ab12`).
+
 ## [1.5.4] — 2026-10-04
 
 ### Changed

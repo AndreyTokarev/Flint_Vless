@@ -23,7 +23,7 @@ nodes() { node_lines $(node_files); }
 # Current server code: empty when there are no servers (panel / flint-node current).
 current() { [ -s "$CONF" ] || return 0; cat "$CUR" 2>/dev/null || true; }
 mode() { cat "$MODE_FILE" 2>/dev/null || echo ru; }
-sub_hosts() { { echo "$SUB_URL"; cut -f2 "$SUBS" 2>/dev/null; } | sed -e 's|^[a-zA-Z]*://||' -e 's|[/:?#].*||'; }
+sub_hosts() { host_of "$(echo "$SUB_URL"; cut -f2 "$SUBS" 2>/dev/null)"; }
 vpn_state() { cat "$VPN_FILE" 2>/dev/null || echo on; }
 # pick: sets pick_code (and pick_switched=1 when a previous current code is gone).
 pick() {

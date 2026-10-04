@@ -1,5 +1,5 @@
 #!/bin/sh /etc/rc.common
-# Region panel on :81 (:80 belongs to the GL.iNet admin UI).
+# Web panel on :81 (:80 belongs to the GL.iNet admin UI).
 START=99
 USE_PROCD=1
 start_service() {

@@ -29,9 +29,7 @@ servers="$(node_lines $(node_files) | awk '{print $2}' | sort -u)"
 for host in $servers; do
 	if echo "$host" | grep -qE '^[0-9]+(\.[0-9]+){3}$'; then ips="$host"
 	else ips="$(nslookup "$host" 127.0.0.1 2>/dev/null | awk '/^Address/ && !/#/ {print $NF}' | grep -E '^[0-9]+(\.[0-9]+){3}$')"; fi
-	for ip in $ips; do
-		iptables -t nat -C XRAY -d "$ip" -j RETURN 2>/dev/null || iptables -t nat -A XRAY -d "$ip" -j RETURN
-	done
+	for ip in $ips; do append nat XRAY -d "$ip" -j RETURN; done
 done
 iptables -t nat -A XRAY -p tcp -j REDIRECT --to-ports 12345
 

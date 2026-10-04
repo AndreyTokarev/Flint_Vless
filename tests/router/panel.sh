@@ -15,6 +15,8 @@ check "PIN change rejects a wrong current PIN" grep -q 'Неверный тек�
 check "PIN unchanged after a rejected change" [ "$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')" = "$pin" ]
 panel "tab=settings&pin=1&pinold=$pin&pinnew=zzPinTest9&pinok=zzPinOther" >/tmp/flint-test-pin
 check "PIN change rejects a mismatched confirmation" grep -q 'не совпадают' /tmp/flint-test-pin
+panel "tab=settings&pin=1&pinold=$pin&pinnew=zz%23Pin9&pinok=zz%23Pin9" >/tmp/flint-test-pin
+check "PIN change rejects other characters" grep -q 'только буквы и цифры' /tmp/flint-test-pin
 panel "tab=settings&pin=1&pinold=$pin&pinnew=zzPinTest9&pinok=zzPinTest9" >/tmp/flint-test-pin
 check "PIN change reports success" grep -q 'PIN изменён' /tmp/flint-test-pin
 check "new PIN is in flint.env" [ "$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')" = zzPinTest9 ]
