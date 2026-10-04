@@ -30,8 +30,6 @@ CHECK_HOST=adblock-check.flint
 DEFAULT_LIST="https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt	AdGuard DNS filter"
 . /usr/share/flint/lib.sh
 . /etc/xray/flint.env 2>/dev/null || true
-fail() { echo "$1"; exit 1; }
-
 state() { cat "$STATE" 2>/dev/null || echo off; }
 interval() { cat "$INTERVAL" 2>/dev/null || echo 24; }
 lists() { [ -f "$LISTS" ] || printf '%s\n' "$DEFAULT_LIST" > "$LISTS"; cat "$LISTS"; }

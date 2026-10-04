@@ -10,7 +10,6 @@
 #   ru     - Russian sites/IPs go direct, the rest via VPN (needs /usr/share/xray/geo*.dat)
 #   global - everything via VPN
 #   custom sites (domains incl. subdomains, IPv4, CIDR) override the geo filter in both modes
-set -e
 . /usr/share/flint/lib.sh
 ENV=/etc/xray/flint.env
 TEMPLATE=/etc/xray/template.json
@@ -105,7 +104,7 @@ apply() {
 	fi
 	if [ -n "$1" ]; then
 		code="$1"
-		nodes | awk '{print $1}' | grep -qx "$code" || { echo "Unknown: $code"; exit 1; }
+		nodes | awk '{print $1}' | grep -qx "$code" || fail "Unknown: $code"
 	else
 		pick
 		code="$pick_code"
@@ -117,14 +116,13 @@ apply() {
 		if [ "$RENDER_MODE" = ru ]; then
 			echo "RU routing unavailable (geo files missing or broken), using global"
 			RENDER_MODE=global
-			render "$code" || { echo "Config test failed:"; tail -n 3 /tmp/flint-xray-test.log; exit 1; }
+			render "$code" || fail "Config test failed: $(tail -n 3 /tmp/flint-xray-test.log)"
 		else
-			echo "Config test failed:"; tail -n 3 /tmp/flint-xray-test.log; exit 1
+			fail "Config test failed: $(tail -n 3 /tmp/flint-xray-test.log)"
 		fi
 	fi
-	mv "$CONF.new" "$CONF"
-	echo "$code" > "$CUR"
-	/etc/init.d/xray restart 2>/dev/null
+	mv "$CONF.new" "$CONF" && echo "$code" > "$CUR" || fail "Cannot write $CONF"
+	/etc/init.d/xray restart 2>/dev/null || fail "Xray did not restart"
 	sh /etc/firewall.user >/dev/null 2>&1 || true
 	echo "Node: $code, routing: $RENDER_MODE"
 }
@@ -149,8 +147,8 @@ case "$cmd" in
 		;;
 	routing)
 		[ -n "$2" ] || { mode; exit 0; }
-		case "$2" in ru|global) ;; *) echo "Usage: flint-node routing [ru|global]"; exit 1 ;; esac
-		echo "$2" > "$MODE_FILE"
+		case "$2" in ru|global) ;; *) fail "Usage: flint-node routing [ru|global]" ;; esac
+		echo "$2" > "$MODE_FILE" || fail "Cannot write $MODE_FILE"
 		apply
 		;;
 	apply)
@@ -165,30 +163,27 @@ case "$cmd" in
 				[ -f "$SITES" ] && awk 'NF == 2 { print $1 "\t" $2 }' "$SITES"
 				exit 0 ;;
 			add)
-				case "$3" in direct|proxy) ;; *) echo "Usage: flint-node site add direct|proxy <site>"; exit 1 ;; esac
+				case "$3" in direct|proxy) ;; *) fail "Usage: flint-node site add direct|proxy <site>" ;; esac
 				site="$(normalize_site "$4")"
-				[ -n "$site" ] || { echo "Not a domain or IP: $4"; exit 1; }
-				touch "$SITES"
-				awk -v s="$site" '$2 != s' "$SITES" > "$SITES.new"
-				echo "$3 $site" >> "$SITES.new"
-				mv "$SITES.new" "$SITES"
+				[ -n "$site" ] || fail "Not a domain or IP: $4"
+				touch "$SITES" && { awk -v s="$site" '$2 != s' "$SITES"; echo "$3 $site"; } > "$SITES.new" &&
+					mv "$SITES.new" "$SITES" || fail "Cannot write $SITES"
 				echo "Added: $site -> $3" ;;
 			del)
 				site="$(normalize_site "$3")"
-				[ -n "$site" ] && [ -f "$SITES" ] || { echo "Not found: $3"; exit 1; }
-				awk -v s="$site" '$2 != s' "$SITES" > "$SITES.new"
-				mv "$SITES.new" "$SITES"
+				[ -n "$site" ] && [ -f "$SITES" ] || fail "Not found: $3"
+				awk -v s="$site" '$2 != s' "$SITES" > "$SITES.new" && mv "$SITES.new" "$SITES" || fail "Cannot write $SITES"
 				echo "Removed: $site" ;;
 			*)
-				echo "Usage: flint-node site list | add direct|proxy <site> | del <site>"; exit 1 ;;
+				fail "Usage: flint-node site list | add direct|proxy <site> | del <site>" ;;
 		esac
 		apply
 		;;
 	vpn)
 		[ -n "$2" ] || { vpn_state; exit 0; }
-		case "$2" in on|off) ;; *) echo "Usage: flint-node vpn [on|off]"; exit 1 ;; esac
-		echo "$2" > "$VPN_FILE"
-		sh /etc/firewall.user >/dev/null 2>&1
+		case "$2" in on|off) ;; *) fail "Usage: flint-node vpn [on|off]" ;; esac
+		echo "$2" > "$VPN_FILE" || fail "Cannot write $VPN_FILE"
+		sh /etc/firewall.user >/dev/null 2>&1 || fail "Firewall update failed"
 		echo "VPN: $2"
 		;;
 	*)

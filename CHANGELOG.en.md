@@ -6,6 +6,16 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-04
+
+### Removed
+- `kit/upstream-access.sh`: the deploy sets up access from the main router's network from `UPSTREAM_IF` / `UPSTREAM_NET` in `flint.env` (the script had the network and interface hard-coded). After a network change, edit `flint.env` and redeploy.
+
+### Changed
+- Migrations from older kits (`gru-*` leftovers, `#@` groups in `nodes.conf`) moved from `install.sh` to `kit/migrate.sh`; each one says when it can be deleted.
+- dnsmasq settings and firewall rules are applied with one `uci batch` instead of dozens of separate `uci set` calls; the resulting settings are the same.
+- `flint-node` and `flint-custom` no longer use `set -e`: failures to write files or restart Xray are checked explicitly with a clear message. Only `install.sh` keeps `set -e`.
+
 ## [1.2.2] — 2026-10-04
 
 ### Changed

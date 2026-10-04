@@ -6,7 +6,6 @@
 #        flint-custom link <vless://...>    add a node from a share link
 #        flint-custom set <code|new> <name> <address> <port> <uuid> <sni> <pbk> [sid] [tcp|grpc] [service]
 #        flint-custom del <code>
-set -e
 . /usr/share/flint/lib.sh
 ENV=/etc/xray/flint.env
 PARSER=/usr/share/flint/vless.awk
@@ -22,8 +21,8 @@ is_custom() { nodes_tsv "$CUSTOM" | awk -F "$TAB" -v c="$1" '$1 == c { f = 1 } E
 NL='
 '
 check() {
-	case "$2" in *"$NL"*) echo "Bad $1"; exit 1 ;; esac
-	echo "$2" | grep -qE "$3" || { echo "Bad $1: '$2'"; exit 1; }
+	case "$2" in *"$NL"*) fail "Bad $1" ;; esac
+	echo "$2" | grep -qE "$3" || fail "Bad $1: '$2'"
 }
 # Also the first server on a router that had none: it becomes the current one.
 reapply() {
@@ -46,11 +45,11 @@ set_node() {
 		i=1; while nodes_tsv | cut -f1 | grep -qx "my$i"; do i=$((i + 1)); done
 		code="my$i"
 	else
-		is_custom "$code" || { echo "Not an own node: $code (copy it first)"; exit 1; }
+		is_custom "$code" || fail "Not an own node: $code (copy it first)"
 	fi
 	umask 077
-	{ without "$code"; printf '# %s\n%s  %s  %s  %s  %s  %s  %s  %s  %s\n' "${name:-$host}" "$code" "$host" "$sni" "$pbk" "$sid" "$uuid" "$port" "$net" "$svc"; } > "$CUSTOM.new"
-	mv "$CUSTOM.new" "$CUSTOM"
+	{ without "$code"; printf '# %s\n%s  %s  %s  %s  %s  %s  %s  %s  %s\n' "${name:-$host}" "$code" "$host" "$sni" "$pbk" "$sid" "$uuid" "$port" "$net" "$svc"; } > "$CUSTOM.new" &&
+		mv "$CUSTOM.new" "$CUSTOM" || fail "Cannot write $CUSTOM"
 	echo "Saved: $code (${name:-$host})"
 	reapply "$code"
 }
@@ -65,19 +64,19 @@ case "$1" in
 		;;
 	link)
 		r="$(printf '%s\n' "$2" | tr -d '\r' | LC_ALL=C awk -f "$PARSER")"
-		[ -n "$r" ] || { echo "Not a vless:// link"; exit 1; }
+		[ -n "$r" ] || fail "Not a vless:// link"
 		IFS="$TAB" read -r st host port uuid sni pbk sid fl net svc name <<EOF
 $r
 EOF
-		[ "$st" = ok ] || { echo "Unsupported link ($st): only REALITY over TCP (xtls-rprx-vision) or gRPC"; exit 1; }
+		[ "$st" = ok ] || fail "Unsupported link ($st): only REALITY over TCP (xtls-rprx-vision) or gRPC"
 		set_node new "$(printf '%b' "$name")" "$host" "$port" "$uuid" "$sni" "$pbk" "$sid" "$net" "$svc"
 		;;
 	set)
 		shift; set_node "$@"
 		;;
 	del)
-		is_custom "$2" || { echo "Not an own node: $2"; exit 1; }
-		without "$2" > "$CUSTOM.new"; mv "$CUSTOM.new" "$CUSTOM"
+		is_custom "$2" || fail "Not an own node: $2"
+		without "$2" > "$CUSTOM.new" && mv "$CUSTOM.new" "$CUSTOM" || fail "Cannot write $CUSTOM"
 		echo "Deleted: $2"
 		if [ "$(flint-node current)" = "$2" ]; then flint-node apply; fi
 		;;

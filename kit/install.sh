@@ -7,6 +7,7 @@ set -e
 KIT="$(cd "$(dirname "$0")" && pwd)"
 say() { echo "== $*"; }
 die() { echo "!! $*" >&2; exit 1; }
+. "$KIT/migrate.sh"
 VERSION="$(cat "$KIT/VERSION" 2>/dev/null || echo dev)"
 echo "Flint VPN $VERSION (was: $(cat /usr/share/flint/version 2>/dev/null || echo none))"
 
@@ -59,36 +60,7 @@ left="$(missing | grep -v -x unzip | tr '\n' ' ')"
 echo "xray: $(xray version | head -n1)"
 
 say "legacy cleanup"
-# Kits before the rename used the gru- prefix: services, files, cron jobs and firewall rules.
-for s in gru-ui81 gru-ui gru-doh gru-adblock; do
-	[ -x "/etc/init.d/$s" ] || continue
-	"/etc/init.d/$s" stop >/dev/null 2>&1 || true
-	"/etc/init.d/$s" disable >/dev/null 2>&1 || true
-	rm -f "/etc/init.d/$s"
-done
-for p in udp tcp; do
-	while iptables -t nat -D PREROUTING -i br-lan -p "$p" --dport 53 -j GRU_DNS 2>/dev/null; do :; done
-done
-iptables -t nat -F GRU_DNS 2>/dev/null && iptables -t nat -X GRU_DNS 2>/dev/null || true
-[ -d /etc/gru-adguard ] && [ ! -e /etc/flint-adguard ] && mv /etc/gru-adguard /etc/flint-adguard
-rm -rf /etc/gru-adguard /www/gru /usr/share/gru
-rm -f /usr/bin/gru-* /etc/dnsmasq.d/gru-*.conf /tmp/dnsmasq.d/gru-*.conf \
-	/etc/dnscrypt-proxy2/gru-doh.toml /etc/xray/gru.env /etc/xray/gru-ui.pass
-sed -i '/\/usr\/bin\/gru-/d' /etc/crontabs/root 2>/dev/null || true
-for sec in gru_ui81 gru_ui gru_upstream_in gru_upstream_fwd; do uci -q delete "firewall.$sec" || true; done
-if [ -f /etc/nginx/conf.d/gru-ui.conf ]; then
-	rm -f /etc/nginx/conf.d/gru-ui.conf
-	/etc/init.d/nginx reload || true
-fi
-if [ -x /etc/init.d/v2raya ]; then
-	/etc/init.d/v2raya stop 2>/dev/null || true
-	/etc/init.d/v2raya disable 2>/dev/null || true
-fi
-sed -i '/dnscrypt-proxy -config/d' /etc/rc.local
-rm -f /etc/firewall.user.d-local-hosts /etc/firewall.user.d-upstream-lan \
-	/etc/dnsmasq.d/local-hosts.conf /tmp/dnsmasq.d/local-hosts.conf \
-	/etc/xray/nodes.tsv
-rm -rf /etc/xray/nodes
+migrate_legacy_files
 
 say "files"
 mkdir -p /etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /www/flint/cgi-bin /usr/share/flint
@@ -117,35 +89,7 @@ grep -v -E '^(#|$)' "$KIT/state-files" | while read -r f; do
 	rm -rf "/etc/xray/$f"
 	(umask 077; cp -R "$KIT/config/$f" "/etc/xray/$f")
 done
-# Legacy nodes.conf with "#@ <id>" groups → nodes.d/<id>.conf (keeps nodes.conf.bak); existing nodes.d files win.
-if [ -f /etc/xray/nodes.conf ] && grep -q '^#@' /etc/xray/nodes.conf; then
-	say "migrate nodes.conf groups into nodes.d/"
-	mkdir -p /etc/xray/nodes.d
-	cp /etc/xray/nodes.conf /etc/xray/nodes.conf.bak
-	first="$(head -n1 /etc/xray/subscriptions 2>/dev/null | cut -f1)"
-	awk -v dir=/etc/xray/nodes.d -v first="$first" '
-		/^#@/ { g = $2; next }
-		{
-			if (g == "") pend = pend $0 ORS
-			else if (g == "-") manual = manual $0 ORS
-			else { blocks[g] = blocks[g] $0 ORS; ids[g] = 1 }
-		}
-		END {
-			if (pend != "") {
-				if (first != "") { blocks[first] = pend blocks[first]; ids[first] = 1 }
-				else manual = pend manual
-			}
-			for (id in ids) {
-				if (id == "" || id == "-") continue
-				f = dir "/" id ".conf"
-				if (system("[ -s " f " ]") == 0) continue
-				printf "%s", blocks[id] > f
-				close(f)
-			}
-			printf "%s", manual > dir "/../nodes.conf.migrated"
-		}' /etc/xray/nodes.conf
-	mv /etc/xray/nodes.conf.migrated /etc/xray/nodes.conf
-fi
+migrate_nodes_groups
 case "${ROUTING:-ru}" in
 	ru|global) echo "${ROUTING:-ru}" > /etc/xray/routing-mode ;;
 	*) die "ROUTING must be ru or global" ;;
@@ -163,12 +107,14 @@ for pair in $LOCAL_HOSTS; do
 done
 
 say "dnsmasq -> DoH 127.0.0.1#5053"
-uci set dhcp.@dnsmasq[0].noresolv='1'
-uci -q delete dhcp.@dnsmasq[0].server || true
-uci add_list dhcp.@dnsmasq[0].server='127.0.0.1#5053'
-uci set dhcp.@dnsmasq[0].confdir='/etc/dnsmasq.d'
-uci set dhcp.@dnsmasq[0].rebind_protection='0'
-uci commit dhcp
+uci -q batch <<EOF
+set dhcp.@dnsmasq[0].noresolv='1'
+delete dhcp.@dnsmasq[0].server
+add_list dhcp.@dnsmasq[0].server='127.0.0.1#5053'
+set dhcp.@dnsmasq[0].confdir='/etc/dnsmasq.d'
+set dhcp.@dnsmasq[0].rebind_protection='0'
+commit dhcp
+EOF
 
 say "firewall"
 if ! uci show firewall | grep -q "path='/etc/firewall.user'"; then
@@ -176,40 +122,45 @@ if ! uci show firewall | grep -q "path='/etc/firewall.user'"; then
 	uci set "firewall.$sec.path=/etc/firewall.user"
 	uci set "firewall.$sec.fw4_compatible=1"
 fi
-uci set firewall.flint_ui=rule
-uci set firewall.flint_ui.name='Allow-Flint-UI'
-uci set firewall.flint_ui.src='lan'
-uci set firewall.flint_ui.dest_port='81'
-uci set firewall.flint_ui.proto='tcp'
-uci set firewall.flint_ui.target='ACCEPT'
-uci set firewall.xray_socks=rule
-uci set firewall.xray_socks.name='Allow-Xray-SOCKS'
-uci set firewall.xray_socks.src='lan'
-uci set firewall.xray_socks.dest_port='1080'
-uci set firewall.xray_socks.proto='tcp udp'
-uci set firewall.xray_socks.target='ACCEPT'
-uci set firewall.xray_http=rule
-uci set firewall.xray_http.name='Allow-Xray-HTTP'
-uci set firewall.xray_http.src='lan'
-uci set firewall.xray_http.dest_port='1087'
-uci set firewall.xray_http.proto='tcp'
-uci set firewall.xray_http.target='ACCEPT'
-uci -q delete firewall.flint_upstream_in || true
-uci -q delete firewall.flint_upstream_fwd || true
+uci -q batch <<EOF
+set firewall.flint_ui=rule
+set firewall.flint_ui.name='Allow-Flint-UI'
+set firewall.flint_ui.src='lan'
+set firewall.flint_ui.dest_port='81'
+set firewall.flint_ui.proto='tcp'
+set firewall.flint_ui.target='ACCEPT'
+set firewall.xray_socks=rule
+set firewall.xray_socks.name='Allow-Xray-SOCKS'
+set firewall.xray_socks.src='lan'
+set firewall.xray_socks.dest_port='1080'
+set firewall.xray_socks.proto='tcp udp'
+set firewall.xray_socks.target='ACCEPT'
+set firewall.xray_http=rule
+set firewall.xray_http.name='Allow-Xray-HTTP'
+set firewall.xray_http.src='lan'
+set firewall.xray_http.dest_port='1087'
+set firewall.xray_http.proto='tcp'
+set firewall.xray_http.target='ACCEPT'
+delete firewall.flint_upstream_in
+delete firewall.flint_upstream_fwd
+EOF
+# The main router's network reaches Flint and the devices behind it (after a change of UPSTREAM_NET: redeploy).
 if [ -n "$UPSTREAM_NET" ]; then
-	uci set firewall.flint_upstream_in=rule
-	uci set firewall.flint_upstream_in.name='Allow-Upstream-LAN-to-Router'
-	uci set firewall.flint_upstream_in.src='wan'
-	uci set firewall.flint_upstream_in.src_ip="$UPSTREAM_NET"
-	uci set firewall.flint_upstream_in.proto='all'
-	uci set firewall.flint_upstream_in.target='ACCEPT'
-	uci set firewall.flint_upstream_fwd=rule
-	uci set firewall.flint_upstream_fwd.name='Allow-Upstream-LAN-to-LAN'
-	uci set firewall.flint_upstream_fwd.src='wan'
-	uci set firewall.flint_upstream_fwd.dest='lan'
-	uci set firewall.flint_upstream_fwd.src_ip="$UPSTREAM_NET"
-	uci set firewall.flint_upstream_fwd.proto='all'
-	uci set firewall.flint_upstream_fwd.target='ACCEPT'
+	uci -q batch <<EOF
+set firewall.flint_upstream_in=rule
+set firewall.flint_upstream_in.name='Allow-Upstream-LAN-to-Router'
+set firewall.flint_upstream_in.src='wan'
+set firewall.flint_upstream_in.src_ip='$UPSTREAM_NET'
+set firewall.flint_upstream_in.proto='all'
+set firewall.flint_upstream_in.target='ACCEPT'
+set firewall.flint_upstream_fwd=rule
+set firewall.flint_upstream_fwd.name='Allow-Upstream-LAN-to-LAN'
+set firewall.flint_upstream_fwd.src='wan'
+set firewall.flint_upstream_fwd.dest='lan'
+set firewall.flint_upstream_fwd.src_ip='$UPSTREAM_NET'
+set firewall.flint_upstream_fwd.proto='all'
+set firewall.flint_upstream_fwd.target='ACCEPT'
+EOF
 fi
 uci commit firewall
 

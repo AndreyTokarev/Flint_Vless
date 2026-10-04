@@ -1,10 +1,12 @@
 # Shared helpers for Flint shell tools (sourced, not executed).
+# The flint-* commands do not use set -e: errors are checked explicitly (fail); only install.sh stops on any error.
 NODES=/etc/xray/nodes.conf
 NODES_D=/etc/xray/nodes.d
 CUSTOM=/etc/xray/nodes-custom.conf
 SUBS=/etc/xray/subscriptions
 CUR=/etc/xray/current-node
 TAB="$(printf '\t')"
+fail() { echo "$1"; exit 1; }
 # Language: FLINT_LANG (panel), else UI_LANG (flint.env), else Russian.
 t() { if [ "${FLINT_LANG:-${UI_LANG:-ru}}" = en ]; then echo "$2"; else echo "$1"; fi; }
 # Server lines from the given files (missing files and a call with no args are fine).
