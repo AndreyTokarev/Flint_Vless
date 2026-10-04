@@ -6,6 +6,9 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+### Changed
+- `tests/run.ps1` / `tests/run.sh`: install and the scenarios run in the background on the router (`tests/router/job.sh`); the script follows the log and survives a dropped connection. Running the same code with the same scenarios again follows the run in progress or the finished one instead of starting over; `-Force` / `--force` starts a new run. The `deploy -KeepKit` / `--keep-kit` switch is replaced with `-UploadOnly` / `--upload-only`: upload the kit without installing.
+
 ## [1.8.0] — 2026-10-04
 
 ### Added

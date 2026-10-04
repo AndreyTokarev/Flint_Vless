@@ -1,10 +1,10 @@
 # Upload the kit with the config\ entries listed in kit\state-files (config\flint.env is required) to the router and run install.sh.
-# Usage: .\deploy.ps1 [-Router 192.168.8.1] [-KeepKit]
-#   -KeepKit leaves the unpacked kit in /tmp/flint-kit on the router (for tests\run.ps1).
+# Usage: .\deploy.ps1 [-Router 192.168.8.1] [-UploadOnly]
+#   -UploadOnly unpacks the kit to /tmp/flint-kit on the router without running install.sh (tests\run.ps1 runs it there).
 param(
     [string]$Router = "192.168.8.1",
     [string]$User = "root",
-    [switch]$KeepKit
+    [switch]$UploadOnly
 )
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
@@ -36,10 +36,10 @@ try {
     if ($LASTEXITCODE) { throw "upload failed" }
 
     $remote = "rm -rf /tmp/flint-kit && mkdir -p /tmp/flint-kit && tar -xf /tmp/flint-kit.tar -C /tmp/flint-kit && rm -f /tmp/flint-kit.tar && " +
-        "find /tmp/flint-kit -type f ! -path '/tmp/flint-kit/bin/*' -exec sed -i 's/\r$//' {} + && " +
-        "sh /tmp/flint-kit/install.sh; rc=`$?; " + $(if ($KeepKit) { "" } else { "rm -rf /tmp/flint-kit; " }) + "exit `$rc"
+        "find /tmp/flint-kit -type f ! -path '/tmp/flint-kit/bin/*' -exec sed -i 's/\r$//' {} +" +
+        $(if ($UploadOnly) { "" } else { " && sh /tmp/flint-kit/install.sh; rc=`$?; rm -rf /tmp/flint-kit; exit `$rc" })
     ssh $target $remote
-    if ($LASTEXITCODE) { throw "install.sh failed (exit $LASTEXITCODE)" }
+    if ($LASTEXITCODE) { throw $(if ($UploadOnly) { "unpacking the kit failed" } else { "install.sh failed (exit $LASTEXITCODE)" }) }
 }
 finally {
     Remove-Item $staging, $archive -Recurse -Force -ErrorAction SilentlyContinue

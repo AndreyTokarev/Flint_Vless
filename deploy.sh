@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Upload the kit with the config/ entries listed in kit/state-files (config/flint.env is required) to the router and run install.sh (macOS/Linux).
-# Usage: ./deploy.sh [--keep-kit] [router_ip] [user]
-#   --keep-kit leaves the unpacked kit in /tmp/flint-kit on the router (for tests/run.sh).
+# Usage: ./deploy.sh [--upload-only] [router_ip] [user]
+#   --upload-only unpacks the kit to /tmp/flint-kit on the router without running install.sh (tests/run.sh runs it there).
 set -euo pipefail
-CLEANUP="rm -rf /tmp/flint-kit;"
-if [ "${1:-}" = "--keep-kit" ]; then CLEANUP=""; shift; fi
+INSTALL=" && sh /tmp/flint-kit/install.sh; rc=\$?; rm -rf /tmp/flint-kit; exit \$rc"
+if [ "${1:-}" = "--upload-only" ]; then INSTALL=""; shift; fi
 ROUTER="${1:-192.168.8.1}"
 USER_NAME="${2:-root}"
 TARGET="$USER_NAME@$ROUTER"
@@ -32,5 +32,4 @@ COPYFILE_DISABLE=1 tar --format ustar -cf - -C "$STAGING" . |
 	ssh "$TARGET" "cat > /tmp/flint-kit.tar"
 
 ssh "$TARGET" "rm -rf /tmp/flint-kit && mkdir -p /tmp/flint-kit && tar -xf /tmp/flint-kit.tar -C /tmp/flint-kit && rm -f /tmp/flint-kit.tar && \
-find /tmp/flint-kit -type f ! -path '/tmp/flint-kit/bin/*' -exec sed -i 's/\r\$//' {} + && \
-sh /tmp/flint-kit/install.sh; rc=\$?; $CLEANUP exit \$rc"
+find /tmp/flint-kit -type f ! -path '/tmp/flint-kit/bin/*' -exec sed -i 's/\r\$//' {} +$INSTALL"

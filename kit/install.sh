@@ -185,7 +185,9 @@ fi
 flint-node use "$DEFAULT_NODE" 2>/dev/null || flint-node apply
 /etc/init.d/flint-ui enable
 /etc/init.d/flint-ui restart
-/etc/init.d/firewall reload
+# fw4 warns ("[!] ...") about the firmware's own disabled or unused GL rules on every reload: not ours, hidden.
+fw="$(/etc/init.d/firewall reload 2>&1)" || { echo "$fw"; die "firewall reload failed"; }
+printf '%s\n' "$fw" | grep -v -e '^\[!\]' -e '^$' || true
 sh /etc/firewall.user
 
 say "geo files for RU routing (~25 MB)"
