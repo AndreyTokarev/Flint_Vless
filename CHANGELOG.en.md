@@ -6,7 +6,14 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-10-04
+
+### Added
+- DNS server (DoH) choice in the panel (Settings → DNS server) and with `flint-dns`: Cloudflare (default, as before), Google, Quad9, AdGuard DNS or your own `https://…` address. A new server is checked; if it does not answer, the previous one stays. The choice survives a redeploy and goes into the settings file.
+- Status: besides the IP via VPN, the provider IP (before VPN) is shown, and the current DNS server.
+
 ### Changed
+- The dnscrypt-proxy config (`/etc/dnscrypt-proxy2/flint-doh.toml`) is now written by `flint-dns` instead of being copied by the installer.
 - README: PIN change, moving settings with a file, "Sites without blocking" and "Recently blocked", fixed addresses for main-network devices, new troubleshooting rows.
 
 ## [1.5.5] — 2026-10-04

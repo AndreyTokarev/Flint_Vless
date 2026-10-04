@@ -70,17 +70,16 @@ cp "$KIT/files/usr/share/flint/vless.awk" "$KIT/files/usr/share/flint/lib.sh" /u
 echo "$VERSION" > /usr/share/flint/version
 cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/flint-ui" "$KIT/files/etc/init.d/flint-doh" \
 	"$KIT/files/etc/init.d/flint-adblock" /etc/init.d/
-cp "$KIT/files/etc/dnscrypt-proxy2/flint-doh.toml" /etc/dnscrypt-proxy2/
 cp "$KIT/files/etc/firewall.user" /etc/firewall.user
 cp "$KIT/files/usr/bin/flint-node" "$KIT/files/usr/bin/flint-geo-update" "$KIT/files/usr/bin/flint-sub-update" \
 	"$KIT/files/usr/bin/flint-custom" "$KIT/files/usr/bin/flint-watchdog" "$KIT/files/usr/bin/flint-adblock" \
-	"$KIT/files/usr/bin/flint-settings" /usr/bin/
+	"$KIT/files/usr/bin/flint-settings" "$KIT/files/usr/bin/flint-dns" /usr/bin/
 cp "$KIT/files/www/flint/index.html" "$KIT/files/www/flint/logo.svg" "$KIT/files/www/flint/icon.svg" \
 	"$KIT/files/www/flint/panel.css" /www/flint/
 cp "$KIT/files/www/flint/cgi-bin/panel.cgi" /www/flint/cgi-bin/
 chmod 755 /etc/init.d/xray /etc/init.d/flint-ui /etc/init.d/flint-doh /etc/init.d/flint-adblock /usr/bin/flint-node \
 	/usr/bin/flint-geo-update /usr/bin/flint-sub-update /usr/bin/flint-custom /usr/bin/flint-watchdog /usr/bin/flint-adblock \
-	/usr/bin/flint-settings \
+	/usr/bin/flint-settings /usr/bin/flint-dns \
 	/www/flint/cgi-bin/panel.cgi
 
 # User state from config/ (names in state-files); an entry missing there keeps the router's copy.
@@ -108,7 +107,9 @@ for pair in $LOCAL_HOSTS; do
 	done
 done
 
-say "dnsmasq -> DoH 127.0.0.1#5053"
+say "dnsmasq -> DoH 127.0.0.1#5053 ($(flint-dns title))"
+# The DoH server chosen in the panel survives a redeploy.
+flint-dns config
 uci -q batch <<EOF
 set dhcp.@dnsmasq[0].noresolv='1'
 delete dhcp.@dnsmasq[0].server

@@ -22,6 +22,9 @@ restore_state() {
 	rmdir "$LOCK" 2>/dev/null
 	flint-sub-update interval "$(cat /etc/xray/sub-interval 2>/dev/null || echo 24h)" >/dev/null
 	flint-node apply >/dev/null 2>&1
+	# The DoH config is outside /etc/xray: bring it in line with the restored choice.
+	[ "$(sed -n '1s/^# flint-dns: //p' /etc/dnscrypt-proxy2/flint-doh.toml | cut -f1)" = "$(flint-dns)" ] ||
+		flint-dns apply >/dev/null 2>&1
 	echo "  restored; vpn: $(vpn_works && echo ok || echo FAIL)"
 }
 finish() {
@@ -54,9 +57,10 @@ vpn_works() {
 }
 direct_works() { [ -n "$(curl -s -m 8 https://ifconfig.me)" ]; }
 # panel_has <tab> <text>: the Russian panel page contains the text.
+# Pages are read with grep -c, not -q: busybox wget hangs for about a minute when the reader quits early.
 panel_has() {
 	pin="$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')"
-	wget -qO- "http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=$1" | grep -q "$2"
+	wget -qO- "http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=$1" | grep -c "$2"
 }
 # The no-servers state: devices online directly, nothing for Xray to run.
 direct_mode() {

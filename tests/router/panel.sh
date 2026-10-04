@@ -5,10 +5,11 @@ save_state
 pin="$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')"
 # panel <query>: the Russian page for the query (without pass and lang).
 panel() { wget -qO- "http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&$1"; }
-page_ok() { panel "$1" | grep -q '</html>'; }
+page_ok() { panel "$1" | grep -c '</html>'; }
 for t in status servers own subs routing adblock settings; do check "tab $t renders" page_ok "tab=$t"; done
-check "no hidden action fields" fails sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&tab=servers' | grep -q 'name=a '"
-check "wrong PIN shows the login form" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=bad' | grep -q 'type=password'"
+check "no hidden action fields" fails sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&tab=servers' | grep -c 'name=a '"
+check "wrong PIN shows the login form" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=bad' | grep -c 'type=password'"
+check "status shows the provider IP" panel_has status 'IP провайдера'
 check "settings shows the PIN form" panel_has settings 'name=pinold'
 panel "tab=settings&pin=1&pinold=bad&pinnew=zzPinTest9&pinok=zzPinTest9" >/tmp/flint-test-pin
 check "PIN change rejects a wrong current PIN" grep -q 'Неверный текущий PIN' /tmp/flint-test-pin
@@ -20,7 +21,7 @@ check "PIN change rejects other characters" grep -q 'только буквы и 
 panel "tab=settings&pin=1&pinold=$pin&pinnew=zzPinTest9&pinok=zzPinTest9" >/tmp/flint-test-pin
 check "PIN change reports success" grep -q 'PIN изменён' /tmp/flint-test-pin
 check "new PIN is in flint.env" [ "$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')" = zzPinTest9 ]
-check "new PIN opens the panel" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=zzPinTest9&tab=settings' | grep -q 'name=pinold'"
+check "new PIN opens the panel" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=zzPinTest9&tab=settings' | grep -c 'name=pinold'"
 wget -qO- "http://127.0.0.1:81/cgi-bin/panel.cgi?pass=zzPinTest9&lang=ru&tab=settings&pin=1&pinold=zzPinTest9&pinnew=$pin&pinok=$pin" >/dev/null
 check "PIN restored after the test" [ "$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')" = "$pin" ]
 rm -f /tmp/flint-test-pin
@@ -45,13 +46,32 @@ panel "tab=subs&subint=$iv" >/dev/null
 
 panel "tab=adblock&aballow=zz-allow-test.example" >/dev/null
 check "site without blocking added" sh -c "flint-adblock rule | grep -qxF '@@||zz-allow-test.example^'"
-check "site without blocking listed" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&tab=adblock' | grep -q '<span>zz-allow-test.example</span>'"
+check "site without blocking listed" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&tab=adblock' | grep -c '<span>zz-allow-test.example</span>'"
 panel "tab=adblock&abrdel=%40%40%7C%7Czz-allow-test.example%5E" >/dev/null
 check "site without blocking removed" fails sh -c "flint-adblock rule | grep -qF zz-allow-test"
 
+# DNS: a bad address and an unreachable server change nothing; the original server comes back at the end.
+doh="$(flint-dns)"
+check "settings shows the DNS form" panel_has settings 'name=dnsurl'
+panel "tab=settings&dns=google" >/dev/null
+check "DNS switch to a preset" [ "$(flint-dns)" = google ]
+check "DNS answers after the switch" nslookup example.com 127.0.0.1
+panel "tab=settings&dnsurl=ftp%3A%2F%2Fbad.example" >/tmp/flint-test-page
+check "DNS rejects a bad address" grep -q 'Это не адрес DoH-сервера' /tmp/flint-test-page
+panel "tab=settings&dnsurl=https%3A%2F%2F127.0.0.1%3A9%2Fdns-query" >/tmp/flint-test-page
+check "an unreachable DoH server is rolled back" grep -q 'DNS остался прежним' /tmp/flint-test-page
+check "DNS unchanged after the rollback" [ "$(flint-dns)" = google ]
+check "DNS answers after the rollback" nslookup example.com 127.0.0.1
+panel "tab=settings&dnsurl=https%3A%2F%2Fdns.google%2Fdns-query" >/dev/null
+check "DNS switch to an own address" [ "$(flint-dns)" = https://dns.google/dns-query ]
+check "status shows the DNS server" panel_has status 'https://dns.google/dns-query'
+flint-dns doh "$doh" >/dev/null 2>&1
+check "DNS restored after the test" [ "$(flint-dns)" = "$doh" ]
+rm -f /tmp/flint-test-page
+
 if [ -n "$(flint-node codes)" ]; then
 	code="$(flint-node codes | head -n1)"
-	check "copy opens the form" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=own&copy=$code' | grep -q 'name=save value=.new.'"
+	check "copy opens the form" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=own&copy=$code' | grep -c 'name=save value=.new.'"
 	cur="$(flint-node current)"
 	panel "tab=servers&node=$code" >/dev/null
 	check "server switch" current_is "$code"

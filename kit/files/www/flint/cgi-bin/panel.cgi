@@ -99,7 +99,7 @@ HTML
 fi
 
 # The action is the first non-empty parameter from this list; every form sends exactly one of them.
-ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin "
+ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsurl "
 a="$(echo "$qs" | tr '&' '\n' | awk -F = -v l="$ACTIONS" '$2 != "" && index(l, " " $1 " ") { print $1; exit }')"
 msg=""; form=""; subedit=""; subsave=""
 case "$a" in
@@ -179,6 +179,8 @@ EOF
     else
       msg="$(T "Не удалось записать PIN в flint.env" "Could not write the PIN to flint.env")"
     fi ;;
+  dns) msg="$(flint-dns doh "$(get dns)" 2>&1)" ;;
+  dnsurl) msg="$(flint-dns doh "$(param dnsurl)" 2>&1)" ;;
 esac
 
 CUR="$(flint-node current)"
@@ -212,14 +214,19 @@ status)
   echo "<div class=card>"
   if [ -z "$NAMES" ]; then
     IP="$(curl -s -m 8 https://ifconfig.me 2>/dev/null || echo n/a)"
-    echo "<b class=err>$(T "Серверов пока нет" "No servers yet")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>IP: <b>$IP</b>$ADD_SERVERS"
+    echo "<b class=err>$(T "Серверов пока нет" "No servers yet")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>$(T "IP провайдера" "Provider IP"): <b>$IP</b>$ADD_SERVERS"
   elif [ "$VPN" = off ]; then
     IP="$(curl -s -m 8 https://ifconfig.me 2>/dev/null || echo n/a)"
-    echo "<b class=err>$(T "VPN выключен" "VPN is off")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>IP: <b>$IP</b>"
+    echo "<b class=err>$(T "VPN выключен" "VPN is off")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>$(T "IP провайдера" "Provider IP"): <b>$IP</b>"
     btn vpn on " class=on" "$(T "Включить VPN" "Turn VPN on")"
   else
+    # The router's own traffic bypasses Xray, so a plain request shows the provider's IP; both run at once.
+    curl -s -m 8 https://ifconfig.me > /tmp/flint-ip.$$ 2>/dev/null &
     IP="$(curl -s -m 8 -x http://127.0.0.1:1087 https://ifconfig.me 2>/dev/null || echo n/a)"
-    echo "VPN: <b class=ok>$(T "включён" "on")</b><br>$(T "Сервер" "Server"): <b class=ok>${CUR_NAME:-$CUR}</b><br>IP: <b>$IP</b>"
+    wait
+    DIRECT_IP="$(head -c 64 /tmp/flint-ip.$$ | esc)"; rm -f /tmp/flint-ip.$$
+    echo "VPN: <b class=ok>$(T "включён" "on")</b><br>$(T "Сервер" "Server"): <b class=ok>${CUR_NAME:-$CUR}</b>"
+    echo "<br>$(T "IP через VPN" "IP via VPN"): <b>$IP</b><br>$(T "IP провайдера (до VPN)" "Provider IP (before VPN)"): <b>${DIRECT_IP:-n/a}</b>"
     btn vpn off " class=off" "$(T "Выключить VPN" "Turn VPN off")"
   fi
   echo "</div>"
@@ -237,6 +244,7 @@ status)
   echo "<div class=stat><span>$(T "Автопереключение при сбое" "Failover")</span><a href='?pass=$pass&amp;tab=servers'>$wds</a></div>"
   [ "$(flint-adblock state)" = on ] && abs="$ON" || abs="$OFF"
   echo "<div class=stat><span>$(T "Блокировка рекламы" "Ad blocking")</span><a href='?pass=$pass&amp;tab=adblock'>$abs</a></div>"
+  echo "<div class=stat><span>DNS (DoH)</span><a href='?pass=$pass&amp;tab=settings'>$(flint-dns title | esc)</a></div>"
   [ -n "$WLAST" ] && echo "<div class=stat><span>$(T "Последний сбой" "Last failure")</span><span>$WLAST</span></div>"
   echo "</div>"
   ;;
@@ -488,6 +496,20 @@ adblock)
   echo "</div>"
   ;;
 settings)
+  DOH="$(flint-dns)"
+  echo "<div class=card><h2>$(T "DNS-сервер" "DNS server")</h2><small>$(T "Роутер отправляет DNS-запросы устройств зашифрованными (DNS-over-HTTPS): провайдер не видит, какие сайты открываются, и не может подменить ответ. Если выбранный сервер не ответит, останется прежний." \
+    "The router sends the devices' DNS queries encrypted (DNS over HTTPS): the provider does not see which sites are opened and cannot spoof the answers. If the chosen server does not answer, the previous one stays.")</small>"
+  echo "<p>$(T "Сейчас" "Now"): <b class=ok>$(flint-dns title | esc)</b></p>"
+  echo "<form method=get class=row>$(hidden)<select name=dns>"
+  flint-dns presets | esc | while IFS="$TAB" read -r n title; do
+    sel=""; [ "$n" = "$DOH" ] && sel=" selected"
+    [ "$n" = cloudflare ] && title="$title — $(T "по умолчанию" "default")"
+    echo "<option value=$n$sel>$title</option>"
+  done
+  echo "</select><button>$(T "Выбрать" "Choose")</button></form>"
+  url=""; case "$DOH" in https://*) url="$(echo "$DOH" | esc)" ;; esac
+  echo "<form method=get class=row>$(hidden)<input type=text name=dnsurl value='$url' placeholder='https://dns.example.com/dns-query' required>"
+  echo "<button>$(T "Свой DoH-сервер" "Own DoH server")</button></form></div>"
   echo "<div class=card><h2>$(T "Сменить PIN" "Change PIN")</h2><small>$(T "Только буквы и цифры. PIN хранится в flint.env на роутере; при деплое с компьютера снова подставится PIN из config/flint.env." \
     "Letters and digits only. The PIN is stored in flint.env on the router; a deploy from the computer will put back the PIN from config/flint.env.")</small>"
   echo "<form method=get class=row>$(hidden)<input type=hidden name=pin value=1>"
@@ -495,8 +517,8 @@ settings)
   echo "<input type=password name=pinnew placeholder='$(T "новый PIN" "new PIN")' autocomplete=new-password required>"
   echo "<input type=password name=pinok placeholder='$(T "ещё раз новый PIN" "new PIN again")' autocomplete=new-password required>"
   echo "<button>$(T "Сменить PIN" "Change PIN")</button></form></div>"
-  echo "<div class=card><h2>$(T "Экспорт настроек" "Export settings")</h2><small>$(T "Подписки, свои и ручные серверы, сайты, блокировка рекламы, режимы и интервалы. PIN и сеть (flint.env) в файл не входят, поэтому его можно загрузить и на другой Flint. В файле ссылки подписок и данные серверов — храните его как пароль." \
-    "Subscriptions, own and manual servers, sites, ad blocking, modes and intervals. The PIN and network (flint.env) are not included, so the file also fits another Flint. It holds subscription links and server data — keep it like a password.")</small>"
+  echo "<div class=card><h2>$(T "Экспорт настроек" "Export settings")</h2><small>$(T "Подписки, свои и ручные серверы, сайты, блокировка рекламы, DNS-сервер, режимы и интервалы. PIN и сеть (flint.env) в файл не входят, поэтому его можно загрузить и на другой Flint. В файле ссылки подписок и данные серверов — храните его как пароль." \
+    "Subscriptions, own and manual servers, sites, ad blocking, DNS server, modes and intervals. The PIN and network (flint.env) are not included, so the file also fits another Flint. It holds subscription links and server data — keep it like a password.")</small>"
   echo "<div class=cta><a class='btn on' href='?pass=$pass&amp;export=1'>⬇️ $(T "Скачать файл настроек" "Download the settings file")</a></div></div>"
   ASK="$(T "Заменить текущие настройки настройками из файла?" "Replace the current settings with the ones from the file?")"
   echo "<div class=card><h2>$(T "Импорт настроек" "Import settings")</h2><small>$(T "Все настройки из списка выше заменятся настройками из файла и сразу применятся. Прежние сохраняются на роутере в /tmp/flint-settings-prev.txt до перезагрузки." \

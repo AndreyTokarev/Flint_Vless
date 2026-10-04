@@ -1,6 +1,6 @@
 #!/bin/sh
 # Export and import the settings made in the panel: subscriptions, manual and own servers, sites,
-# ad blocking, modes and intervals. flint.env (PIN, network) is not included, so a file fits another Flint.
+# ad blocking, DNS server, modes and intervals. flint.env (PIN, network) is not included, so a file fits another Flint.
 # File format: a "# Flint VPN settings" first line, then "[<file in /etc/xray>]" sections with every
 # content line prefixed by "|". Import replaces all these settings; the previous ones go to $PREV.
 # Usage: flint-settings export              print the settings
@@ -8,7 +8,7 @@
 . /usr/share/flint/lib.sh
 . /etc/xray/flint.env 2>/dev/null || true
 ENTRIES="subscriptions nodes.d nodes.conf nodes-custom.conf current-node routing-mode vpn-state custom-sites
-sub-interval watchdog adblock adblock-lists adblock-rules adblock-exclude adblock-interval"
+sub-interval watchdog adblock adblock-lists adblock-rules adblock-exclude adblock-interval dns-doh"
 TMP=/tmp/flint-import
 PREV=/tmp/flint-settings-prev.txt
 
@@ -50,6 +50,7 @@ case "$1" in
 		flint-sub-update interval "$(flint-sub-update interval)" >/dev/null
 		# Subscriptions without their server files: fetch them now.
 		[ -n "$(flint-node codes)" ] || flint-sub-update >/dev/null 2>&1
+		flint-dns apply >/dev/null 2>&1
 		flint-node apply >/dev/null 2>&1
 		sh /etc/firewall.user >/dev/null 2>&1
 		if [ "$(flint-adblock state)" = on ]; then flint-adblock on >/dev/null 2>&1; else flint-adblock off >/dev/null 2>&1; fi

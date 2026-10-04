@@ -1,0 +1,140 @@
+#!/bin/sh
+# DNS over HTTPS: dnsmasq forwards every query to dnscrypt-proxy (flint-doh, 127.0.0.1:5053), which sends it
+# encrypted to one DoH server — a preset or any https:// address. A switch is checked: if the new server
+# does not answer, the previous one comes back. The choice lives in /etc/xray, so it survives redeploys.
+# Usage: flint-dns [doh]                                   print the DoH server: preset name or address
+#        flint-dns doh <preset|https://host[:port][/path]>   switch to another server
+#        flint-dns title                                   the current server, for people
+#        flint-dns presets                                 name, title
+#        flint-dns apply                                   rewrite the config from the saved choice and restart
+#        flint-dns config                                  write the config without a restart (install.sh)
+STATE=/etc/xray/dns-doh
+CONF=/etc/dnscrypt-proxy2/flint-doh.toml
+DEFAULT=cloudflare
+# name, address, host, path. The address in the stamp means no plain-DNS bootstrap lookup is needed.
+SERVERS="cloudflare	1.1.1.1	dns.cloudflare.com	/dns-query
+google	8.8.8.8	dns.google	/dns-query
+quad9	9.9.9.9	dns.quad9.net	/dns-query
+adguard	94.140.14.14	dns.adguard-dns.com	/dns-query"
+IPV4='^[0-9]+(\.[0-9]+){3}$'
+. /usr/share/flint/lib.sh
+. /etc/xray/flint.env 2>/dev/null || true
+
+presets() {
+	printf '%s\t%s\n' cloudflare "Cloudflare (1.1.1.1)" google "Google (8.8.8.8)" \
+		quad9 "Quad9 (9.9.9.9) — $(t "блокирует вредоносные сайты" "blocks malicious sites")" \
+		adguard "AdGuard DNS — $(t "блокирует рекламу и трекеры" "blocks ads and trackers")"
+}
+# The saved choice: a preset name, or "<https address><TAB><its IPv4>".
+choice() { line="$(head -n1 "$STATE" 2>/dev/null)"; if [ -n "$(server "$line")" ]; then echo "$line"; else echo "$DEFAULT"; fi; }
+# server <choice>: "address host path" for the stamp; nothing for a broken choice.
+server() {
+	case "$1" in
+		https://*)
+			url="${1%%"$TAB"*}"; ip="${1#*"$TAB"}"
+			hp="${url#https://}"; hostport="${hp%%/*}"; path="${hp#"$hostport"}"
+			# dnscrypt-proxy builds the request URL from the host field, so a port goes there too.
+			port=""; case "$hostport" in *:*) port=":${hostport#*:}" ;; esac
+			echo "$ip" | grep -qE "$IPV4" && echo "$ip$port $hostport $path" ;;
+		*) echo "$SERVERS" | awk -F '\t' -v n="$1" 'n != "" && $1 == n { print $2, $3, $4 }' ;;
+	esac
+}
+title() {
+	case "$1" in
+		https://*) echo "${1%%"$TAB"*}" ;;
+		*) presets | awk -F '\t' -v n="$1" '$1 == n { print $2 }' ;;
+	esac
+}
+lp() { printf "\\$(printf %03o "${#1}")%s" "$1"; }
+# DoH stamp: protocol 2, props (DNSSEC, no log, no filter — informational for a static server),
+# address, no certificate hashes, host, path; URL-safe base64 without padding.
+stamp() {
+	printf 'sdns://'
+	{ printf '\002\007\000\000\000\000\000\000\000'; lp "$1"; printf '\000'; lp "$2"; lp "$3"; } |
+		base64 | tr -d '\n=' | tr '+/' '-_'
+}
+# The first line keeps the choice, so a rollback knows what the previous config was.
+write_config() {
+	line="$1"; srv="$(server "$line")"
+	[ -n "$srv" ] || { line="$DEFAULT"; srv="$(server "$DEFAULT")"; }
+	set -- $srv
+	mkdir -p "${CONF%/*}"
+	cat > "$CONF" <<EOF
+# flint-dns: $line
+listen_addresses = ['127.0.0.1:5053']
+server_names = ['flint']
+ipv6_servers = false
+block_ipv6 = true
+require_dnssec = false
+ignore_system_dns = true
+timeout = 5000
+
+[static.'flint']
+stamp = '$(stamp "$1" "$2" "$3")'
+EOF
+}
+# busybox nslookup exits 0 on an empty answer too: look for an address after the "Name:" line.
+answers() { nslookup example.com 127.0.0.1:5053 2>/dev/null | awk '/^Name:/ { n = 1 } n && /^Address/ { f = 1 } END { exit !f }'; }
+restart() {
+	/etc/init.d/flint-doh restart >/dev/null 2>&1
+	# A deadline, not a count: each lookup against a dead server waits for its own timeout.
+	end=$(($(date +%s) + 15))
+	until answers; do
+		[ "$(date +%s)" -lt "$end" ] || return 1
+		sleep 1
+	done
+}
+saved() { sed -n '1s/^# flint-dns: //p' "$1" 2>/dev/null; }
+# use <choice>: write the config and restart; if the server does not answer, put the previous config back.
+use() {
+	cp "$CONF" "$CONF.prev" 2>/dev/null
+	write_config "$1"
+	if restart; then
+		saved "$CONF" > "$STATE"
+		rm -f "$CONF.prev"
+		# dnsmasq forgets answers from the previous server.
+		killall -HUP dnsmasq 2>/dev/null
+		return 0
+	fi
+	if [ -f "$CONF.prev" ]; then mv "$CONF.prev" "$CONF"; else write_config "$DEFAULT"; fi
+	prev="$(saved "$CONF")"
+	if [ -n "$prev" ]; then echo "$prev" > "$STATE"; else rm -f "$STATE"; fi
+	restart
+	return 1
+}
+
+case "$1" in
+	""|doh)
+		if [ -z "$2" ]; then choice | cut -f1; exit 0; fi
+		arg="$(printf '%s' "$2" | tr -d ' \t\r\n')"
+		case "$arg" in
+			*[:/.]*)
+				echo "$arg" | grep -qE '^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~%+=/-]*)?$' ||
+					fail "$(t "Это не адрес DoH-сервера: нужна ссылка вида https://dns.example.com/dns-query" \
+						"Not a DoH server address: needs a link like https://dns.example.com/dns-query")"
+				hp="${arg#https://}"; hostport="$(echo "${hp%%/*}" | tr 'A-Z' 'a-z')"; path="${hp#*/}"
+				[ "$path" = "$hp" ] || [ -z "$path" ] && path=dns-query
+				arg="https://$hostport/$path"
+				host="${hostport%%:*}"
+				if echo "$host" | grep -qE "$IPV4"; then ip="$host"
+				else ip="$(nslookup "$host" 127.0.0.1 2>/dev/null | awk '/^Address/ && !/#/ {print $NF}' | grep -E "$IPV4" | head -n1)"; fi
+				[ -n "$ip" ] || fail "$(t "Не удалось найти адрес сервера $host" "Could not resolve the server $host")"
+				line="$arg$TAB$ip" ;;
+			*)
+				[ -n "$(server "$arg")" ] ||
+					fail "$(t "Нет такого DNS-сервера: $arg" "No such DNS server: $arg") ($(echo "$SERVERS" | cut -f1 | tr '\n' ' ')https://...)"
+				line="$arg" ;;
+		esac
+		name="$(title "$line")"
+		use "$line" || fail "$(t "$name не ответил — DNS остался прежним: $(title "$(choice)")" \
+			"$name did not answer — DNS stays as it was: $(title "$(choice)")")"
+		t "DNS-сервер: $name" "DNS server: $name"
+		;;
+	title) title "$(choice)" ;;
+	presets) presets ;;
+	apply)
+		use "$(choice)" || fail "$(t "DNS-сервер не ответил — оставлен прежний" "The DNS server did not answer — the previous one stays")"
+		;;
+	config) write_config "$(choice)" ;;
+	*) sed -n '5,10s/^# \{0,1\}//p' "$0"; exit 1 ;;
+esac
