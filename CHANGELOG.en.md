@@ -6,6 +6,19 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-10-04
+
+### Added
+- Ad blocking tab: a "Sites without blocking" card — the site and its subdomains are not blocked (an `@@||site^` exception). Ads from other domains on that site are still blocked at the DNS level.
+- Next to it, a "Recently blocked" list (domain and device) with an Allow button, to find the domain a broken site needs. AdGuard Home keeps the last 1000 queries for it in memory only; command `flint-adblock blocked`.
+
+### Changed
+- The panel reads `/etc/xray/flint.env` directly; the deploy removes the `/usr/share/flint/env` link.
+- The panel takes the action from the request parameter itself: hidden `a=` fields are gone from every form, and parameters are read only in their action's branch.
+- On the Servers tab, manual servers next to a subscription are titled "Manual" instead of repeating "Servers".
+- `flint-adblock` parses AdGuard Home replies with `jsonfilter` instead of regular expressions; the installer checks that `jsonfilter` is present.
+- New `tests/router/panel.sh` scenario: panel tabs and the main actions through `panel.cgi`. Scenarios no longer start when `/etc/xray` could not be snapshotted (the scenario's exit could wipe it before).
+
 ## [1.3.0] — 2026-10-04
 
 ### Removed

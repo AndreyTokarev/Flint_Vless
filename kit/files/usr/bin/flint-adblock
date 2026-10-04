@@ -8,6 +8,7 @@
 #        flint-adblock on|off
 #        flint-adblock list | list add <url> [name] | list del <url>
 #        flint-adblock rule | rule add block|allow <domain, link or AdGuard rule> | rule del <rule>
+#        flint-adblock blocked                         recently blocked domains: domain, device (not yet allowed)
 #        flint-adblock exclude | exclude add <mac> [name] | exclude del <mac>
 #        flint-adblock devices                         LAN devices: mac, ip, name
 #        flint-adblock interval [off|1|12|24|72|168]   list auto-update period, hours
@@ -89,8 +90,10 @@ write_config() {
 		echo "  protection_enabled: true"
 		echo "  filtering_enabled: true"
 		echo "  filters_update_interval: $iv"
-		echo "  querylog_enabled: false"
+		# The last queries stay in memory only, for "flint-adblock blocked"; nothing is written to flash.
+		echo "  querylog_enabled: true"
 		echo "  querylog_file_enabled: false"
+		echo "  querylog_size_memory: 1000"
 		echo "  statistics_interval: 1"
 		echo "filters:"
 		lists | while IFS="$TAB" read -r url name; do
@@ -160,8 +163,10 @@ case "$1" in
 			"")
 				st=""
 				if running; then
-					st="$(curl -s -m 5 "$API/filtering/status" | tr '{' '\n' | sed 's/\\u0026/\&/g' |
-						sed -n 's/.*"url":"\([^"]*\)".*"last_updated":"\([0-9-]*\)T\([0-9:]*\)[^"]*".*"rules_count":\([0-9]*\).*/\1\t\4\t\2 \3/p')"
+					st="$(curl -s -m 5 "$API/filtering/status" | jsonfilter -e '@.filters[*]' | while read -r f; do
+						printf '%s\t%s\t%s\n' "$(jsonfilter -s "$f" -e '@.url')" "$(jsonfilter -s "$f" -e '@.rules_count')" \
+							"$(jsonfilter -s "$f" -e '@.last_updated' | sed -n 's/^\([0-9-]*\)T\([0-9:]*\).*/\1 \2/p')"
+					done)"
 				fi
 				lists | while IFS="$TAB" read -r url name; do
 					[ -n "$url" ] || continue
@@ -252,6 +257,26 @@ case "$1" in
 			*) fail "flint-adblock exclude | exclude add <mac> [name] | exclude del <mac>" ;;
 		esac
 		;;
+	blocked)
+		running || exit 0
+		curl -s -m 5 -o "$OUT" "$API/querylog?limit=300&response_status=blocked" || exit 0
+		jsonfilter -i "$OUT" -e '@.data[*].client' > "$OUT.client"
+		rules | sed -n 's/^@@||\([a-z0-9.-]*\)^$/\1/p' > "$OUT.allowed"
+		devices > "$OUT.devices"
+		# Newest first, one line per domain.
+		jsonfilter -i "$OUT" -e '@.data[*].question.name' |
+			awk -F '\t' -v skip="$CHECK_HOST" '
+				# An allow rule also covers subdomains.
+				function allowed(d,  i) { while (1) { if (d in ok) return 1; if (!(i = index(d, "."))) return 0; d = substr(d, i + 1) } }
+				FILENAME == ARGV[1] { name[$2] = ($3 != "" ? $3 : $2); next }
+				FILENAME == ARGV[2] { ok[$0] = 1; next }
+				FILENAME == ARGV[3] { client[FNR] = $0; next }
+				{ d = tolower($0); sub(/\.$/, "", d) }
+				d == skip || allowed(d) || seen[d]++ { next }
+				{ c = client[FNR]; print d "\t" (c in name ? name[c] : c); if (++n == 30) exit }
+			' "$OUT.devices" "$OUT.allowed" "$OUT.client" -
+		rm -f "$OUT.client" "$OUT.allowed" "$OUT.devices"
+		;;
 	devices) devices ;;
 	interval)
 		[ -n "$2" ] || { interval; exit 0; }
@@ -266,14 +291,13 @@ case "$1" in
 		running || fail "$(t "Блокировка выключена — включите её, чтобы обновить списки" "Ad blocking is off — turn it on to update the lists")"
 		[ "$(post filtering/refresh '{"whitelist":false}' 180)" = 200 ] ||
 			fail "$(t "Не удалось обновить списки" "Could not update the lists"): $(head -c 300 "$OUT")"
-		n="$(sed -n 's/.*"updated":\([0-9]*\).*/\1/p' "$OUT")"
+		n="$(jsonfilter -i "$OUT" -e '@.updated')"
 		t "Списки проверены, обновлено: ${n:-0}" "Lists checked, updated: ${n:-0}"
 		;;
 	stats)
 		running || exit 1
-		curl -s -m 5 "$API/stats" | tr ',' '\n' |
-			sed -n -e 's/.*"num_dns_queries":\([0-9]*\).*/q \1/p' -e 's/.*"num_blocked_filtering":\([0-9]*\).*/b \1/p' |
-			awk '{ v[$1] = $2 } END { print v["q"] + 0, v["b"] + 0 }'
+		eval "$(curl -s -m 5 "$API/stats" | jsonfilter -e 'q=@.num_dns_queries' -e 'b=@.num_blocked_filtering')"
+		echo "${q:-0} ${b:-0}"
 		;;
 	check)
 		[ "$(state)" = on ] || exit 0

@@ -47,7 +47,7 @@ The panel is available in English and Russian: the language follows your browser
 - **Failover.** Every 2 minutes the router checks the tunnel; if the server stopped responding while the internet is up, it refreshes the subscription and switches to the first working server.
 - **White lists.** Provider servers given by bare IP (for networks where only a white list is open) are grouped in a separate collapsible block.
 - **DNS over HTTPS** (dnscrypt-proxy) against DNS spoofing; client DNS queries are forced through the router.
-- **Ad blocking** for the whole network at the DNS level — AdGuard Home from the GL firmware, one button to turn it on. The default list is AdGuard DNS filter, the DNS version of the filters in paid AdGuard; add your own lists by URL and your own rules. Lists update by themselves, and individual devices can be excluded.
+- **Ad blocking** for the whole network at the DNS level — AdGuard Home from the GL firmware, one button to turn it on. The default list is AdGuard DNS filter, the DNS version of the filters in paid AdGuard; add your own lists by URL and your own rules. Lists update by themselves, and individual devices and sites can be excluded.
 - **Home network access.** The main router's LAN, NAS and printer are reachable directly, bypassing the VPN; local names (`nas01`) are served by dnsmasq.
 - **Backup and restore** with one command; redeploying keeps the settings made in the panel.
 
@@ -225,7 +225,7 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 | **Own servers** | servers not from the subscription: add by `vless://` link, copy a subscription server and edit the copy, enter manually; edit or delete |
 | **Subscriptions** | VPN provider subscriptions: add by link, change the link or name, delete; last update, number of servers, expiry and traffic; "Update all subscriptions now" and the auto-update interval |
 | **Routing** | Russia geo filter on/off; own sites, IPs and subnets "always direct" or "always via VPN" |
-| **Ad blocking** | ad blocking on/off and 24-hour stats; devices without blocking; filter lists — ready-made and your own by URL; auto-update and "Update the lists now"; own rules |
+| **Ad blocking** | ad blocking on/off and 24-hour stats; devices without blocking; sites without blocking and "Recently blocked" with an Allow button; filter lists — ready-made and your own by URL; auto-update and "Update the lists now"; own rules |
 
 The panel speaks English and Russian. On the first visit the language follows the browser (or `UI_LANG` in `flint.env`); after that use the **RU | EN** switch in the top right corner (next to "Sign out"; on the login page too) — the choice is remembered in the browser. Messages after panel actions use the same language.
 
@@ -380,6 +380,7 @@ flint-adblock on                 # ad blocking (off — turn off)
 flint-adblock list               # lists: URL, name, rules, last update
 flint-adblock list add https://example.com/list.txt "Name"
 flint-adblock rule add block ads.example.com   # allow — exception
+flint-adblock blocked                          # recently blocked domains and devices
 flint-adblock exclude add aa:bb:cc:dd:ee:ff    # device without blocking
 flint-adblock refresh            # update the lists now
 flint-adblock interval 24        # auto-update: off, 1, 12, 24, 72, 168 hours

@@ -6,8 +6,9 @@ STATE=/tmp/flint-test-state.tgz
 PASS=0
 FAIL=0
 
+# Without a good snapshot the scenario must not start: restore_state replaces /etc/xray with it.
 save_state() {
-	tar -C /etc -czf "$STATE" xray
+	[ -s /etc/xray/flint.env ] && tar -C /etc -czf "$STATE" xray || { echo "  cannot snapshot /etc/xray, scenario skipped"; exit 1; }
 	trap restore_state EXIT
 }
 restore_state() {

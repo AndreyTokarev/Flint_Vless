@@ -29,6 +29,7 @@ missing() {
 	[ -x /usr/sbin/dnscrypt-proxy ] || echo dnscrypt-proxy2
 	command -v iptables >/dev/null || echo "iptables-nft iptables-mod-nat-extra"
 	command -v unzip >/dev/null || echo unzip
+	command -v jsonfilter >/dev/null || echo jsonfilter
 	command -v xray >/dev/null || echo xray-core
 }
 need="$(missing | tr '\n' ' ')"
@@ -66,7 +67,6 @@ say "files"
 mkdir -p /etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /www/flint/cgi-bin /usr/share/flint
 cp "$KIT/files/etc/xray/template.json" /etc/xray/
 cp "$KIT/files/usr/share/flint/vless.awk" "$KIT/files/usr/share/flint/lib.sh" /usr/share/flint/
-ln -sf /etc/xray/flint.env /usr/share/flint/env
 echo "$VERSION" > /usr/share/flint/version
 cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/flint-ui" "$KIT/files/etc/init.d/flint-doh" \
 	"$KIT/files/etc/init.d/flint-adblock" /etc/init.d/

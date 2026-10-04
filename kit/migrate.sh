@@ -28,10 +28,12 @@ migrate_legacy_files() {
 		/etc/init.d/v2raya stop 2>/dev/null || true
 		/etc/init.d/v2raya disable 2>/dev/null || true
 	fi
-	sed -i '/dnscrypt-proxy -config/d' /etc/rc.local
+	sed -i '/dnscrypt-proxy -config/d' /etc/rc.local 2>/dev/null || true
 	rm -f /etc/firewall.user.d-local-hosts /etc/firewall.user.d-upstream-lan \
 		/etc/dnsmasq.d/local-hosts.conf /tmp/dnsmasq.d/local-hosts.conf /etc/xray/nodes.tsv
 	rm -rf /etc/xray/nodes
+	# Up to 1.3.0 the panel read flint.env through this link.
+	rm -f /usr/share/flint/env
 }
 
 # 1.1.x kept every server in nodes.conf with "#@ <id>" group lines: split it into nodes.d/<id>.conf

@@ -15,7 +15,8 @@ param() {
       printf "%s", out s }')"
 }
 esc() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e "s/'/\&#39;/g"; }
-. /usr/share/flint/env
+TAB="$(printf '\t')"
+. /etc/xray/flint.env
 
 # Language: ?lang= (remembered in a cookie), then the cookie, then UI_LANG, then the browser's first language.
 lang="$(get lang)"
@@ -35,15 +36,7 @@ echo "Content-Type: text/html; charset=utf-8"
 [ "$lang" = "$L" ] && echo "Set-Cookie: lang=$L; Path=/; Max-Age=31536000; SameSite=Lax"
 echo ""
 
-pass="$(get pass)"; a="$(get a)"; tab="$(get tab)"
-node="$(get node)"; routing="$(get routing)"; vpn="$(get vpn)"; sub="$(get sub)"
-add="$(param add)"; to="$(get to)"; del="$(param del)"
-link="$(param link)"; edit="$(get edit)"; copy="$(get copy)"; newnode="$(get newnode)"; save="$(get save)"; ndel="$(get ndel)"
-subint="$(get subint)"; wd="$(get wd)"
-subadd="$(param subadd)"; subname="$(param subname)"; subedit="$(get subedit)"; subsave="$(get subsave)"; subdel="$(get subdel)"
-adblock="$(get adblock)"; ablist="$(param ablist)"; abname="$(param abname)"; abpreset="$(get abpreset)"; abldel="$(param abldel)"
-abrule="$(param abrule)"; abto="$(get abto)"; abrdel="$(param abrdel)"; abint="$(get abint)"; abref="$(get abref)"
-abxadd="$(param abxadd)"; abxname="$(param abxname)"; abxdel="$(param abxdel)"
+pass="$(get pass)"; tab="$(get tab)"
 case "$tab" in status|servers|own|subs|routing|adblock) ;; *) tab=status ;; esac
 # Ready-made lists from AdGuard's registry of DNS blocklists: id:name.
 PRESET_URL=https://adguardteam.github.io/HostlistsRegistry/assets/filter_
@@ -92,58 +85,68 @@ HTML
   exit 0
 fi
 
-msg=""; form=""
+# The action is the first non-empty parameter from this list; every form sends exactly one of them.
+ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode "
+a="$(echo "$qs" | tr '&' '\n' | awk -F = -v l="$ACTIONS" '$2 != "" && index(l, " " $1 " ") { print $1; exit }')"
+msg=""; form=""; subedit=""; subsave=""
 case "$a" in
-  node) msg="$(flint-node "$node" 2>&1)" ;;
-  routing) msg="$(flint-node routing "$routing" 2>&1)" ;;
-  vpn) msg="$(flint-node vpn "$vpn" 2>&1)" ;;
+  node) msg="$(flint-node "$(get node)" 2>&1)" ;;
+  routing) msg="$(flint-node routing "$(get routing)" 2>&1)" ;;
+  vpn) msg="$(flint-node vpn "$(get vpn)" 2>&1)" ;;
   sub) msg="$(flint-sub-update 2>&1)" ;;
-  subint) msg="$(flint-sub-update interval "$subint" 2>&1)" ;;
-  subadd) msg="$(flint-sub-update add "$subadd" "$subname" 2>&1)" ;;
-  subsave) msg="$(flint-sub-update set "$subsave" "$(param subu)" "$(param subn)" 2>&1)" || subedit="$subsave" ;;
-  subdel) msg="$(flint-sub-update del "$subdel" 2>&1)" ;;
-  wd) msg="$(flint-watchdog "$wd" 2>&1)" ;;
-  adblock) msg="$(flint-adblock "$adblock" 2>&1)" ;;
+  subint) msg="$(flint-sub-update interval "$(get subint)" 2>&1)" ;;
+  subadd) msg="$(flint-sub-update add "$(param subadd)" "$(param subname)" 2>&1)" ;;
+  subsave)
+    subsave="$(get subsave)"
+    msg="$(flint-sub-update set "$subsave" "$(param subu)" "$(param subn)" 2>&1)" || subedit="$subsave" ;;
+  subdel) msg="$(flint-sub-update del "$(get subdel)" 2>&1)" ;;
+  subedit) subedit="$(get subedit)" ;;
+  wd) msg="$(flint-watchdog "$(get wd)" 2>&1)" ;;
+  adblock) msg="$(flint-adblock "$(get adblock)" 2>&1)" ;;
   abpreset)
+    abpreset="$(get abpreset)"
     pname="$(echo "$PRESETS" | awk -F : -v i="$abpreset" '$1 == i { print $2 }')"
     [ -n "$pname" ] && msg="$(flint-adblock list add "$PRESET_URL$abpreset.txt" "$pname" 2>&1)" ;;
-  ablist) msg="$(flint-adblock list add "$ablist" "$abname" 2>&1)" ;;
-  abldel) msg="$(flint-adblock list del "$abldel" 2>&1)" ;;
-  abrule) [ "$abto" = block ] || [ "$abto" = allow ] && msg="$(flint-adblock rule add "$abto" "$abrule" 2>&1)" ;;
-  abrdel) msg="$(flint-adblock rule del "$abrdel" 2>&1)" ;;
-  abint) msg="$(flint-adblock interval "$abint" 2>&1)" ;;
+  ablist) msg="$(flint-adblock list add "$(param ablist)" "$(param abname)" 2>&1)" ;;
+  abldel) msg="$(flint-adblock list del "$(param abldel)" 2>&1)" ;;
+  abrule)
+    abto="$(get abto)"
+    case "$abto" in block|allow) msg="$(flint-adblock rule add "$abto" "$(param abrule)" 2>&1)" ;; esac ;;
+  abrdel) msg="$(flint-adblock rule del "$(param abrdel)" 2>&1)" ;;
+  aballow) msg="$(flint-adblock rule add allow "$(param aballow)" 2>&1)" ;;
+  abint) msg="$(flint-adblock interval "$(get abint)" 2>&1)" ;;
   abref) msg="$(flint-adblock refresh 2>&1)" ;;
-  abxadd) msg="$(flint-adblock exclude add "$abxadd" "$abxname" 2>&1)" ;;
-  abxdel) msg="$(flint-adblock exclude del "$abxdel" 2>&1)" ;;
-  add) [ "$to" = direct ] || [ "$to" = proxy ] && msg="$(flint-node site add "$to" "$add" 2>&1)" ;;
-  del) msg="$(flint-node site del "$del" 2>&1)" ;;
-  link) msg="$(flint-custom link "$link" 2>&1)" ;;
-  ndel) msg="$(flint-custom del "$ndel" 2>&1)" ;;
+  abxadd) msg="$(flint-adblock exclude add "$(param abxadd)" "$(param abxname)" 2>&1)" ;;
+  abxdel) msg="$(flint-adblock exclude del "$(param abxdel)" 2>&1)" ;;
+  add)
+    to="$(get to)"
+    case "$to" in direct|proxy) msg="$(flint-node site add "$to" "$(param add)" 2>&1)" ;; esac ;;
+  del) msg="$(flint-node site del "$(param del)" 2>&1)" ;;
+  link) msg="$(flint-custom link "$(param link)" 2>&1)" ;;
+  ndel) msg="$(flint-custom del "$(get ndel)" 2>&1)" ;;
   save)
+    save="$(get save)"
     f_name="$(param n)"; f_addr="$(param h)"; f_port="$(param p)"; f_uuid="$(param u)"
     f_sni="$(param s)"; f_pbk="$(param k)"; f_sid="$(param i)"; f_net="$(get t)"; f_svc="$(param g)"
     # On a validation error keep the form open with what was typed.
     msg="$(flint-custom set "$save" "$f_name" "$f_addr" "$f_port" "$f_uuid" "$f_sni" "$f_pbk" "$f_sid" "$f_net" "$f_svc" 2>&1)" || form="$save" ;;
   edit|copy)
-    TAB="$(printf '\t')"
+    code="$(get "$a")"
     IFS="$TAB" read -r f_code f_name f_addr f_port f_uuid f_sni f_pbk f_sid f_net f_svc <<EOF
-$(flint-custom show "${edit:-$copy}")
+$(flint-custom show "$code")
 EOF
     [ "$f_sid" = - ] && f_sid=""
     [ "$f_svc" = - ] && f_svc=""
-    if [ "$a" = edit ]; then form="$edit"; else form=new; f_name="$f_name ($(T "копия" "copy"))"; fi ;;
+    if [ "$a" = edit ]; then form="$code"; else form=new; f_name="$f_name ($(T "копия" "copy"))"; fi ;;
   newnode) form=new; f_port=443 ;;
-  "") ;;
-  *) ;;
 esac
 
-CUR="$(flint-node current)"; CUR="${CUR:-unknown}"
+CUR="$(flint-node current)"
 MODE="$(flint-node routing)"
 VPN="$(flint-node vpn)"
-TAB="$(printf '\t')"
 hidden() { echo "<input type=hidden name=pass value='$pass'><input type=hidden name=tab value='$tab'>"; }
-# btn <action> <value> <button attrs> <label>: sets a=<action> and <action>=<value>.
-btn() { echo "<form method=get class=act>$(hidden)<input type=hidden name=a value='$1'><input type=hidden name=$1 value='$2'><button$3>$4</button></form>"; }
+# btn <action> <value> <button attrs> <label>: a form that sends <action>=<value>.
+btn() { echo "<form method=get class=act>$(hidden)<input type=hidden name=$1 value='$2'><button$3>$4</button></form>"; }
 field() { echo "<label>$1<input type=text name=$2 value='$(printf '%s' "$3" | esc)'$4></label>"; }
 SUBLIST="$(flint-sub-update list | esc)"
 NAMES="$(flint-node names | esc)"
@@ -203,7 +206,7 @@ servers)
       '$3 == k && (g == "" || $4 == g) { print $1 "\t" $2 }' |
     while IFS="$TAB" read -r code name; do
       on=""; [ "$code" = "$CUR" ] && on=" on"
-      echo "<form method=get>$(hidden)<input type=hidden name=a value=node><input type=hidden name=node value='$code'><button class='$on'>$name</button></form>"
+      echo "<form method=get>$(hidden)<input type=hidden name=node value='$code'><button class='$on'>$name</button></form>"
     done
   }
   card() { [ -n "$2" ] && echo "<div class=card><h2>$1</h2><div class=grid>$2</div></div>"; }
@@ -214,7 +217,8 @@ servers)
   elif [ -n "$SUBLIST" ]; then
     card "$SERVERS" "$(grid domain "$(echo "$SUBLIST" | cut -f1)")"
   fi
-  card "$SERVERS" "$(grid domain "-")"
+  [ -n "$SUBLIST" ] && manual="$(T "Заданные вручную" "Manual")" || manual="$SERVERS"
+  card "$manual" "$(grid domain "-")"
   card "$(T "Свои серверы" "Own servers")" "$(grid domain own)"
   WL="$(grid ip)"
   if [ -n "$WL" ]; then
@@ -238,7 +242,7 @@ own)
   if [ -n "$form" ]; then
     [ "$form" = new ] && title="$(T "Новый сервер" "New server")" || title="$(T "Изменить сервер" "Edit server")"
     echo "<div class=card><h2>$title</h2><small>$(T "Поддерживаются VLESS + REALITY поверх TCP (xtls-rprx-vision) или gRPC." "Supported: VLESS + REALITY over TCP (xtls-rprx-vision) or gRPC.")</small>"
-    echo "<form method=get>$(hidden)<input type=hidden name=a value=save><input type=hidden name=save value='$form'>"
+    echo "<form method=get>$(hidden)<input type=hidden name=save value='$form'>"
     field "$(T "Название" "Name")" n "$f_name" " maxlength=60"
     field "$(T "Адрес сервера" "Server address")" h "$f_addr" " required"
     field "$(T "Порт" "Port")" p "$f_port" " required inputmode=numeric"
@@ -259,13 +263,13 @@ own)
   echo "$OWN" | while IFS="$TAB" read -r code name; do
     [ -n "$code" ] || continue
     echo "<div class=item><span>$name</span>"
-    echo "<form method=get>$(hidden)<input type=hidden name=a value=edit><input type=hidden name=edit value='$code'><button>$EDIT</button></form>"
-    echo "<form method=get>$(hidden)<input type=hidden name=a value=ndel><input type=hidden name=ndel value='$code'><button title='$DEL'>✕</button></form></div>"
+    echo "<form method=get>$(hidden)<input type=hidden name=edit value='$code'><button>$EDIT</button></form>"
+    echo "<form method=get>$(hidden)<input type=hidden name=ndel value='$code'><button title='$DEL'>✕</button></form></div>"
   done
   echo "</div><div class=card><h2>$(T "Добавить" "Add")</h2>"
-  echo "<form method=get class=row>$(hidden)<input type=hidden name=a value=link><input type=text name=link placeholder='vless://...' required><button>$(T "Добавить по ссылке" "Add by link")</button></form>"
+  echo "<form method=get class=row>$(hidden)<input type=text name=link placeholder='vless://...' required><button>$(T "Добавить по ссылке" "Add by link")</button></form>"
   if [ -n "$NAMES" ]; then
-    echo "<form method=get class=row>$(hidden)<input type=hidden name=a value=copy><select name=copy>"
+    echo "<form method=get class=row>$(hidden)<select name=copy>"
     echo "$NAMES" | while IFS="$TAB" read -r code name kind group; do [ -n "$code" ] && echo "<option value='$code'>$name</option>"; done
     echo "</select><button>$(T "Скопировать и изменить" "Copy and edit")</button></form>"
   fi
@@ -282,7 +286,7 @@ EOF
       # After a failed save keep what was typed.
       [ -n "$subsave" ] && { s_url="$(param subu)"; s_name="$(param subn)"; }
       echo "<div class=card><h2>$(T "Изменить подписку" "Edit subscription")</h2>"
-      echo "<form method=get>$(hidden)<input type=hidden name=a value=subsave><input type=hidden name=subsave value='$s_id'>"
+      echo "<form method=get>$(hidden)<input type=hidden name=subsave value='$s_id'>"
       field "$(T "Ссылка" "Link")" subu "$s_url" " required"
       field "$(T "Название" "Name")" subn "$s_name" " maxlength=60"
       echo "<button class=on style='margin-top:12px'>$(T "Сохранить" "Save")</button></form>"
@@ -299,17 +303,17 @@ EOF
     [ "$st" = - ] && st="$(T "ещё не обновлялась" "not updated yet")"
     [ "$info" = - ] && info="" || info="<br><small>$info</small>"
     echo "<div class=item><span>$sname<br><small>$host · $st</small>$info</span>"
-    echo "<form method=get>$(hidden)<input type=hidden name=a value=subedit><input type=hidden name=subedit value='$id'><button>$EDIT</button></form>"
-    echo "<form method=get onsubmit=\"return confirm('$ASK')\">$(hidden)<input type=hidden name=a value=subdel><input type=hidden name=subdel value='$id'><button title='$DEL'>✕</button></form></div>"
+    echo "<form method=get>$(hidden)<input type=hidden name=subedit value='$id'><button>$EDIT</button></form>"
+    echo "<form method=get onsubmit=\"return confirm('$ASK')\">$(hidden)<input type=hidden name=subdel value='$id'><button title='$DEL'>✕</button></form></div>"
   done
-  echo "<form method=get class=row>$(hidden)<input type=hidden name=a value=subadd><input type=text name=subadd placeholder='https://provider.example/sub/...' required>"
+  echo "<form method=get class=row>$(hidden)<input type=text name=subadd placeholder='https://provider.example/sub/...' required>"
   echo "<input type=text name=subname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить подписку" "Add subscription")</button></form></div>"
   echo "<div class=card><h2>$(T "Обновление" "Updates")</h2>"
   btn sub 1 "" "$(T "Обновить все подписки сейчас" "Update all subscriptions now")"
   CHECKED="$(flint-sub-update status | esc)"
   echo "<small>$(T "Последняя проверка" "Last check"): ${CHECKED:-$NEVER}</small>"
   SI="$(flint-sub-update interval)"
-  echo "<form method=get class=row>$(hidden)<input type=hidden name=a value=subint><select name=subint>"
+  echo "<form method=get class=row>$(hidden)<select name=subint>"
   for v in "off:$(T "Автообновление выключено" "Auto-update off")" "30m:$(T "Обновлять каждые 30 минут" "Update every 30 minutes")" \
     "1h:$(T "Обновлять каждый час" "Update every hour")" "3h:$(T "Обновлять каждые 3 часа" "Update every 3 hours")" \
     "6h:$(T "Обновлять каждые 6 часов" "Update every 6 hours")" "12h:$(T "Обновлять каждые 12 часов" "Update every 12 hours")" \
@@ -331,7 +335,7 @@ routing)
   fi
   echo "</div>"
   echo "<div class=card><h2>$(T "Свои сайты" "Own sites")</h2><small>$(T "Важнее гео-фильтра. Домен действует вместе с поддоменами; можно вставить ссылку, IP или подсеть." "Override the geo filter. A domain covers its subdomains; you can paste a link, an IP or a subnet.")</small>"
-  echo "<form method=get class=row>$(hidden)<input type=hidden name=a value=add><input type=text name=add placeholder='example.com' required>"
+  echo "<form method=get class=row>$(hidden)<input type=text name=add placeholder='example.com' required>"
   echo "<select name=to><option value=direct>$(T "Напрямую" "Direct")</option><option value=proxy>$(T "Через VPN" "Via VPN")</option></select><button>$(T "Добавить" "Add")</button></form>"
   DEL="$(T "Удалить" "Delete")"
   for list in direct proxy; do
@@ -340,7 +344,7 @@ routing)
     echo "<p><b>$title</b></p>"
     [ -n "$items" ] || echo "<small>$(T "пусто" "empty")</small>"
     for s in $items; do
-      echo "<form method=get class=item>$(hidden)<input type=hidden name=a value=del><input type=hidden name=del value='$s'><span>$s</span><button title='$DEL'>✕</button></form>"
+      echo "<form method=get class=item>$(hidden)<input type=hidden name=del value='$s'><span>$s</span><button title='$DEL'>✕</button></form>"
     done
   done
   echo "</div>"
@@ -372,16 +376,37 @@ adblock)
   echo "$EXCL" | while IFS="$TAB" read -r m name; do
     [ -n "$m" ] || continue
     echo "<div class=item><span>$name<br><small>$m</small></span>"
-    echo "<form method=get>$(hidden)<input type=hidden name=a value=abxdel><input type=hidden name=abxdel value='$m'><button title='$DEL'>✕</button></form></div>"
+    echo "<form method=get>$(hidden)<input type=hidden name=abxdel value='$m'><button title='$DEL'>✕</button></form></div>"
   done
   DEVS="$(flint-adblock devices | esc | awk -F '\t' -v ex="$(flint-adblock exclude | cut -f1 | tr '\n' ' ')" 'index(" " ex, " " $1 " ") == 0')"
   if [ -n "$DEVS" ]; then
-    echo "<form method=get class=row>$(hidden)<input type=hidden name=a value=abxadd><select name=abxadd>"
+    echo "<form method=get class=row>$(hidden)<select name=abxadd>"
     echo "$DEVS" | while IFS="$TAB" read -r m ip name; do echo "<option value='$m'>${name:-$m} — $ip</option>"; done
     echo "</select><button>$(T "Не блокировать" "Don't block")</button></form>"
   fi
-  echo "<form method=get class=row>$(hidden)<input type=hidden name=a value=abxadd><input type=text name=abxadd placeholder='aa:bb:cc:dd:ee:ff' required>"
+  echo "<form method=get class=row>$(hidden)<input type=text name=abxadd placeholder='aa:bb:cc:dd:ee:ff' required>"
   echo "<input type=text name=abxname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить по MAC" "Add by MAC")</button></form></div>"
+  # Allow rules for a plain domain (@@||domain^) are shown here; every other rule under "Own rules".
+  RULES="$(flint-adblock rule | esc)"
+  ALLOWED="$(echo "$RULES" | grep -E '^@@\|\|[a-z0-9.-]+\^$')"
+  echo "<div class=card><h2>$(T "Сайты без блокировки" "Sites without blocking")</h2><small>$(T "Сайт и его поддомены не блокируются — если блокировка сломала нужный сайт. Рекламу с чужих доменов на этом сайте блокировка всё равно убирает: по DNS-запросу не видно, с какой страницы он пришёл." \
+    "The site and its subdomains are not blocked — for when blocking breaks a site you need. Ads from other domains on that site are still blocked: a DNS query does not tell which page it came from.")</small>"
+  [ -n "$ALLOWED" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
+  echo "$ALLOWED" | while IFS= read -r r; do
+    [ -n "$r" ] || continue
+    d="${r#@@||}"
+    echo "<form method=get class=item>$(hidden)<input type=hidden name=abrdel value='$r'><span>${d%^}</span><button title='$DEL'>✕</button></form>"
+  done
+  echo "<form method=get class=row>$(hidden)<input type=text name=aballow placeholder='example.com' required><button>$(T "Не блокировать" "Don't block")</button></form>"
+  BLOCKED="$(flint-adblock blocked 2>/dev/null | esc)"
+  if [ -n "$BLOCKED" ]; then
+    echo "<details style='margin-top:10px'><summary><b>$(T "Недавно заблокировано" "Recently blocked")</b> <small>— $(T "если сайт перестал работать, разрешите домен, который ему нужен" "if a site stopped working, allow the domain it needs")</small></summary>"
+    echo "$BLOCKED" | while IFS="$TAB" read -r d dev; do
+      echo "<form method=get class=item>$(hidden)<input type=hidden name=aballow value='$d'><span>$d<br><small>$dev</small></span><button>$(T "Разрешить" "Allow")</button></form>"
+    done
+    echo "</details>"
+  fi
+  echo "</div>"
   echo "<div class=card><h2>$(T "Списки фильтров" "Filter lists")</h2><small>$(T "Списки в формате AdGuard или hosts. AdGuard DNS filter — DNS-версия фильтров платного AdGuard: Base, Tracking Protection, Mobile Ads, российские рекламные серверы, EasyList, EasyPrivacy." \
     "Lists in AdGuard or hosts format. AdGuard DNS filter is the DNS version of the filters in paid AdGuard: Base, Tracking Protection, Mobile Ads, Russian ad servers, EasyList, EasyPrivacy.")</small>"
   LISTS="$(flint-adblock list | esc)"
@@ -390,18 +415,18 @@ adblock)
     [ -n "$url" ] || continue
     info="$url"; [ "$rc" != - ] && info="$(T "правил" "rules"): $rc · $(T "обновлён" "updated") $up"
     echo "<div class=item><span>$name<br><small>$info</small></span>"
-    echo "<form method=get>$(hidden)<input type=hidden name=a value=abldel><input type=hidden name=abldel value='$url'><button title='$DEL'>✕</button></form></div>"
+    echo "<form method=get>$(hidden)<input type=hidden name=abldel value='$url'><button title='$DEL'>✕</button></form></div>"
   done
   OPTS="$(echo "$PRESETS" | while IFS=: read -r id pname; do
     echo "$LISTS" | cut -f1 | grep -qxF "$PRESET_URL$id.txt" || echo "<option value=$id>$pname</option>"
   done)"
-  [ -n "$OPTS" ] && echo "<form method=get class=row>$(hidden)<input type=hidden name=a value=abpreset><select name=abpreset>$OPTS</select><button>$(T "Добавить" "Add")</button></form>"
-  echo "<form method=get class=row>$(hidden)<input type=hidden name=a value=ablist><input type=text name=ablist placeholder='https://example.com/list.txt' required>"
+  [ -n "$OPTS" ] && echo "<form method=get class=row>$(hidden)<select name=abpreset>$OPTS</select><button>$(T "Добавить" "Add")</button></form>"
+  echo "<form method=get class=row>$(hidden)<input type=text name=ablist placeholder='https://example.com/list.txt' required>"
   echo "<input type=text name=abname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить по ссылке" "Add by link")</button></form></div>"
   echo "<div class=card><h2>$(T "Обновление списков" "List updates")</h2>"
   btn abref 1 "" "$(T "Обновить списки сейчас" "Update the lists now")"
   AI="$(flint-adblock interval)"
-  echo "<form method=get class=row>$(hidden)<input type=hidden name=a value=abint><select name=abint>"
+  echo "<form method=get class=row>$(hidden)<select name=abint>"
   for v in "off:$(T "Автообновление выключено" "Auto-update off")" "1:$(T "Обновлять каждый час" "Update every hour")" \
     "12:$(T "Обновлять каждые 12 часов" "Update every 12 hours")" "24:$(T "Обновлять раз в сутки" "Update once a day")" \
     "72:$(T "Обновлять раз в 3 дня" "Update every 3 days")" "168:$(T "Обновлять раз в неделю" "Update once a week")"; do
@@ -409,15 +434,15 @@ adblock)
     echo "<option value='${v%%:*}'$sel>${v#*:}</option>"
   done
   echo "</select><button>$(T "Сохранить" "Save")</button></form></div>"
-  echo "<div class=card><h2>$(T "Свои правила" "Own rules")</h2><small>$(T "Домен или ссылка блокируются вместе с поддоменами. «Разрешить» — исключение, если список заблокировал нужный сайт. Шаблоны пишутся в синтаксисе AdGuard: ||ads.*^, /regex/, @@||site.ru^." \
-    "A domain or link is blocked with its subdomains. \"Allow\" makes an exception when a list blocks a site you need. Patterns use AdGuard syntax: ||ads.*^, /regex/, @@||site.com^.")</small>"
-  echo "<form method=get class=row>$(hidden)<input type=hidden name=a value=abrule><input type=text name=abrule placeholder='ads.example.com' required>"
+  echo "<div class=card><h2>$(T "Свои правила" "Own rules")</h2><small>$(T "Домен или ссылка блокируются вместе с поддоменами. «Разрешить» с шаблоном — исключение сложнее, чем сайт целиком. Шаблоны пишутся в синтаксисе AdGuard: ||ads.*^, /regex/, @@||site.ru^." \
+    "A domain or link is blocked with its subdomains. \"Allow\" with a pattern makes a narrower exception than a whole site. Patterns use AdGuard syntax: ||ads.*^, /regex/, @@||site.com^.")</small>"
+  echo "<form method=get class=row>$(hidden)<input type=text name=abrule placeholder='ads.example.com' required>"
   echo "<select name=abto><option value=block>$(T "Блокировать" "Block")</option><option value=allow>$(T "Разрешить" "Allow")</option></select><button>$(T "Добавить" "Add")</button></form>"
-  RULES="$(flint-adblock rule | esc)"
-  [ -n "$RULES" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
-  echo "$RULES" | while IFS= read -r r; do
+  OWNRULES="$(echo "$RULES" | grep -vE '^@@\|\|[a-z0-9.-]+\^$')"
+  [ -n "$OWNRULES" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
+  echo "$OWNRULES" | while IFS= read -r r; do
     [ -n "$r" ] || continue
-    echo "<form method=get class=item>$(hidden)<input type=hidden name=a value=abrdel><input type=hidden name=abrdel value='$r'><span>$r</span><button title='$DEL'>✕</button></form>"
+    echo "<form method=get class=item>$(hidden)<input type=hidden name=abrdel value='$r'><span>$r</span><button title='$DEL'>✕</button></form>"
   done
   echo "</div>"
   ;;

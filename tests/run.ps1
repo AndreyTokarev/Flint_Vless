@@ -1,7 +1,7 @@
 # Deploy this checkout (deploy.ps1 -KeepKit), upload the router test scenarios and run them on the router.
 # The router ends up with this code and the settings from config\ (as after a deploy).
 # Takes 5-10 minutes; some scenarios empty the router, so servers vanish and LAN goes direct until each restores the state.
-# Usage: .\tests\run.ps1 [-Router 192.168.8.1] [empty redeploy subscription own-server failover]
+# Usage: .\tests\run.ps1 [-Router 192.168.8.1] [empty redeploy subscription own-server failover panel]
 param(
     [string]$Router = "192.168.8.1",
     [string]$User = "root",
