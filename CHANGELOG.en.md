@@ -6,6 +6,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-10-04
+
 ### Added
 - Uninstall Flint VPN: `uninstall.ps1` / `uninstall.sh` (on the router — `kit/uninstall.sh`). A backup runs first; network, Wi‑Fi and the firmware stay, devices go online directly.
 - Local names for network devices in the panel: DNS → Local names (`nas01` → IP; `nas01.lan` and `nas01.local` work too). On the router — `flint-dns hosts`. The names are part of the settings file.
@@ -260,7 +262,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.2...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.6.0...v1.7.0
