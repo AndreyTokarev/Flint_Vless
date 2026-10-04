@@ -41,15 +41,15 @@ The panel is available in English and Russian: the language follows your browser
 - **Transparent VPN for the whole network.** Client TCP traffic is redirected into Xray; nothing to configure on devices.
 - **Russia geo filter.** Russian sites (`geosite:category-ru`) and IPs (`geoip:ru`) go direct, the rest via VPN. One button turns it off (everything via VPN).
 - **Your own rules.** Sites, IPs and subnets "always direct" or "always via VPN", taking priority over the geo filter.
-- **Web panel** at `http://vpn.lan:81/`, protected by a PIN: server selection, VPN on/off, routing, own servers. Works on phones.
+- **Web panel** at `http://vpn.lan:81/`, protected by a PIN: server selection, VPN on/off, routing, own servers, subscriptions, ad blocking, PIN change, settings export and import. Works on phones.
 - **Subscriptions from any providers.** Add several subscriptions in the v2rayN / Happ / Hiddify format — servers from all of them show up in the panel, grouped by provider. The subscription name, expiry date and traffic are picked up automatically. The list is refreshed on demand or automatically (every 30 minutes to once a day); the router downloads subscriptions directly, so refreshing works even when the current server is down.
 - **Own servers.** Add by `vless://` link, by copying a subscription server, or manually; TCP (xtls-rprx-vision) or gRPC transport.
 - **Failover.** Every 2 minutes the router checks the tunnel; if the server stopped responding while the internet is up, it refreshes the subscription and switches to the first working server.
 - **White lists.** Provider servers given by bare IP (for networks where only a white list is open) are grouped in a separate collapsible block.
 - **DNS over HTTPS** (dnscrypt-proxy) against DNS spoofing; client DNS queries are forced through the router.
-- **Ad blocking** for the whole network at the DNS level — AdGuard Home from the GL firmware, one button to turn it on. The default list is AdGuard DNS filter, the DNS version of the filters in paid AdGuard; add your own lists by URL and your own rules. Lists update by themselves, and individual devices and sites can be excluded.
+- **Ad blocking** for the whole network at the DNS level — AdGuard Home from the GL firmware, one button to turn it on. The default list is AdGuard DNS filter, the DNS version of the filters in paid AdGuard; add your own lists by URL and your own rules. Lists update by themselves, individual devices and sites can be excluded, and a recently blocked domain is allowed with one button.
 - **Home network access.** The main router's LAN, NAS and printer are reachable directly, bypassing the VPN; local names (`nas01`) are served by dnsmasq.
-- **Backup and restore** with one command; redeploying keeps the settings made in the panel.
+- **Backup and restore** with one command; redeploying keeps the settings made in the panel. The panel settings can also be downloaded as a file and uploaded to the same or another Flint right from the browser.
 
 ## Screenshots
 
@@ -235,7 +235,7 @@ The panel speaks English and Russian. On the first visit the language follows th
 | Setting | Description |
 |---|---|
 | `VLESS_UUID` | optional: UUID for `config/nodes.conf` lines without one (subscription and own servers carry their own) |
-| `UI_PIN` | panel PIN (letters and digits only) |
+| `UI_PIN` | panel PIN (letters and digits only). It can also be changed in the panel (Settings), but a deploy writes the value from here to the router — after changing it in the panel, update it here or run a backup |
 | `UI_TITLE` | text of the panel logo, default `Flint VPN` (the last word is gold) |
 | `UI_TAGLINE` | tagline under the logo, default `Sail the internet`; an empty value removes it |
 | `UI_LANG` | default panel language: `ru` or `en`; empty — follow the browser. Background records (last subscription check, last failure) are written in it too |
@@ -304,6 +304,8 @@ How it works:
 
 Rules take effect in a few seconds.
 
+**Sites without blocking.** If blocking broke a site you need, add it to "Sites without blocking" — the same "Allow" rule for a domain with its subdomains, kept as a separate list. Below it, "Recently blocked" lists the latest blocked domains with the device name, each with an Allow button. The query log is kept in memory only (the last 1000 queries); nothing is written to flash.
+
 AdGuard Home uses 40–60 MB of RAM; with blocking off it is stopped.
 
 ### Where ads remain
@@ -321,11 +323,13 @@ On such sites only a blocker on the device itself helps: the [uBlock Origin](htt
 - browsers with secure DNS (DoH): Chrome, Edge, Firefox, Yandex Browser;
 - devices running a VPN client (Happ, v2rayN, Hiddify, etc.): DNS and all traffic go into its tunnel, so neither the blocking nor the router's VPN apply. Behind Flint a VPN client isn't needed — turn it off.
 
-More on device settings in [Devices on the network](#devices-on-the-network). If a site you need broke after turning blocking on, allow its domain in "Own rules" or add the device to "Devices without blocking".
+More on device settings in [Devices on the network](#devices-on-the-network). If a site you need broke after turning blocking on, add it to "Sites without blocking" or add the device to "Devices without blocking".
 
 ## Access from the main router's network
 
 `install.sh` allows incoming connections from `UPSTREAM_NET` to Flint and to devices behind it (`192.168.8.x`). If the main router's network changes, update `UPSTREAM_IF` / `UPSTREAM_NET` in `config/flint.env` and redeploy. On the main router, add a DHCP reservation for Flint (e.g. `192.168.0.111`) and a static route: network `192.168.8.0`, mask `255.255.255.0`, gateway `192.168.0.111`.
+
+Fix the addresses of the main network's devices you reach through Flint (NAS, printer) as well — with a DHCP reservation on the main router or a static IP on the device. Otherwise a device may get another address after a reboot, and `LOCAL_HOSTS` will point nowhere.
 
 ## Backup
 
@@ -338,7 +342,9 @@ More on device settings in [Devices on the network](#devices-on-the-network). If
 ./backup.sh --with-binary
 ```
 
-The backup pulls from the router its settings, the own servers and sites from the panel, and the network and Wi‑Fi configs. The user files listed in `kit/state-files` (`flint.env`, servers, subscriptions, sites, ad blocking files) are saved as one archive, `backup\<date>\state.tar.gz`, and also copied into `config/`, which the deploy uploads later.
+The backup pulls from the router its settings, the own servers and sites from the panel, and the network and Wi‑Fi configs. The user files listed in `kit/state-files` (`flint.env`, servers, subscriptions, sites, ad blocking files) are saved as one archive, `backup\<date>\state.tar.gz`, and also copied into `config/`, which the deploy uploads later. This includes `flint.env` with the PIN, if it was changed in the panel.
+
+Without a computer, the panel settings can be saved as a file: Settings → "Download the settings file" (or `flint-settings export` on the router). It is not a full backup: `flint.env`, the network and Wi‑Fi are not included.
 
 > [!WARNING]
 > `backup/` and the files in `config/` contain your subscription UUID and Wi‑Fi passwords. They are gitignored; keep them separately — in the cloud or on a USB stick.
@@ -382,10 +388,11 @@ flint-adblock list               # lists: URL, name, rules, last update
 flint-adblock list add https://example.com/list.txt "Name"
 flint-adblock rule add block ads.example.com   # allow — exception
 flint-adblock blocked                          # recently blocked domains and devices
-flint-settings export > /tmp/s.txt             # export the panel settings (no flint.env); import /tmp/s.txt — import
 flint-adblock exclude add aa:bb:cc:dd:ee:ff    # device without blocking
 flint-adblock refresh            # update the lists now
 flint-adblock interval 24        # auto-update: off, 1, 12, 24, 72, 168 hours
+flint-settings export > /tmp/s.txt   # export the panel settings (no flint.env)
+flint-settings import /tmp/s.txt     # import: replaces the panel settings and applies them
 logread -e xray                # Xray logs
 ```
 
@@ -419,7 +426,9 @@ If you run it on another device, please report the result in [Issues](https://gi
 | A server fails though it works in Happ | the provider rotated keys or SNI — "Subscriptions → Update all subscriptions now" |
 | A subscription is not added | "could not be downloaded" - open the link in a browser, check the router's internet; "no supported servers" - the subscription has no VLESS + REALITY (VMess, Trojan, Shadowsocks, XHTTP are not supported) |
 | A Russian site goes via VPN | geoip/geosite missing (then `global` mode): `flint-geo-update`; or add the site as "direct" |
-| A site or app broke with ad blocking on | turn blocking off to confirm; if it is the cause, add the domain to own rules as "Allow" or the device to "Devices without blocking" |
+| A site or app broke with ad blocking on | turn blocking off to confirm; if it is the cause, allow the domain in "Sites without blocking" ("Recently blocked" gives a hint) or add the device to "Devices without blocking" |
+| Forgot the PIN | `ssh root@192.168.8.1 "grep UI_PIN /etc/xray/flint.env"`; or redeploy — the PIN becomes the one in `config/flint.env` |
+| A NAS or other device of the main network doesn't open | find it in the main router's client list: it may have a new address after a reboot. Fix the address (DHCP reservation or static IP on the device) and check `LOCAL_HOSTS` |
 | Ads are not blocked on a device | turn off Private DNS, browser DoH and any VPN client (Happ, etc.) on it; check it is not excluded |
 | Ads remain on VK, YouTube, etc. | they come from the same domain as the content and DNS blocking can't remove them — install uBlock Origin in the browser (see [Where ads remain](#where-ads-remain)) |
 | `opkg install ... failed` | `/tmp/flint-opkg.log`; router internet; put Xray into `backup/bin/xray` |

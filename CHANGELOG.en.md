@@ -6,6 +6,9 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+### Changed
+- README: PIN change, moving settings with a file, "Sites without blocking" and "Recently blocked", fixed addresses for main-network devices, new troubleshooting rows.
+
 ## [1.5.5] — 2026-10-04
 
 ### Fixed
