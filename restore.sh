@@ -35,15 +35,11 @@ tar -xzf "$ARCHIVE" -C "$TMP" etc/xray 2>/dev/null || true
 if [ -f "$TMP/etc/xray/gru.env" ] && [ ! -f "$TMP/etc/xray/flint.env" ]; then
 	mv "$TMP/etc/xray/gru.env" "$TMP/etc/xray/flint.env"
 fi
+NAMES="$(grep -v -E '^(#|$)' "$ROOT/kit/state-files" | tr -d '\r')"
 FOUND=""
-for f in flint.env nodes.conf nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
-	if [ -f "$TMP/etc/xray/$f" ]; then FOUND="$FOUND $f"; fi
+for f in $NAMES; do
+	if [ -e "$TMP/etc/xray/$f" ]; then FOUND="$FOUND $f"; fi
 done
-HAS_NODES_D=0
-if [ -d "$TMP/etc/xray/nodes.d" ] && ls "$TMP/etc/xray/nodes.d"/*.conf >/dev/null 2>&1; then
-	HAS_NODES_D=1
-	FOUND="$FOUND nodes.d"
-fi
 
 echo "Backup: $BACKUP"
 echo "Settings from the backup:${FOUND:- none (current config/ is kept)}"
@@ -56,19 +52,14 @@ fi
 if [ -n "$FOUND" ]; then
 	KEEP="$ROOT/backup/config-before-restore-$(date +%Y-%m-%d_%H%M%S)"
 	mkdir -p "$KEEP"
-	for f in flint.env nodes.conf nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
-		if [ -f "$ROOT/config/$f" ]; then cp "$ROOT/config/$f" "$KEEP/"; fi
+	for f in $NAMES; do
+		if [ -e "$ROOT/config/$f" ]; then cp -R "$ROOT/config/$f" "$KEEP/"; fi
 	done
-	[ -d "$ROOT/config/nodes.d" ] && cp -R "$ROOT/config/nodes.d" "$KEEP/"
 	echo "Current config/ saved to $KEEP"
 	for f in $FOUND; do
-		[ "$f" = nodes.d ] && continue
-		cp "$TMP/etc/xray/$f" "$ROOT/config/$f"
+		rm -rf "${ROOT:?}/config/$f"
+		cp -R "$TMP/etc/xray/$f" "$ROOT/config/$f"
 	done
-	if [ "$HAS_NODES_D" = 1 ]; then
-		rm -rf "$ROOT/config/nodes.d"
-		cp -R "$TMP/etc/xray/nodes.d" "$ROOT/config/nodes.d"
-	fi
 fi
 
 if [ "$FULL" = 1 ]; then

@@ -6,6 +6,13 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.2.2] — 2026-10-04
+
+### Changed
+- The user files (`flint.env`, servers, subscriptions, sites, ad blocking) are listed once, in `kit/state-files`. Deploy, backup, restore and the installer read it; before, the list was copied into seven places.
+- The backup pulls these files as one archive, `backup/<date>/state.tar.gz` (one connection instead of nine), and unpacks it into `config/`.
+- `tests/run.ps1` / `tests/run.sh` deploy the working copy first, so every scenario checks the current code. `deploy` got a `-KeepKit` / `--keep-kit` switch.
+
 ## [1.2.1] — 2026-10-04
 
 ### Fixed

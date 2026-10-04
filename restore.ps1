@@ -25,7 +25,7 @@ if (-not $Backup) {
 $archive = Join-Path (Resolve-Path $Backup) "router-config.tar.gz"
 if (-not (Test-Path $archive)) { throw "Missing $archive" }
 
-$files = "flint.env", "nodes.conf", "nodes-custom.conf", "custom-sites", "subscriptions", "adblock-lists", "adblock-rules", "adblock-exclude"
+$names = Get-Content (Join-Path $root "kit\state-files") | Where-Object { $_ -and $_ -notmatch '^#' }
 $tmp = Join-Path ([IO.Path]::GetTempPath()) "flint-restore"
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory $tmp | Out-Null
@@ -36,31 +36,25 @@ try {
     if ((Test-Path $oldEnv) -and -not (Test-Path (Join-Path $tmp "etc\xray\flint.env"))) {
         Rename-Item $oldEnv "flint.env"
     }
-    $found = $files | Where-Object { Test-Path (Join-Path $tmp "etc\xray\$_") }
-    $nodesD = Join-Path $tmp "etc\xray\nodes.d"
-    $hasNodesD = (Test-Path $nodesD) -and (Get-ChildItem $nodesD -Filter *.conf -ErrorAction SilentlyContinue)
+    $found = @($names | Where-Object { Test-Path (Join-Path $tmp "etc\xray\$_") })
 
     Write-Host "Backup: $Backup"
-    $foundLabel = @($found)
-    if ($hasNodesD) { $foundLabel += "nodes.d" }
-    Write-Host ("Settings from the backup: " + $(if ($foundLabel) { $foundLabel -join ", " } else { "none (current config\ is kept)" }))
+    Write-Host ("Settings from the backup: " + $(if ($found) { $found -join ", " } else { "none (current config\ is kept)" }))
     if ($Full) { Write-Host "Full: network, Wi-Fi, firewall, DHCP, hosts, cron, SSH keys from the backup, then reboot" }
     if (-not $Yes -and (Read-Host "Restore to $target? [y/N]") -notmatch '^[yY]') { Write-Host "Cancelled"; exit 1 }
 
-    if ($found -or $hasNodesD) {
+    if ($found) {
         $keep = Join-Path $root ("backup\config-before-restore-" + (Get-Date -Format "yyyy-MM-dd_HHmmss"))
         New-Item -ItemType Directory $keep | Out-Null
-        foreach ($f in $files) {
+        foreach ($f in $names) {
             $cur = Join-Path $root "config\$f"
-            if (Test-Path $cur) { Copy-Item $cur $keep }
+            if (Test-Path $cur) { Copy-Item $cur $keep -Recurse }
         }
-        $curD = Join-Path $root "config\nodes.d"
-        if (Test-Path $curD) { Copy-Item $curD (Join-Path $keep "nodes.d") -Recurse }
         Write-Host "Current config\ saved to $keep"
-        foreach ($f in $found) { Copy-Item (Join-Path $tmp "etc\xray\$f") (Join-Path $root "config\$f") -Force }
-        if ($hasNodesD) {
-            Remove-Item $curD -Recurse -Force -ErrorAction SilentlyContinue
-            Copy-Item $nodesD $curD -Recurse
+        foreach ($f in $found) {
+            $dst = Join-Path $root "config\$f"
+            Remove-Item $dst -Recurse -Force -ErrorAction SilentlyContinue
+            Copy-Item (Join-Path $tmp "etc\xray\$f") $dst -Recurse
         }
     }
 

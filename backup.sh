@@ -18,19 +18,16 @@ PATHS="/etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /etc/firewall.user* /etc/in
 ssh "$TARGET" "tar -czf - $PATHS 2>/dev/null" > "$DIR/router-config.tar.gz" || true
 echo "Saved $DIR/router-config.tar.gz"
 
-for f in flint.env nodes.conf nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
-	if ssh "$TARGET" "test -f /etc/xray/$f"; then
-		ssh "$TARGET" "cat /etc/xray/$f" > "$ROOT/config/$f"
-		cp "$ROOT/config/$f" "$DIR/"
-		echo "Refreshed config/$f"
-	fi
-done
-if ssh "$TARGET" "test -d /etc/xray/nodes.d && ls /etc/xray/nodes.d/*.conf >/dev/null 2>&1"; then
-	rm -rf "$ROOT/config/nodes.d"
-	ssh "$TARGET" "tar -czf - -C /etc/xray nodes.d" > "$DIR/nodes.d.tar.gz"
-	tar -xzf "$DIR/nodes.d.tar.gz" -C "$ROOT/config"
-	cp -R "$ROOT/config/nodes.d" "$DIR/"
-	echo "Refreshed config/nodes.d"
+# User state (kit/state-files) as one archive, then unpacked over config/.
+NAMES="$(grep -v -E '^(#|$)' "$ROOT/kit/state-files" | tr -d '\r' | tr '\n' ' ')"
+if ssh "$TARGET" "cd /etc/xray && tar -czf - \$(ls -d $NAMES 2>/dev/null)" > "$DIR/state.tar.gz"; then
+	for name in $(tar -tzf "$DIR/state.tar.gz" | cut -d/ -f1 | sort -u); do
+		rm -rf "${ROOT:?}/config/$name"
+		echo "Refreshed config/$name"
+	done
+	tar -xzf "$DIR/state.tar.gz" -C "$ROOT/config"
+else
+	echo "No user state on the router: config/ is kept"
 fi
 
 if [ "$WITH_BINARY" = 1 ]; then

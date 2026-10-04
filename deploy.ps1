@@ -1,8 +1,10 @@
-# Upload the kit with config/flint.env (+ config/nodes.conf and other saved lists, if any) to the router and run install.sh.
-# Usage: .\deploy.ps1 [-Router 192.168.8.1]
+# Upload the kit with the config\ entries listed in kit\state-files (config\flint.env is required) to the router and run install.sh.
+# Usage: .\deploy.ps1 [-Router 192.168.8.1] [-KeepKit]
+#   -KeepKit leaves the unpacked kit in /tmp/flint-kit on the router (for tests\run.ps1).
 param(
     [string]$Router = "192.168.8.1",
-    [string]$User = "root"
+    [string]$User = "root",
+    [switch]$KeepKit
 )
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
@@ -18,12 +20,10 @@ try {
     Remove-Item $staging, $archive -Recurse -Force -ErrorAction SilentlyContinue
     Copy-Item (Join-Path $root "kit") $staging -Recurse
     New-Item -ItemType Directory (Join-Path $staging "config") | Out-Null
-    foreach ($f in "flint.env", "nodes.conf", "nodes-custom.conf", "custom-sites", "subscriptions", "adblock-lists", "adblock-rules", "adblock-exclude") {
+    foreach ($f in Get-Content (Join-Path $root "kit\state-files") | Where-Object { $_ -and $_ -notmatch '^#' }) {
         $src = Join-Path $root "config\$f"
-        if (Test-Path $src) { Copy-Item $src (Join-Path $staging "config") }
+        if (Test-Path $src) { Copy-Item $src (Join-Path $staging "config") -Recurse }
     }
-    $nodesD = Join-Path $root "config\nodes.d"
-    if (Test-Path $nodesD) { Copy-Item $nodesD (Join-Path $staging "config\nodes.d") -Recurse }
     $xrayBin = Join-Path $root "backup\bin\xray"
     if (Test-Path $xrayBin) {
         New-Item -ItemType Directory (Join-Path $staging "bin") | Out-Null
@@ -37,7 +37,7 @@ try {
 
     $remote = "rm -rf /tmp/flint-kit && mkdir -p /tmp/flint-kit && tar -xf /tmp/flint-kit.tar -C /tmp/flint-kit && rm -f /tmp/flint-kit.tar && " +
         "find /tmp/flint-kit -type f ! -path '/tmp/flint-kit/bin/*' -exec sed -i 's/\r$//' {} + && " +
-        "sh /tmp/flint-kit/install.sh; rc=`$?; rm -rf /tmp/flint-kit; exit `$rc"
+        "sh /tmp/flint-kit/install.sh; rc=`$?; " + $(if ($KeepKit) { "" } else { "rm -rf /tmp/flint-kit; " }) + "exit `$rc"
     ssh $target $remote
     if ($LASTEXITCODE) { throw "install.sh failed (exit $LASTEXITCODE)" }
 }

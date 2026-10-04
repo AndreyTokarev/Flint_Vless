@@ -109,15 +109,13 @@ chmod 755 /etc/init.d/xray /etc/init.d/flint-ui /etc/init.d/flint-doh /etc/init.
 	/usr/bin/flint-geo-update /usr/bin/flint-sub-update /usr/bin/flint-custom /usr/bin/flint-watchdog /usr/bin/flint-adblock \
 	/www/flint/cgi-bin/panel.cgi
 
-(umask 077; cp "$KIT/config/flint.env" /etc/xray/flint.env)
-# Subscription servers saved by backup only seed a router without them: the router keeps its own list fresh.
-if [ -d "$KIT/config/nodes.d" ] && { [ ! -d /etc/xray/nodes.d ] || [ -z "$(ls /etc/xray/nodes.d 2>/dev/null)" ]; }; then
-	mkdir -p /etc/xray/nodes.d
-	(umask 077; cp "$KIT/config/nodes.d"/*.conf /etc/xray/nodes.d/ 2>/dev/null) || true
-fi
-# Optional: manual and own servers, custom sites, subscriptions and ad blocking lists/rules; without them the router's copies stay.
-for f in nodes.conf nodes-custom.conf custom-sites subscriptions adblock-lists adblock-rules adblock-exclude; do
-	if [ -f "$KIT/config/$f" ]; then (umask 077; cp "$KIT/config/$f" "/etc/xray/$f"); fi
+# User state from config/ (names in state-files); an entry missing there keeps the router's copy.
+# nodes.d only seeds a router without subscription servers: the router keeps its own list fresh.
+grep -v -E '^(#|$)' "$KIT/state-files" | while read -r f; do
+	[ -e "$KIT/config/$f" ] || continue
+	if [ "$f" = nodes.d ] && [ -n "$(ls /etc/xray/nodes.d 2>/dev/null)" ]; then continue; fi
+	rm -rf "/etc/xray/$f"
+	(umask 077; cp -R "$KIT/config/$f" "/etc/xray/$f")
 done
 # Legacy nodes.conf with "#@ <id>" groups → nodes.d/<id>.conf (keeps nodes.conf.bak); existing nodes.d files win.
 if [ -f /etc/xray/nodes.conf ] && grep -q '^#@' /etc/xray/nodes.conf; then

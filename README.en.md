@@ -337,7 +337,7 @@ More on device settings in [Devices on the network](#devices-on-the-network). If
 ./backup.sh --with-binary
 ```
 
-The backup pulls from the router its settings, the own servers and sites from the panel, and the network and Wi‑Fi configs. Fresh `flint.env`, `nodes.conf`, `nodes-custom.conf`, `custom-sites`, `subscriptions` and the ad blocking files (`adblock-lists`, `adblock-rules`, `adblock-exclude`) are also copied into `config/`.
+The backup pulls from the router its settings, the own servers and sites from the panel, and the network and Wi‑Fi configs. The user files listed in `kit/state-files` (`flint.env`, servers, subscriptions, sites, ad blocking files) are saved as one archive, `backup\<date>\state.tar.gz`, and also copied into `config/`, which the deploy uploads later.
 
 > [!WARNING]
 > `backup/` and the files in `config/` contain your subscription UUID and Wi‑Fi passwords. They are gitignored; keep them separately — in the cloud or on a USB stick.

@@ -1,0 +1,11 @@
+# User state in /etc/xray, one name per line (file or directory): backup saves it to config/,
+# restore takes it from a backup, deploy uploads what config/ has and install.sh puts it in place.
+flint.env
+nodes.conf
+nodes-custom.conf
+nodes.d
+custom-sites
+subscriptions
+adblock-lists
+adblock-rules
+adblock-exclude

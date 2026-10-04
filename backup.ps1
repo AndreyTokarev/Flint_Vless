@@ -18,24 +18,20 @@ $paths = "/etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /etc/firewall.user* /etc
 cmd /c "ssh $target ""tar -czf - $paths 2>/dev/null"" > ""$dir\router-config.tar.gz"""
 Write-Host "Saved $dir\router-config.tar.gz"
 
-New-Item -ItemType Directory (Join-Path $root "config") -Force | Out-Null
-foreach ($f in "flint.env", "nodes.conf", "nodes-custom.conf", "custom-sites", "subscriptions", "adblock-lists", "adblock-rules", "adblock-exclude") {
-    ssh $target "test -f /etc/xray/$f"
-    if ($LASTEXITCODE -eq 0) {
-        cmd /c "ssh $target ""cat /etc/xray/$f"" > ""$root\config\$f"""
-        Copy-Item (Join-Path $root "config\$f") $dir
-        Write-Host "Refreshed config\$f"
-    }
-}
-ssh $target "test -d /etc/xray/nodes.d && ls /etc/xray/nodes.d/*.conf >/dev/null 2>&1"
+# User state (kit\state-files) as one archive, then unpacked over config\.
+$config = Join-Path $root "config"
+New-Item -ItemType Directory $config -Force | Out-Null
+$names = (Get-Content (Join-Path $root "kit\state-files") | Where-Object { $_ -and $_ -notmatch '^#' }) -join " "
+$state = Join-Path $dir "state.tar.gz"
+cmd /c "ssh $target ""cd /etc/xray && tar -czf - `$(ls -d $names 2>/dev/null)"" > ""$state"""
 if ($LASTEXITCODE -eq 0) {
-    $localD = Join-Path $root "config\nodes.d"
-    Remove-Item $localD -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory $localD | Out-Null
-    cmd /c "ssh $target ""tar -czf - -C /etc/xray nodes.d"" > ""$dir\nodes.d.tar.gz"""
-    tar -xzf (Join-Path $dir "nodes.d.tar.gz") -C (Join-Path $root "config")
-    Copy-Item $localD (Join-Path $dir "nodes.d") -Recurse
-    Write-Host "Refreshed config\nodes.d"
+    foreach ($name in (tar -tzf $state | ForEach-Object { ($_ -split '/')[0] } | Sort-Object -Unique)) {
+        Remove-Item (Join-Path $config $name) -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "Refreshed config\$name"
+    }
+    tar -xzf $state -C $config
+} else {
+    Write-Host "No user state on the router: config\ is kept"
 }
 
 if ($WithBinary) {

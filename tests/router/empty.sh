@@ -6,7 +6,7 @@ echo "== empty: install without servers"
 save_state
 go_empty
 mkdir -p "$KIT/config"
-rm -f "$KIT/config/"*
+rm -rf "$KIT/config/"*
 sed 's/^SUB_URL=.*/SUB_URL=/' /etc/xray/flint.env > "$KIT/config/flint.env"
 sh "$KIT/install.sh" > /tmp/flint-test-install.log 2>&1
 rc=$?
