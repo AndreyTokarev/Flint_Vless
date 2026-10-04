@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/brand/flint-logo.png" width="320" alt="Flint VPN">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="kit/files/www/flint/logo.svg">
+    <img src="docs/brand/flint-mark.svg" width="110" alt="Flint VPN">
+  </picture>
 </p>
 
 <h1 align="center">Flint VPN</h1>
@@ -233,8 +236,8 @@ The panel speaks English and Russian. On the first visit the language follows th
 |---|---|
 | `VLESS_UUID` | optional: UUID for `config/nodes.conf` lines without one (subscription and own servers carry their own) |
 | `UI_PIN` | panel PIN (letters and digits only) |
-| `UI_TITLE` | browser tab title, default `Flint VPN` (the panel logo is the brand image) |
-| `UI_TAGLINE` | unused in the panel (the slogan is already on the logo); may be left empty |
+| `UI_TITLE` | text of the panel logo, default `Flint VPN` (the last word is gold) |
+| `UI_TAGLINE` | tagline under the logo, default `Sail the internet`; an empty value removes it |
 | `UI_LANG` | default panel language: `ru` or `en`; empty — follow the browser. Background records (last subscription check, last failure) are written in it too |
 | `DEFAULT_NODE` | server code enabled after installation (usually `auto`); the first server if there is no such code |
 | `ROUTING` | `ru` — Russian sites and IPs direct, the rest via VPN; `global` — everything via VPN. The `geoip.dat`/`geosite.dat` databases (Loyalsoldier) are downloaded on install and updated on Sundays at 4:30; without them the router runs in `global` mode |

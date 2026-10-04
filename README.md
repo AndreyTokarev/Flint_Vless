@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/brand/flint-logo.png" width="320" alt="Flint VPN">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="kit/files/www/flint/logo.svg">
+    <img src="docs/brand/flint-mark.svg" width="110" alt="Flint VPN">
+  </picture>
 </p>
 
 <h1 align="center">Flint VPN</h1>
@@ -244,8 +247,8 @@ Panel: http://vpn.lan:81/  (PIN from flint.env)
 |---|---|
 | `VLESS_UUID` | необязательно: UUID для строк `config/nodes.conf`, где он не указан (у серверов из подписок и своих серверов UUID свой) |
 | `UI_PIN` | PIN панели (только буквы и цифры) |
-| `UI_TITLE` | заголовок вкладки браузера, по умолчанию `Flint VPN` (логотип в панели — картинка) |
-| `UI_TAGLINE` | не используется в панели (слоган уже на логотипе); можно оставить пустым |
+| `UI_TITLE` | надпись в логотипе панели, по умолчанию `Flint VPN` (последнее слово — золотым) |
+| `UI_TAGLINE` | подзаголовок под логотипом, по умолчанию `Sail the internet`; пустое значение убирает его |
 | `UI_LANG` | язык панели по умолчанию: `ru` или `en`; пусто — по языку браузера. Им же пишутся фоновые записи (последняя проверка подписки, последний сбой) |
 | `DEFAULT_NODE` | код сервера, который включается после установки (обычно `auto`); если такого нет — первый в списке |
 | `ROUTING` | `ru` — российские сайты и IP напрямую, остальное через VPN; `global` — всё через VPN. Базы `geoip.dat`/`geosite.dat` (Loyalsoldier) скачиваются при установке и обновляются по воскресеньям в 4:30; без них роутер работает в режиме `global` |

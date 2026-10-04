@@ -6,6 +6,11 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.5.4] — 2026-10-04
+
+### Changed
+- Restored the previous panel logo: SVG mark and text (`UI_TITLE` / `UI_TAGLINE`), as before 1.5.3.
+
 ## [1.5.3] — 2026-10-04
 
 ### Changed
