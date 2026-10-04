@@ -6,9 +6,22 @@ pin="$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')"
 # panel <query>: the Russian page for the query (without pass and lang).
 panel() { wget -qO- "http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&$1"; }
 page_ok() { panel "$1" | grep -q '</html>'; }
-for t in status servers own subs routing adblock; do check "tab $t renders" page_ok "tab=$t"; done
+for t in status servers own subs routing adblock settings; do check "tab $t renders" page_ok "tab=$t"; done
 check "no hidden action fields" fails sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&tab=servers' | grep -q 'name=a '"
 check "wrong PIN shows the login form" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=bad' | grep -q 'type=password'"
+check "settings shows the PIN form" panel_has settings 'name=pinold'
+panel "tab=settings&pin=1&pinold=bad&pinnew=zzPinTest9&pinok=zzPinTest9" >/tmp/flint-test-pin
+check "PIN change rejects a wrong current PIN" grep -q 'Неверный текущий PIN' /tmp/flint-test-pin
+check "PIN unchanged after a rejected change" [ "$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')" = "$pin" ]
+panel "tab=settings&pin=1&pinold=$pin&pinnew=zzPinTest9&pinok=zzPinOther" >/tmp/flint-test-pin
+check "PIN change rejects a mismatched confirmation" grep -q 'не совпадают' /tmp/flint-test-pin
+panel "tab=settings&pin=1&pinold=$pin&pinnew=zzPinTest9&pinok=zzPinTest9" >/tmp/flint-test-pin
+check "PIN change reports success" grep -q 'PIN изменён' /tmp/flint-test-pin
+check "new PIN is in flint.env" [ "$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')" = zzPinTest9 ]
+check "new PIN opens the panel" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=zzPinTest9&tab=settings' | grep -q 'name=pinold'"
+wget -qO- "http://127.0.0.1:81/cgi-bin/panel.cgi?pass=zzPinTest9&lang=ru&tab=settings&pin=1&pinold=zzPinTest9&pinnew=$pin&pinok=$pin" >/dev/null
+check "PIN restored after the test" [ "$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')" = "$pin" ]
+rm -f /tmp/flint-test-pin
 
 panel "tab=routing&add=zz-panel-test.example&to=proxy" >/dev/null
 check "site add" sh -c "flint-node site list | grep -q zz-panel-test.example"

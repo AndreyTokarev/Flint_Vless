@@ -99,7 +99,7 @@ HTML
 fi
 
 # The action is the first non-empty parameter from this list; every form sends exactly one of them.
-ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import "
+ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin "
 a="$(echo "$qs" | tr '&' '\n' | awk -F = -v l="$ACTIONS" '$2 != "" && index(l, " " $1 " ") { print $1; exit }')"
 msg=""; form=""; subedit=""; subsave=""
 case "$a" in
@@ -164,6 +164,24 @@ EOF
         /^Content-Disposition:/ && /name="file"/ { hdr = 1 }' | flint-settings import 2>&1)"
     else
       msg="$(T "Выберите файл настроек (не больше 1 МБ)" "Choose a settings file (up to 1 MB)")"
+    fi ;;
+  pin)
+    # Letters and digits only — same rule as UI_PIN in flint.env / README; get() already strips the rest.
+    pinold="$(get pinold)"; pinnew="$(get pinnew)"; pinok="$(get pinok)"
+    if [ -z "$pinold" ] || [ "$pinold" != "$UI_PIN" ]; then
+      msg="$(T "Неверный текущий PIN" "Wrong current PIN")"
+    elif [ -z "$pinnew" ] || [ "$pinnew" != "$(printf '%s' "$pinnew" | tr -cd 'A-Za-z0-9')" ]; then
+      msg="$(T "Новый PIN: только буквы и цифры" "New PIN: letters and digits only")"
+    elif [ "$pinnew" != "$pinok" ]; then
+      msg="$(T "Новый PIN и подтверждение не совпадают" "New PIN and confirmation do not match")"
+    elif ! grep -q '^UI_PIN=' /etc/xray/flint.env; then
+      msg="$(T "В flint.env нет строки UI_PIN" "flint.env has no UI_PIN line")"
+    elif ! sed -i "s/^UI_PIN=.*/UI_PIN=$pinnew/" /etc/xray/flint.env; then
+      msg="$(T "Не удалось записать PIN в flint.env" "Could not write the PIN to flint.env")"
+    else
+      UI_PIN="$pinnew"; pass="$pinnew"
+      msg="$(T "PIN изменён. При деплое с компьютера снова возьмётся PIN из config/flint.env — обновите его там или сделайте бэкап." \
+        "PIN changed. A deploy from the computer will use the PIN from config/flint.env again — update it there or take a backup.")"
     fi ;;
 esac
 
@@ -474,6 +492,13 @@ adblock)
   echo "</div>"
   ;;
 settings)
+  echo "<div class=card><h2>$(T "Сменить PIN" "Change PIN")</h2><small>$(T "Только буквы и цифры. PIN хранится в flint.env на роутере; при деплое с компьютера снова подставится PIN из config/flint.env." \
+    "Letters and digits only. The PIN is stored in flint.env on the router; a deploy from the computer will put back the PIN from config/flint.env.")</small>"
+  echo "<form method=get class=row>$(hidden)<input type=hidden name=pin value=1>"
+  echo "<input type=password name=pinold placeholder='$(T "текущий PIN" "current PIN")' autocomplete=current-password required>"
+  echo "<input type=password name=pinnew placeholder='$(T "новый PIN" "new PIN")' autocomplete=new-password required>"
+  echo "<input type=password name=pinok placeholder='$(T "ещё раз новый PIN" "new PIN again")' autocomplete=new-password required>"
+  echo "<button>$(T "Сменить PIN" "Change PIN")</button></form></div>"
   echo "<div class=card><h2>$(T "Экспорт настроек" "Export settings")</h2><small>$(T "Подписки, свои и ручные серверы, сайты, блокировка рекламы, режимы и интервалы. PIN и сеть (flint.env) в файл не входят, поэтому его можно загрузить и на другой Flint. В файле ссылки подписок и данные серверов — храните его как пароль." \
     "Subscriptions, own and manual servers, sites, ad blocking, modes and intervals. The PIN and network (flint.env) are not included, so the file also fits another Flint. It holds subscription links and server data — keep it like a password.")</small>"
   echo "<div class=cta><a class='btn on' href='?pass=$pass&amp;export=1'>⬇️ $(T "Скачать файл настроек" "Download the settings file")</a></div></div>"

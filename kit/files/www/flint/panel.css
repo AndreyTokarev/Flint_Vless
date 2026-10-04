@@ -18,7 +18,7 @@ form.act{margin-top:10px}
 a.btn{flex:1 1 200px;padding:12px;border-radius:10px;border:1px solid #374151;background:#111827;color:#e5e7eb;font-size:15px;text-align:center;text-decoration:none}
 a.btn.on{border-color:#34d399;background:#064e3b}
 form.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-form.row input[type=text],form.row select{flex:1 1 200px}
+form.row input[type=text],form.row input[type=password],form.row select{flex:1 1 200px}
 form.row button{width:auto}
 .item{display:flex;align-items:center;gap:8px;margin:4px 0}
 .item span{flex:1;word-break:break-all}

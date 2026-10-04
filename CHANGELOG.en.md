@@ -6,6 +6,11 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.5.2] — 2026-10-04
+
+### Added
+- Settings tab: change the panel PIN (current, new and confirmation). The PIN is written to `flint.env` on the router; a deploy from the computer will use the PIN from `config/flint.env` again.
+
 ## [1.5.1] — 2026-10-04
 
 ### Changed
