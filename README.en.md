@@ -241,7 +241,7 @@ The panel speaks English and Russian. On the first visit the language follows th
 | Setting | Description |
 |---|---|
 | `VLESS_UUID` | optional: UUID for `config/nodes.conf` lines without one (subscription and own servers carry their own) |
-| `UI_PIN` | panel PIN (letters and digits only). It can also be changed in the panel (Settings), but a deploy writes the value from here to the router — after changing it in the panel, update it here or run a backup |
+| `UI_PIN` | panel PIN (letters and digits only). It can also be changed in the panel (Settings), but a deploy writes the value from here to the router — after changing it in the panel, update it here or run a backup. A forgotten PIN can be set over SSH, see [Troubleshooting](#troubleshooting) |
 | `UI_TITLE` | text of the panel logo, default `Flint VPN` (the last word is gold) |
 | `UI_TAGLINE` | tagline under the logo, default `Sail the internet`; an empty value removes it |
 | `UI_LANG` | default panel language: `ru` or `en`; empty — follow the browser. Background records (last subscription check, last failure) are written in it too |
@@ -438,7 +438,7 @@ If you run it on another device, please report the result in [Issues](https://gi
 | A subscription is not added | "could not be downloaded" - open the link in a browser, check the router's internet; "no supported servers" - the subscription has no VLESS + REALITY (VMess, Trojan, Shadowsocks, XHTTP are not supported) |
 | A Russian site goes via VPN | geoip/geosite missing (then `global` mode): `flint-geo-update`; or add the site as "direct" |
 | A site or app broke with ad blocking on | turn blocking off to confirm; if it is the cause, allow the domain in "Sites without blocking" ("Recently blocked" gives a hint) or add the device to "Devices without blocking" |
-| Forgot the PIN | `ssh root@192.168.8.1 "grep UI_PIN /etc/xray/flint.env"`; or redeploy — the PIN becomes the one in `config/flint.env` |
+| Forgot the PIN | see it: `ssh root@192.168.8.1 "grep UI_PIN /etc/xray/flint.env"`. Set a new one (here `1234`, letters and digits only): `ssh root@192.168.8.1 "sed -i '/^UI_PIN=/d' /etc/xray/flint.env && echo UI_PIN=1234 >> /etc/xray/flint.env"` — it works at once, nothing needs a restart; put it into `config/flint.env` too, or a deploy brings the old one back. Or just redeploy — the PIN becomes the one in `config/flint.env` |
 | A NAS or other device of the main network doesn't open | find it in the main router's client list: it may have a new address after a reboot. Fix the address (DHCP reservation or static IP on the device) and check `LOCAL_HOSTS` |
 | Ads are not blocked on a device | turn off Private DNS, browser DoH and any VPN client (Happ, etc.) on it; check it is not excluded |
 | Ads remain on VK, YouTube, etc. | they come from the same domain as the content and DNS blocking can't remove them — install uBlock Origin in the browser (see [Where ads remain](#where-ads-remain)) |
