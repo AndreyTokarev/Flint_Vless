@@ -6,6 +6,9 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+### Changed
+- DNS tab: removed the "Turn on …" buttons that duplicated "Use …".
+
 ## [1.7.0] — 2026-10-04
 
 ### Added

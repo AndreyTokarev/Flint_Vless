@@ -89,7 +89,7 @@ check "DNS answers after the UDP rollback" dns_answers
 panel "tab=dns&dnsudp=provider" >/dev/null
 check "UDP via the main router's DNS" [ "$(flint-dns udp):$(uci -q get dhcp.@dnsmasq[0].noresolv)" = provider:0 ]
 check "DNS answers via the main router" dns_answers
-panel "tab=dns&dnsmode=doh" >/dev/null
+flint-dns mode doh >/dev/null
 check "mode switch back to DoH keeps its server" [ "$(flint-dns mode):$(flint-dns doh)" = doh:https://dns.google/dns-query ]
 check "DNS answers after the mode switch" dns_answers
 flint-dns udp "$udp" >/dev/null 2>&1; flint-dns dnscrypt "$dnscrypt" >/dev/null 2>&1

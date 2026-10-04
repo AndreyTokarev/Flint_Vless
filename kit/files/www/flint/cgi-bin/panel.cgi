@@ -99,7 +99,7 @@ HTML
 fi
 
 # The action is the first non-empty parameter from this list; every form sends exactly one of them.
-ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsurl dnscrypt dnsstamp dnsudp dnsip dnsmode "
+ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsurl dnscrypt dnsstamp dnsudp dnsip "
 a="$(echo "$qs" | tr '&' '\n' | awk -F = -v l="$ACTIONS" '$2 != "" && index(l, " " $1 " ") { print $1; exit }')"
 msg=""; form=""; subedit=""; subsave=""
 case "$a" in
@@ -185,7 +185,6 @@ EOF
   dnsstamp) msg="$(flint-dns dnscrypt "$(param dnsstamp)" 2>&1)" ;;
   dnsudp) msg="$(flint-dns udp "$(get dnsudp)" 2>&1)" ;;
   dnsip) msg="$(flint-dns udp "$(param dnsip)" 2>&1)" ;;
-  dnsmode) msg="$(flint-dns mode "$(get dnsmode)" 2>&1)" ;;
 esac
 
 CUR="$(flint-node current)"
@@ -519,12 +518,7 @@ dns)
   }
   echo "<div class=card><h2>DNS</h2><small>$(T "Через этот DNS роутер узнаёт адреса сайтов для всех устройств сети. Если выбранный сервер не ответит, останется прежний." \
     "The router looks up site addresses for every device on the network through this DNS. If the chosen server does not answer, the previous one stays.")</small>"
-  echo "<p>$(T "Сейчас" "Now"): <b class=ok>$(flint-dns title | esc)</b></p>"
-  echo "<div class=cta>"
-  for m in "doh:DoH" "dnscrypt:DNSCrypt" "udp:$(T "обычный DNS (UDP)" "plain DNS (UDP)")"; do
-    [ "${m%%:*}" = "$DNSMODE" ] || btn dnsmode "${m%%:*}" "" "$(T "Включить" "Turn on") ${m#*:}"
-  done
-  echo "</div></div>"
+  echo "<p>$(T "Сейчас" "Now"): <b class=ok>$(flint-dns title | esc)</b></p></div>"
   dns_card doh "$(T "DoH — зашифрованный" "DoH — encrypted")" "$(T "Запросы идут по HTTPS: провайдер не видит, какие сайты открываются, и не может подменить ответ." \
     "Queries go over HTTPS: the provider does not see which sites are opened and cannot spoof the answers.")"
   dns_select dns doh "$DOH" "$(T "Использовать DoH" "Use DoH")"
