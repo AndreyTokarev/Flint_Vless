@@ -32,6 +32,12 @@ fi
 
 if [ "$WITH_BINARY" = 1 ]; then
 	mkdir -p "$ROOT/backup/bin"
-	ssh "$TARGET" "cat /usr/bin/xray" > "$ROOT/backup/bin/xray"
-	echo "Saved backup/bin/xray"
+	tmp="$(mktemp)"
+	if ssh "$TARGET" "cat /usr/bin/xray" > "$tmp" && [ -s "$tmp" ]; then
+		mv "$tmp" "$ROOT/backup/bin/xray"
+		echo "Saved backup/bin/xray"
+	else
+		rm -f "$tmp"
+		echo "No /usr/bin/xray on the router: backup/bin/xray is kept as is"
+	fi
 fi

@@ -372,6 +372,25 @@ By default the settings from the backup (`flint.env`, servers, subscriptions, ow
 
 `-Full` / `--full` is only for the **same** router: it brings back its network, Wi‑Fi (SSIDs and passwords), firewall, DHCP reservations, cron and SSH keys, then reboots. The script asks for confirmation (`-Yes` / `--yes` skips it).
 
+## Uninstall
+
+```powershell
+.\uninstall.ps1               # back up, then uninstall
+.\uninstall.ps1 -KeepXray     # keep the xray-core package
+.\uninstall.ps1 -NoBackup     # no backup
+```
+```sh
+./uninstall.sh
+./uninstall.sh --keep-xray
+./uninstall.sh --no-backup
+```
+
+The script asks for confirmation (`-Yes` / `--yes` skips it), backs up to `backup/<date>` and removes from the router everything Flint VPN installed: the panel, services, `flint-*` scripts, settings in `/etc/xray`, its own AdGuard Home instance, firewall rules and cron jobs, the `xray-core` package and the geoip/geosite databases. The DNS settings go back to the firmware defaults: dnsmasq takes DNS from the main router again. The firmware and its packages (`dnscrypt-proxy2`, `curl`, the firmware's AdGuard Home, etc.), network, Wi‑Fi and the root password stay as they are.
+
+After uninstalling, devices go online directly. Flint is no longer reachable from the main router's network (Flint VPN's rules did that): connect to it over Wi‑Fi or a cable. To bring everything back, run `.\restore.ps1` / `./restore.sh` with the backup just made.
+
+To uninstall by hand, without a computer with the project: upload `kit/uninstall.sh` to the router and run `sh uninstall.sh` (or `sh uninstall.sh --keep-xray`).
+
 ## Router commands
 
 ```sh

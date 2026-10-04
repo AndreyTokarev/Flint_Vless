@@ -6,6 +6,9 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+### Added
+- Uninstall Flint VPN: `uninstall.ps1` / `uninstall.sh` (on the router — `kit/uninstall.sh`). A backup runs first; network, Wi‑Fi and the firmware stay, devices go online directly.
+
 ## [1.7.2] — 2026-10-04
 
 ### Changed

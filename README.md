@@ -416,6 +416,25 @@ route -p add 192.168.8.0 mask 255.255.255.0 192.168.0.111   # Windows, от ад
 1. `backup/bin/xray` — сохраните заранее с рабочего роутера: `.\backup.ps1 -WithBinary`;
 2. официальный релиз с GitHub (`XRAY_VERSION`).
 
+## Удаление
+
+```powershell
+.\uninstall.ps1               # бэкап, затем удаление
+.\uninstall.ps1 -KeepXray     # оставить пакет xray-core
+.\uninstall.ps1 -NoBackup     # без бэкапа
+```
+```sh
+./uninstall.sh
+./uninstall.sh --keep-xray
+./uninstall.sh --no-backup
+```
+
+Скрипт спрашивает подтверждение (`-Yes` / `--yes` — без вопроса), делает бэкап в `backup/<дата>` и удаляет с роутера всё, что поставил Flint VPN: панель, службы, скрипты `flint-*`, настройки в `/etc/xray`, свой AdGuard Home, правила firewall и задачи cron, пакет `xray-core` и базы geoip/geosite. Настройки DNS возвращаются к заводским: dnsmasq снова берёт DNS у основного роутера. Прошивка и её пакеты (`dnscrypt-proxy2`, `curl`, AdGuard Home из прошивки и т. д.), сеть, Wi‑Fi и пароль root не меняются.
+
+После удаления устройства ходят в интернет напрямую. Из сети основного роутера Flint больше недоступен (это делали правила Flint VPN): подключайтесь к нему по Wi‑Fi или кабелем. Вернуть всё как было — `.\restore.ps1` / `./restore.sh` из сделанного бэкапа.
+
+Удалить вручную, без компьютера с проектом: залейте на роутер `kit/uninstall.sh` и запустите `sh uninstall.sh` (или `sh uninstall.sh --keep-xray`).
+
 ## Команды на роутере
 
 ```sh
@@ -523,6 +542,7 @@ logread -e xray                # логи Xray
 | `deploy.ps1` / `deploy.sh` | залить комплект на роутер и установить |
 | `backup.ps1` / `backup.sh` | резервная копия роутера в `backup/` |
 | `restore.ps1` / `restore.sh` | восстановление из `backup/` |
+| `uninstall.ps1` / `uninstall.sh` | удалить Flint VPN с роутера (на роутере работает `kit/uninstall.sh`) |
 | `kit/VERSION` | номер версии |
 | `CHANGELOG.md` | история изменений |
 | `docs/` | скриншоты, логотип, аудиты кода и планы рефакторинга |

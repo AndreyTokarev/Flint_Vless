@@ -37,6 +37,13 @@ if ($LASTEXITCODE -eq 0) {
 if ($WithBinary) {
     $bin = Join-Path $root "backup\bin"
     New-Item -ItemType Directory $bin -Force | Out-Null
-    cmd /c "ssh $target ""cat /usr/bin/xray"" > ""$bin\xray"""
-    Write-Host "Saved backup\bin\xray"
+    $tmp = Join-Path ([IO.Path]::GetTempPath()) "flint-xray.bin"
+    cmd /c "ssh $target ""cat /usr/bin/xray"" > ""$tmp"""
+    if ((Test-Path $tmp) -and (Get-Item $tmp).Length -gt 0) {
+        Move-Item $tmp (Join-Path $bin "xray") -Force
+        Write-Host "Saved backup\bin\xray"
+    } else {
+        Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+        Write-Host "No /usr/bin/xray on the router: backup\bin\xray is kept as is"
+    }
 }
