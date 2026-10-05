@@ -26,10 +26,12 @@ done
 say "firewall"
 for p in udp tcp; do del nat PREROUTING -i br-lan -p "$p" --dport 53 -j FLINT_DNS; done
 del nat PREROUTING -i br-lan -p tcp -j XRAY
+del filter FORWARD -i br-lan -p udp --dport 443 -j FLINT_QUIC
 del filter FORWARD -i br-lan -p udp --dport 443 -j DROP
 for ch in XRAY FLINT_DNS; do
 	iptables -t nat -F "$ch" 2>/dev/null && iptables -t nat -X "$ch" 2>/dev/null
 done
+iptables -F FLINT_QUIC 2>/dev/null && iptables -X FLINT_QUIC 2>/dev/null
 if [ -n "$UPSTREAM_IF" ] && [ -n "$UPSTREAM_NET" ]; then
 	del nat POSTROUTING -o "$UPSTREAM_IF" -d "$UPSTREAM_NET" -j MASQUERADE
 	del filter FORWARD -i br-lan -o "$UPSTREAM_IF" -d "$UPSTREAM_NET" -j ACCEPT
@@ -88,5 +90,6 @@ left="$(
 	[ -e /www/flint ] && echo /www/flint
 	ls /usr/bin/flint-* /etc/init.d/flint-* 2>/dev/null
 	iptables -t nat -S 2>/dev/null | grep -E 'XRAY|FLINT_DNS' || true
+	iptables -S 2>/dev/null | grep FLINT_QUIC || true
 )"
 [ -z "$left" ] && echo "Flint VPN removed. LAN devices go online directly." || { echo "Left over:"; echo "$left"; exit 1; }

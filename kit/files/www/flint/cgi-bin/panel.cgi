@@ -99,7 +99,7 @@ HTML
 fi
 
 # The action is the first non-empty parameter from this list; every form sends exactly one of them.
-ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsurl dnscrypt dnsstamp dnsudp dnsip hostadd hostdel "
+ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsurl dnscrypt dnsstamp dnsudp dnsip hostadd hostdel directadd directdel "
 a="$(echo "$qs" | tr '&' '\n' | awk -F = -v l="$ACTIONS" '$2 != "" && index(l, " " $1 " ") { print $1; exit }')"
 msg=""; form=""; subedit=""; subsave=""
 case "$a" in
@@ -187,6 +187,8 @@ EOF
   dnsip) msg="$(flint-dns udp "$(param dnsip)" 2>&1)" ;;
   hostadd) msg="$(flint-dns hosts add "$(param hostadd)" "$(param hostip)" 2>&1)" ;;
   hostdel) msg="$(flint-dns hosts del "$(param hostdel)" 2>&1)" ;;
+  directadd) msg="$(flint-node direct add "$(param directadd)" "$(param directname)" 2>&1)" ;;
+  directdel) msg="$(flint-node direct del "$(param directdel)" 2>&1)" ;;
 esac
 
 CUR="$(flint-node current)"
@@ -389,10 +391,26 @@ routing)
     btn routing ru " class=on" "$(T "Включить гео-фильтр" "Turn the geo filter on")"
   fi
   echo "</div>"
+  DEL="$(T "Удалить" "Delete")"
+  echo "<div class=card><h2>$(T "Устройства без VPN" "Devices without VPN")</h2><small>$(T "Эти устройства всегда ходят в интернет напрямую, мимо VPN, — например, телевизор или консоль. Устройство узнаётся по MAC-адресу. Уже открытые соединения доработают как были, новые пойдут напрямую." \
+    "These devices always go online directly, bypassing the VPN — a TV or a game console, for example. A device is recognised by its MAC address. Open connections finish as they were; new ones go direct.")</small>"
+  DIRECTS="$(flint-node direct | esc)"
+  [ -n "$DIRECTS" ] || echo "<p><small>$(T "нет — все устройства через VPN" "none — every device goes via VPN")</small></p>"
+  echo "$DIRECTS" | while IFS="$TAB" read -r m name; do
+    [ -n "$m" ] || continue
+    echo "<form method=get class=item>$(hidden)<input type=hidden name=directdel value='$m'><span>$name<br><small>$m</small></span><button title='$DEL'>✕</button></form>"
+  done
+  DEVS="$(flint-adblock devices | esc | awk -F '\t' -v ex="$(flint-node direct | cut -f1 | tr '\n' ' ')" 'index(" " ex, " " $1 " ") == 0')"
+  if [ -n "$DEVS" ]; then
+    echo "<form method=get class=row>$(hidden)<select name=directadd>"
+    echo "$DEVS" | while IFS="$TAB" read -r m ip name; do echo "<option value='$m'>${name:-$m} — $ip</option>"; done
+    echo "</select><button>$(T "Без VPN" "Without VPN")</button></form>"
+  fi
+  echo "<form method=get class=row>$(hidden)<input type=text name=directadd placeholder='aa:bb:cc:dd:ee:ff' required>"
+  echo "<input type=text name=directname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить по MAC" "Add by MAC")</button></form></div>"
   echo "<div class=card><h2>$(T "Свои сайты" "Own sites")</h2><small>$(T "Важнее гео-фильтра. Домен действует вместе с поддоменами; можно вставить ссылку, IP или подсеть." "Override the geo filter. A domain covers its subdomains; you can paste a link, an IP or a subnet.")</small>"
   echo "<form method=get class=row>$(hidden)<input type=text name=add placeholder='example.com' required>"
   echo "<select name=to><option value=direct>$(T "Напрямую" "Direct")</option><option value=proxy>$(T "Через VPN" "Via VPN")</option></select><button>$(T "Добавить" "Add")</button></form>"
-  DEL="$(T "Удалить" "Delete")"
   for list in direct proxy; do
     [ "$list" = direct ] && title="$(T "Всегда напрямую (мимо VPN)" "Always direct (bypass VPN)")" || title="$(T "Всегда через VPN" "Always via VPN")"
     items="$(echo "$SITES" | awk -F "$TAB" -v l="$list" '$1 == l {print $2}')"
@@ -562,8 +580,8 @@ settings)
   echo "<input type=password name=pinnew placeholder='$(T "новый PIN" "new PIN")' autocomplete=new-password required>"
   echo "<input type=password name=pinok placeholder='$(T "ещё раз новый PIN" "new PIN again")' autocomplete=new-password required>"
   echo "<button>$(T "Сменить PIN" "Change PIN")</button></form></div>"
-  echo "<div class=card><h2>$(T "Экспорт настроек" "Export settings")</h2><small>$(T "Подписки, свои и ручные серверы, сайты, блокировка рекламы, DNS-сервер, локальные имена, режимы и интервалы. PIN и сеть (flint.env) в файл не входят, поэтому его можно загрузить и на другой Flint. В файле ссылки подписок и данные серверов — храните его как пароль." \
-    "Subscriptions, own and manual servers, sites, ad blocking, DNS server, local names, modes and intervals. The PIN and network (flint.env) are not included, so the file also fits another Flint. It holds subscription links and server data — keep it like a password.")</small>"
+  echo "<div class=card><h2>$(T "Экспорт настроек" "Export settings")</h2><small>$(T "Подписки, свои и ручные серверы, сайты, устройства без VPN, блокировка рекламы, DNS-сервер, локальные имена, режимы и интервалы. PIN и сеть (flint.env) в файл не входят, поэтому его можно загрузить и на другой Flint. В файле ссылки подписок и данные серверов — храните его как пароль." \
+    "Subscriptions, own and manual servers, sites, devices without VPN, ad blocking, DNS server, local names, modes and intervals. The PIN and network (flint.env) are not included, so the file also fits another Flint. It holds subscription links and server data — keep it like a password.")</small>"
   echo "<div class=cta><a class='btn on' href='?pass=$pass&amp;export=1'>⬇️ $(T "Скачать файл настроек" "Download the settings file")</a></div></div>"
   ASK="$(T "Заменить текущие настройки настройками из файла?" "Replace the current settings with the ones from the file?")"
   echo "<div class=card><h2>$(T "Импорт настроек" "Import settings")</h2><small>$(T "Все настройки из списка выше заменятся настройками из файла и сразу применятся. Прежние сохраняются на роутере в /tmp/flint-settings-prev.txt до перезагрузки." \

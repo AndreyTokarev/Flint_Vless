@@ -44,7 +44,7 @@ fails() { ! "$@"; }
 # Router state probes.
 xray_running() { pidof xray >/dev/null; }
 redirect_on() { iptables -t nat -S PREROUTING | grep -q -- '-j XRAY'; }
-quic_blocked() { iptables -S FORWARD | grep -q 'dport 443 -j DROP'; }
+quic_blocked() { iptables -S FORWARD | grep -q 'dport 443 -j FLINT_QUIC'; }
 sub_cron() { grep -q flint-sub-update /etc/crontabs/root; }
 no_servers() { [ -z "$(flint-node codes)" ]; }
 current_is() { [ "$(flint-node current)" = "$1" ]; }

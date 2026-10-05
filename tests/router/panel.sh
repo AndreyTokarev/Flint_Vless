@@ -38,6 +38,27 @@ panel "tab=routing&routing=$other" >/dev/null
 check "routing switch" [ "$(flint-node routing)" = "$other" ]
 panel "tab=routing&routing=$mode" >/dev/null
 check "routing switch back" [ "$(flint-node routing)" = "$mode" ]
+# A documentation-range MAC (00:00:5e:00:53:xx): no real device has it.
+tm=00:00:5e:00:53:01
+direct_listed() { flint-node direct | cut -f1 | grep -qx "$tm"; }
+xray_skips() { iptables -t nat -S XRAY | grep -qi -- "--mac-source $tm -j RETURN"; }
+quic_allowed() { iptables -S FLINT_QUIC | grep -qi -- "--mac-source $tm -j RETURN"; }
+check "routing tab shows the devices without VPN form" panel_has routing 'name=directadd'
+panel "tab=routing&directadd=00-00-5E-00-53-01&directname=zz-direct-test" >/dev/null
+check "device without VPN added by MAC" direct_listed
+check "device without VPN skips xray" xray_skips
+check "device without VPN keeps QUIC" quic_allowed
+check "QUIC still blocked for the rest" sh -c "iptables -S FLINT_QUIC | tail -n1 | grep -q -- '-j DROP'"
+check "routing tab lists the device without VPN" panel_has routing 'zz-direct-test'
+panel "tab=routing&directadd=$tm" >/tmp/flint-test-page
+check "the same device twice is rejected" [ "$(grep -c 'уже без VPN' /tmp/flint-test-page):$(flint-node direct | grep -c "^$tm")" = 1:1 ]
+panel "tab=routing&directadd=not-a-mac" >/tmp/flint-test-page
+check "a bad MAC is rejected" grep -q 'Это не MAC-адрес' /tmp/flint-test-page
+panel "tab=routing&directdel=$tm" >/dev/null
+check "device without VPN deleted" fails direct_listed
+check "the deleted device goes via xray again" fails xray_skips
+check "the deleted device has QUIC blocked again" fails quic_allowed
+rm -f /tmp/flint-test-page
 
 iv="$(flint-sub-update interval)"
 panel "tab=subs&subint=6h" >/dev/null

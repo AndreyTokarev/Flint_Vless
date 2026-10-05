@@ -23,6 +23,9 @@ iptables -t nat -N XRAY 2>/dev/null || iptables -t nat -F XRAY
 for net in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4; do
 	iptables -t nat -A XRAY -d "$net" -j RETURN
 done
+# Devices without VPN (flint-node direct) skip Xray and keep QUIC.
+direct_macs="$(direct_devices | cut -f1)"
+for m in $direct_macs; do iptables -t nat -A XRAY -m mac --mac-source "$m" -j RETURN; done
 # Provider servers go direct, so a VPN client on a LAN device (e.g. Happ) is not tunnelled twice.
 # The subscription host is routed direct by name in Xray instead: it may sit on shared CDN IPs.
 servers="$(node_lines $(node_files) | awk '{print $2}' | sort -u)"
@@ -33,15 +36,21 @@ for host in $servers; do
 done
 iptables -t nat -A XRAY -p tcp -j REDIRECT --to-ports 12345
 
+# Only TCP goes through Xray; dropping QUIC makes browsers fall back to TCP.
+iptables -N FLINT_QUIC 2>/dev/null || iptables -F FLINT_QUIC
+for m in $direct_macs; do iptables -A FLINT_QUIC -m mac --mac-source "$m" -j RETURN; done
+iptables -A FLINT_QUIC -j DROP
+# Up to 1.8.1 QUIC was dropped by a plain rule in FORWARD.
+remove filter FORWARD -i br-lan -p udp --dport 443 -j DROP
+
 # /etc/xray/vpn-state = off (panel / flint-node vpn off) or no Xray config yet: LAN clients go to the internet directly.
 if [ "$(cat /etc/xray/vpn-state 2>/dev/null)" = off ] || [ ! -s /etc/xray/config.json ]; then
 	remove nat PREROUTING -i br-lan -p tcp -j XRAY
-	remove filter FORWARD -i br-lan -p udp --dport 443 -j DROP
+	remove filter FORWARD -i br-lan -p udp --dport 443 -j FLINT_QUIC
 else
 	# Order matters: DNS redirects must stay above the XRAY jump.
 	append nat PREROUTING -i br-lan -p tcp -j XRAY
-	# Only TCP goes through Xray; dropping QUIC makes browsers fall back to TCP.
-	ensure filter FORWARD -i br-lan -p udp --dport 443 -j DROP
+	ensure filter FORWARD -i br-lan -p udp --dport 443 -j FLINT_QUIC
 fi
 # LAN DNS goes to the router: dnsmasq, or AdGuard Home when ad blocking is on (FLINT_DNS, see flint-adblock).
 remove nat PREROUTING -i br-lan -p udp --dport 53 -j REDIRECT --to-ports 53

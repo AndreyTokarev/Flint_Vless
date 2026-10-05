@@ -230,7 +230,7 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 | **Servers** | one-click server selection — servers grouped by subscription, own servers apart; "White lists" block; failover on/off |
 | **Own servers** | servers not from the subscription: add by `vless://` link, copy a subscription server and edit the copy, enter manually; edit or delete |
 | **DNS** | DoH, DNSCrypt or plain UDP mode with a server for each — a preset or your own; the mode in use is marked. Local names for network devices (`nas01` → IP) |
-| **Routing** | Russia geo filter on/off; own sites, IPs and subnets "always direct" or "always via VPN" |
+| **Routing** | Russia geo filter on/off; devices without VPN (by MAC); own sites, IPs and subnets "always direct" or "always via VPN" |
 | **Ad blocking** | ad blocking on/off and 24-hour stats; devices without blocking; sites without blocking and "Recently blocked" with an Allow button; filter lists — ready-made and your own by URL; auto-update and "Update the lists now"; own rules |
 | **Settings** | change the PIN; export the settings to a file and import them from a file (subscriptions, servers, sites, ad blocking, DNS, modes; no PIN or network) |
 
@@ -399,6 +399,7 @@ flint-node nl                    # switch to server nl (with an exit IP check)
 flint-node routing ru            # geo filter: RU direct (global — everything via VPN)
 flint-node vpn off               # clients go online directly (on — via VPN again)
 flint-node site add direct example.ru     # own site: direct — bypass VPN, proxy — via VPN
+flint-node direct add aa:bb:cc:dd:ee:ff TV   # a device without VPN; list: flint-node direct, remove: direct del <MAC>
 flint-custom link 'vless://...'  # add an own server by link
 flint-sub-update                 # update all subscriptions
 flint-sub-update list            # subscriptions: id, name, host, last update, expiry and traffic

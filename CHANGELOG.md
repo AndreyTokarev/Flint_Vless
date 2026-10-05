@@ -6,6 +6,14 @@
 
 ## [Не выпущено]
 
+## [1.9.0] — 2026-10-05
+
+### Добавлено
+- Устройства без VPN: «Маршрутизация → Устройства без VPN» — выбранные устройства (по MAC) всегда ходят в интернет напрямую, остальные по-прежнему через VPN. На роутере — `flint-node direct`. Список входит в файл настроек.
+
+### Изменено
+- QUIC (UDP 443) режется отдельной цепочкой `FLINT_QUIC` вместо правила в `FORWARD`, чтобы устройства без VPN его сохраняли; старое правило убирается при обновлении.
+
 ## [1.8.1] — 2026-10-04
 
 ### Изменено
@@ -268,7 +276,8 @@
 - Доступ к сети основного роутера без VPN.
 - Установка пакетов с нуля; деплой и бэкап для Windows, macOS и Linux.
 
-[Не выпущено]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.1...HEAD
+[Не выпущено]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.1...v1.7.2

@@ -5,6 +5,8 @@ NODES_D=/etc/xray/nodes.d
 CUSTOM=/etc/xray/nodes-custom.conf
 SUBS=/etc/xray/subscriptions
 CUR=/etc/xray/current-node
+# LAN devices that go online directly even with the VPN on: "mac<TAB>name".
+DIRECT=/etc/xray/direct-devices
 TAB="$(printf '\t')"
 fail() { echo "$1"; exit 1; }
 # Language: FLINT_LANG (panel), else UI_LANG (flint.env), else Russian.
@@ -48,3 +50,13 @@ nodes_tsv() {
 	done
 }
 host_of() { echo "$1" | sed -e 's|^[a-zA-Z]*://||' -e 's|[/:?#].*||'; }
+# mac <text>: the MAC in lower case with colons, nothing when it is not a MAC.
+mac() { echo "$1" | tr 'A-F-' 'a-f:' | grep -E '^([0-9a-f]{2}:){5}[0-9a-f]{2}$'; }
+# LAN devices "mac<TAB>ip<TAB>name": DHCP leases first (they have names), then the neighbour table for static IPs.
+devices() {
+	{
+		awk '{ print $2 "\t" $3 "\t" ($4 == "*" ? "" : $4) }' /tmp/dhcp.leases 2>/dev/null
+		ip neigh show dev br-lan 2>/dev/null | awk '$3 == "lladdr" && $1 ~ /^[0-9.]+$/ { print $4 "\t" $1 "\t" }'
+	} | awk -F '\t' '!seen[tolower($1)]++ { print tolower($1) "\t" $2 "\t" $3 }'
+}
+direct_devices() { [ -f "$DIRECT" ] && grep -v '^$' "$DIRECT"; }

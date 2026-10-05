@@ -6,6 +6,14 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-10-05
+
+### Added
+- Devices without VPN: Routing → Devices without VPN — the chosen devices (by MAC) always go online directly, the rest still go via VPN. On the router — `flint-node direct`. The list is part of the settings file.
+
+### Changed
+- QUIC (UDP 443) is dropped by a separate `FLINT_QUIC` chain instead of a rule in `FORWARD`, so devices without VPN keep it; the old rule is removed on update.
+
 ## [1.8.1] — 2026-10-04
 
 ### Changed
@@ -268,7 +276,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.1...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.1...v1.7.2

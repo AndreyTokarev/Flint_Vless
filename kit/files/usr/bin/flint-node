@@ -7,6 +7,8 @@
 #        flint-node vpn [on|off]   off = LAN clients go to the internet directly, bypassing Xray
 #                                  (so they do while there are no servers at all)
 #        flint-node site list | add direct|proxy <site> | del <site>
+#        flint-node direct | direct add <mac> [name] | direct del <mac>
+#                                  LAN devices that always go online directly, bypassing Xray (firewall.user)
 #   ru     - Russian sites/IPs go direct, the rest via VPN (needs /usr/share/xray/geo*.dat)
 #   global - everything via VPN
 #   custom sites (domains incl. subdomains, IPv4, CIDR) override the geo filter in both modes
@@ -185,6 +187,28 @@ case "$cmd" in
 		echo "$2" > "$VPN_FILE" || fail "Cannot write $VPN_FILE"
 		sh /etc/firewall.user >/dev/null 2>&1 || fail "Firewall update failed"
 		echo "VPN: $2"
+		;;
+	direct)
+		m="$(mac "$3")"
+		case "$2" in
+			"") direct_devices ;;
+			add)
+				[ -n "$m" ] || fail "$(t "Это не MAC-адрес: $3" "Not a MAC address: $3")"
+				direct_devices | cut -f1 | grep -qxF "$m" && fail "$(t "Это устройство уже без VPN" "This device already bypasses the VPN")"
+				name="$(printf '%s' "$4" | tr -d '\t\r\n' | cut -c1-40)"
+				[ -n "$name" ] || name="$(devices | awk -F '\t' -v m="$m" '$1 == m { print ($3 != "" ? $3 : $2) }' | head -n1)"
+				printf '%s\t%s\n' "$m" "${name:-$m}" >> "$DIRECT" || fail "Cannot write $DIRECT"
+				sh /etc/firewall.user >/dev/null 2>&1 || fail "Firewall update failed"
+				t "Без VPN: ${name:-$m}" "Without VPN: ${name:-$m}"
+				;;
+			del)
+				direct_devices | cut -f1 | grep -qxF "$m" || fail "$(t "Нет такого устройства" "No such device")"
+				direct_devices | awk -F '\t' -v m="$m" '$1 != m' > "$DIRECT.new" && mv "$DIRECT.new" "$DIRECT" || fail "Cannot write $DIRECT"
+				sh /etc/firewall.user >/dev/null 2>&1 || fail "Firewall update failed"
+				t "Устройство снова через VPN" "The device goes via VPN again"
+				;;
+			*) fail "flint-node direct | direct add <mac> [name] | direct del <mac>" ;;
+		esac
 		;;
 	*)
 		apply "$cmd"

@@ -46,14 +46,6 @@ OUT=/tmp/flint-adblock.out
 post() { curl -s -m "${3:-30}" -o "$OUT" -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d "$2" "$API/$1"; }
 # Stable per URL, so the downloaded copy in $DIR/data/filters/<id>.txt is reused after a restart.
 list_id() { printf '%d' "0x$(printf '%s' "$1" | md5sum | cut -c1-7)"; }
-mac() { echo "$1" | tr 'A-F-' 'a-f:' | grep -E '^([0-9a-f]{2}:){5}[0-9a-f]{2}$'; }
-# DHCP leases first (they have names), then the neighbour table for devices with a static IP.
-devices() {
-	{
-		awk '{ print $2 "\t" $3 "\t" ($4 == "*" ? "" : $4) }' /tmp/dhcp.leases 2>/dev/null
-		ip neigh show dev br-lan 2>/dev/null | awk '$3 == "lladdr" && $1 ~ /^[0-9.]+$/ { print $4 "\t" $1 "\t" }'
-	} | awk -F '\t' '!seen[tolower($1)]++ { print tolower($1) "\t" $2 "\t" $3 }'
-}
 
 # FLINT_DNS: excluded MACs -> dnsmasq, everyone else -> AdGuard Home (or dnsmasq when off / bypassed).
 fw() {
