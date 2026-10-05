@@ -6,6 +6,9 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+### Changed
+- README and screenshots updated for Devices without VPN and Local names on the Routing and DNS tabs.
+
 ## [1.9.0] — 2026-10-05
 
 ### Added

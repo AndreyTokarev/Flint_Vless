@@ -41,6 +41,7 @@ The panel is available in English and Russian: the language follows your browser
 - **Transparent VPN for the whole network.** Client TCP traffic is redirected into Xray; nothing to configure on devices.
 - **Russia geo filter.** Russian sites (`geosite:category-ru`) and IPs (`geoip:ru`) go direct, the rest via VPN. One button turns it off (everything via VPN).
 - **Your own rules.** Sites, IPs and subnets "always direct" or "always via VPN", taking priority over the geo filter.
+- **Devices without VPN.** Selected clients (a TV, console or work laptop) always go online directly by MAC address; the rest still go via VPN.
 - **Web panel** at `http://vpn.lan:81/`, protected by a PIN: server selection, VPN on/off, routing, own servers, subscriptions, ad blocking, PIN change, settings export and import. Works on phones.
 - **Subscriptions from any providers.** Add several subscriptions in the v2rayN / Happ / Hiddify format — servers from all of them show up in the panel, grouped by provider. The subscription name, expiry date and traffic are picked up automatically. The list is refreshed on demand or automatically (every 30 minutes to once a day); the router downloads subscriptions directly, so refreshing works even when the current server is down.
 - **Own servers.** Add by `vless://` link, by copying a subscription server, or manually; TCP (xtls-rprx-vision) or gRPC transport.
@@ -83,6 +84,7 @@ The screenshots use demo data: documentation IP ranges, made-up servers and keys
  ┌──────────────── Flint (OpenWrt) ────────────────┐
  │ DNS: [AdGuard Home] ──► dnsmasq ──► DoH         │
  │ iptables: TCP from br-lan ──► Xray :12345       │
+ │           (devices without VPN go direct)       │
  │ Xray: RU and own "direct" ──► direct            │
  │       everything else ──► VLESS + REALITY       │
  │ uhttpd :81 ──► web panel (CGI)                  │
@@ -232,7 +234,7 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 | **DNS** | DoH, DNSCrypt or plain UDP mode with a server for each — a preset or your own; the mode in use is marked. Local names for network devices (`nas01` → IP) |
 | **Routing** | Russia geo filter on/off; devices without VPN (by MAC); own sites, IPs and subnets "always direct" or "always via VPN" |
 | **Ad blocking** | ad blocking on/off and 24-hour stats; devices without blocking; sites without blocking and "Recently blocked" with an Allow button; filter lists — ready-made and your own by URL; auto-update and "Update the lists now"; own rules |
-| **Settings** | change the PIN; export the settings to a file and import them from a file (subscriptions, servers, sites, ad blocking, DNS, modes; no PIN or network) |
+| **Settings** | change the PIN; export the settings to a file and import them from a file (subscriptions, servers, sites, devices without VPN, ad blocking, DNS, local names, modes; no PIN or network) |
 
 The panel speaks English and Russian. On the first visit the language follows the browser (or `UI_LANG` in `flint.env`); after that use the **RU | EN** switch in the top right corner (next to "Sign out"; on the login page too) — the choice is remembered in the browser. Messages after panel actions use the same language.
 
@@ -467,7 +469,7 @@ If you run it on another device, please report the result in [Issues](https://gi
 
 ## Limitations
 
-- **TCP only.** UDP 443 (QUIC) is blocked so browsers use TCP; other UDP goes direct.
+- **TCP only.** UDP 443 (QUIC) is blocked so browsers use TCP; other UDP goes direct. Devices without VPN keep QUIC.
 - **IPv6 is not tunnelled.** If the main router hands out IPv6, disable it for the Flint network.
 - **Xray 1.8.x from opkg:** no XHTTP transport; the gRPC "white list" servers of some providers fail the REALITY handshake with it, so they are not imported by default.
 - **The panel is for the home network:** plain HTTP, the PIN travels in the request URL. Never expose port 81 to the internet.
