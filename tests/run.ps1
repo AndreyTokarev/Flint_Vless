@@ -19,7 +19,7 @@ $ssh = "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInter
 # The run id: the tree hash of the tracked files as they are now (with uncommitted changes) and the scenarios.
 $stash = git -C $root stash create 2>$null
 $tree = git -C $root rev-parse "$(if ($stash) { $stash } else { 'HEAD' })^{tree}"
-$id = (@($tree) + $Scenarios) -join " "
+$id = ((@($tree) + $Scenarios) -join " ").Trim()
 # "<running|done|none> <run id>": done = the log ends with the summary line of job.sh.
 $statusCmd = 'id=$(cat /tmp/flint-test.run 2>/dev/null); if [ -f /tmp/flint-test.pid ] && kill -0 $(cat /tmp/flint-test.pid) 2>/dev/null; then s=running; ' +
     'elif tail -n1 /tmp/flint-test.log 2>/dev/null | grep -qE ''^(ALL PASSED|SOME FAILED)''; then s=done; else s=none; fi; echo $s $id'

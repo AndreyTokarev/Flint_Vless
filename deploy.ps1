@@ -26,7 +26,7 @@ try {
     }
     $xrayBin = Join-Path $root "backup\bin\xray"
     if (Test-Path $xrayBin) {
-        New-Item -ItemType Directory (Join-Path $staging "bin") | Out-Null
+        New-Item -ItemType Directory -Force (Join-Path $staging "bin") | Out-Null
         Copy-Item $xrayBin (Join-Path $staging "bin")
     }
     tar --format ustar -cf $archive -C $staging .

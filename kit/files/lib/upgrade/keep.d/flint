@@ -1,0 +1,20 @@
+# Flint VPN files a firmware upgrade with "Keep settings" carries over (sysupgrade reads keep.d before flashing).
+# One path per line; directories go whole, globs are expanded by sysupgrade, missing paths are skipped.
+# The list keeps itself, so a second upgrade keeps everything too. Check on the router: sysupgrade -l
+/lib/upgrade/keep.d/flint
+/etc/xray
+/etc/flint-adguard
+/etc/firewall.user
+/etc/crontabs/root
+/etc/dnsmasq.d/flint-*.conf
+/etc/dnscrypt-proxy2/flint-doh.toml
+/etc/init.d/xray
+/etc/init.d/flint-*
+/etc/rc.d/*xray
+/etc/rc.d/*flint-*
+/usr/bin/flint-*
+/usr/bin/xray
+/usr/bin/tg-ws-proxy
+/usr/share/flint
+/usr/share/xray
+/www/flint

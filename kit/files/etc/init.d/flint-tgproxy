@@ -1,0 +1,20 @@
+#!/bin/sh /etc/rc.common
+# Telegram proxy (tg-ws-proxy-rs) for flint-tg: MTProto on the router's port (1443 by default).
+START=96
+STOP=10
+USE_PROCD=1
+start_service() {
+  [ "$(/usr/bin/flint-tg state)" = on ] || return 0
+  [ -x /usr/bin/tg-ws-proxy ] || return 0
+  procd_open_instance
+  # shellcheck disable=SC2046
+  procd_set_param command /usr/bin/tg-ws-proxy $(/usr/bin/flint-tg args)
+  procd_set_param env TG_SECRET="$(/usr/bin/flint-tg secret)"
+  procd_set_param respawn
+  # The log goes to logread (RAM) only when turned on in the panel: flash is never written.
+  if [ "$(/usr/bin/flint-tg log)" != off ]; then
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+  fi
+  procd_close_instance
+}

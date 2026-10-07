@@ -1,0 +1,348 @@
+#!/bin/sh
+# Telegram proxy on the router: tg-ws-proxy-rs, an MTProto proxy for the Telegram apps on the network.
+# It reaches Telegram over WebSocket (TLS) to Telegram's web servers, with Cloudflare as a fallback, so
+# Telegram works without the VPN: on devices without VPN, while the VPN is off, or to spare subscription traffic.
+# Settings live in /etc/xray/tgproxy (key=value): they survive redeploys and go into backups and exports.
+# Usage: flint-tg [state]                 print on|off
+#        flint-tg on|off
+#        flint-tg route [direct|vpn]      reach Telegram directly or through the VPN (directly while the VPN is off)
+#        flint-tg cf [on|off]             Cloudflare fallback when Telegram's servers are not reachable
+#        flint-tg remote [on|off]         accept clients from the internet (a port forward on the main router)
+#        flint-tg addr [host|auto]        the address in the link for the internet (auto: the provider IP)
+#        flint-tg mask [domain|off]       FakeTLS: connections to the proxy look like HTTPS to this site
+#        flint-tg port [port]
+#        flint-tg secret [new|<hex>]      print the secret / make a new one / set your own (dd…/ee… links work too)
+#        flint-tg dc [2:IP,4:IP|default]  Telegram data center addresses for the direct route
+#        flint-tg cfdomain [dom,...|off]  own Cloudflare-proxied domains (tried before the shared list)
+#        flint-tg worker [dom,...|off]    Cloudflare Worker domains (a TCP tunnel fallback)
+#        flint-tg cftls [on|off]          TLS to Cloudflare (off: plain ws:// on port 80)
+#        flint-tg pool [1-16]             pre-opened WebSocket connections per data center (4)
+#        flint-tg log [off|on|verbose]    the proxy log in the system log (logread)
+#        flint-tg logs [lines]            the last lines of the proxy log
+#        flint-tg version|latest          the installed version / compare it with the latest release on GitHub
+#        flint-tg link [lan|upstream|remote]  tg:// link: this network, the main router's network, the internet
+#        flint-tg check                   test the proxy end to end: from a client handshake to Telegram's answer
+#        flint-tg install [archive]       install the proxy from the kit's archive, else from GitHub (checked by SHA-256)
+#        flint-tg sync                    start, restart or stop the proxy to match the settings (firewall.user)
+#        flint-tg rule                    write the firewall rule for clients from the internet (install.sh)
+#        flint-tg args                    the proxy command line (init script)
+CONF=/etc/xray/tgproxy
+BIN=/usr/bin/tg-ws-proxy
+# The release archive is kept in kit/bin, so a deploy does not depend on GitHub; a new version replaces it there.
+VERSION=v2.5.2
+SHA256=a25face08cf3204962d349f56a8acdfd9baf8f244ccb4890595f056e78ca972d
+URL=https://github.com/valnesfjord/tg-ws-proxy-rs/releases/download/$VERSION/tg-ws-proxy-aarch64-unknown-linux-musl.tar.gz
+# The command line and secret the running proxy was started with: sync restarts it only when they change.
+APPLIED=/tmp/flint-tg.applied
+RULE=firewall.flint_tg_remote
+. /usr/share/flint/lib.sh
+. /etc/xray/flint.env 2>/dev/null || true
+
+get() { v="$(sed -n "s/^$1=//p" "$CONF" 2>/dev/null | tail -n1)"; echo "${v:-$2}"; }
+put() {
+	(umask 077; { grep -v "^$1=" "$CONF" 2>/dev/null; echo "$1=$2"; } > "$CONF.new") && mv "$CONF.new" "$CONF" ||
+		fail "Cannot write $CONF"
+}
+state() { get state off; }
+port() { get port 1443; }
+hex() { hexdump -v -e '/1 "%02x"'; }
+secret() {
+	s="$(get secret)"
+	echo "$s" | grep -qxE '[0-9a-f]{32}' && { echo "$s"; return; }
+	s="$(head -c 16 /dev/urandom | hex)"
+	put secret "$s"
+	echo "$s"
+}
+running() { pidof tg-ws-proxy >/dev/null; }
+listening() { netstat -ltn 2>/dev/null | awk -v p=":$1" '$4 ~ p "$" { f = 1 } END { exit !f }'; }
+# Same condition as firewall.user: with the VPN off or no servers, LAN traffic goes direct and so does the proxy.
+vpn_active() { [ "$(cat /etc/xray/vpn-state 2>/dev/null)" != off ] && [ -s /etc/xray/config.json ]; }
+upstream_ip() { [ -n "$UPSTREAM_IF" ] && ip -4 -o addr show dev "$UPSTREAM_IF" 2>/dev/null | awk '{ split($4, a, "/"); print a[1]; exit }'; }
+
+# args [host] [port]: one option per line; the secret goes in TG_SECRET, so it stays out of the process list.
+args() {
+	echo "--host ${1:-0.0.0.0}"
+	echo "--port ${2:-$(port)}"
+	echo "--link-ip $(lan_ip)"
+	if [ "$(get cf on)" = on ]; then echo "--default-domains"; fi
+	m="$(get mask)"; if [ -n "$m" ]; then echo "--listen-faketls-domain $m"; fi
+	if [ "$(get route direct)" = vpn ] && vpn_active; then echo "--outbound-proxy http://127.0.0.1:1087"; fi
+	for d in $(get dc | tr ',' ' '); do echo "--dc-ip $d"; done
+	d="$(get cfdomain)"; if [ -n "$d" ]; then echo "--cf-domain $d"; fi
+	d="$(get worker)"; if [ -n "$d" ]; then echo "--cf-worker-domain $d"; fi
+	if [ "$(get cftls on)" = off ]; then echo "--cf-disable-tls"; fi
+	if [ "$(get pool 4)" != 4 ]; then echo "--pool-size $(get pool 4)"; fi
+	if [ "$(get log off)" = verbose ]; then echo "--verbose"; fi
+}
+
+# domains <list>: "A.com, b.org" -> "a.com,b.org"; fails on anything that is not a domain.
+domains() {
+	out=""
+	for d in $(echo "$1" | tr 'A-Z,;' 'a-z  '); do
+		d="$(host_of "$d")"
+		echo "$d" | grep -qxE '([a-z0-9-]+\.)+[a-z0-9-]{2,}' || return 1
+		out="${out:+$out,}$d"
+	done
+	[ -n "$out" ] && echo "$out"
+}
+
+sync() {
+	if [ "$(state)" = on ] && [ -x "$BIN" ]; then
+		want="$(args | tr '\n' ' ')$(get log off) $(secret)"
+		running && [ "$(cat "$APPLIED" 2>/dev/null)" = "$want" ] && return 0
+		/etc/init.d/flint-tgproxy enable
+		/etc/init.d/flint-tgproxy restart >/dev/null 2>&1
+		echo "$want" > "$APPLIED"
+	else
+		/etc/init.d/flint-tgproxy stop >/dev/null 2>&1
+		/etc/init.d/flint-tgproxy disable 2>/dev/null
+		rm -f "$APPLIED"
+	fi
+}
+
+# install_bin [archive]: the kit's copy when given, else a download from GitHub.
+install_bin() {
+	[ -x "$BIN" ] && "$BIN" --version 2>/dev/null | grep -qF "${VERSION#v}" && return 0
+	d=/tmp/flint-tg-dl
+	rm -rf "$d"; mkdir -p "$d" || return 1
+	if [ -n "$1" ] && [ -f "$1" ]; then
+		cp "$1" "$d/a.tgz"
+	else
+		# GitHub can be slow from Russia: through the VPN first, then directly.
+		curl -fsSL -m 300 -x http://127.0.0.1:1087 -o "$d/a.tgz" "$URL" || curl -fsSL -m 300 -o "$d/a.tgz" "$URL"
+	fi
+	if [ "$(sha256sum "$d/a.tgz" 2>/dev/null | cut -d ' ' -f1)" = "$SHA256" ] &&
+		tar -xzf "$d/a.tgz" -C "$d" tg-ws-proxy && chmod 755 "$d/tg-ws-proxy" && mv "$d/tg-ws-proxy" "$BIN"; then
+		rm -rf "$d" "$APPLIED"
+		return 0
+	fi
+	rm -rf "$d"
+	return 1
+}
+
+# The rule opens the port in the WAN zone only while "remote" is on; the main router's network is allowed anyway.
+rule() {
+	if [ "$(get remote off)" = on ]; then
+		uci -q batch <<EOF
+set $RULE=rule
+set $RULE.name='Allow-Flint-Telegram-Proxy'
+set $RULE.src='wan'
+set $RULE.dest_port='$(port)'
+set $RULE.proto='tcp'
+set $RULE.target='ACCEPT'
+EOF
+	else
+		uci -q delete "$RULE"
+	fi
+	uci commit firewall
+}
+# fw4 warns ("[!] ...") about the firmware's own GL rules on every reload: not ours, hidden.
+reload_fw() {
+	rule
+	out="$(/etc/init.d/firewall reload 2>&1)" || { printf '%s\n' "$out" | grep -v '^\[!\]'; return 1; }
+}
+
+link() {
+	case "${1:-lan}" in
+		lan) host="$(lan_ip)" ;;
+		upstream) host="$(upstream_ip)" ;;
+		remote) host="$(get addr)"; [ -n "$host" ] || host="$(curl -s -m 8 https://ifconfig.me 2>/dev/null)" ;;
+		*) fail "flint-tg link [lan|upstream|remote]" ;;
+	esac
+	[ -n "$host" ] || fail "$(t "Не удалось узнать адрес" "Cannot find the address")"
+	m="$(get mask)"
+	if [ -n "$m" ]; then s="ee$(secret)$(printf '%s' "$m" | hex)"; else s="dd$(secret)"; fi
+	echo "tg://proxy?server=$host&port=$(port)&secret=$s"
+}
+
+NEED_BIN="$(t "Прокси не установлен: повторите деплой с компьютера (прокси входит в комплект) или попробуйте позже — роутер скачает его с GitHub." \
+	"The proxy is not installed: redeploy from the computer (the kit includes it) or try again later — the router downloads it from GitHub.")"
+
+case "$1" in
+	""|state) state ;;
+	on)
+		install_bin || [ -x "$BIN" ] || fail "$NEED_BIN"
+		put state on
+		sync
+		n=0
+		until listening "$(port)"; do
+			n=$((n + 1))
+			if [ "$n" -gt 10 ]; then
+				put state off
+				sync
+				fail "$(t "Прокси не запустился — выключен" "The proxy did not start — turned off")"
+			fi
+			sleep 1
+		done
+		t "Прокси для Telegram включён" "Telegram proxy is on"
+		;;
+	off)
+		put state off
+		sync
+		t "Прокси для Telegram выключен" "Telegram proxy is off"
+		;;
+	route)
+		[ -n "$2" ] || { get route direct; exit 0; }
+		case "$2" in direct|vpn) ;; *) fail "flint-tg route [direct|vpn]" ;; esac
+		put route "$2"
+		sync
+		if [ "$2" = vpn ]; then t "Telegram через VPN" "Telegram via VPN"; else t "Telegram напрямую, мимо VPN" "Telegram directly, bypassing the VPN"; fi
+		;;
+	cf)
+		[ -n "$2" ] || { get cf on; exit 0; }
+		case "$2" in on|off) ;; *) fail "flint-tg cf [on|off]" ;; esac
+		put cf "$2"
+		sync
+		if [ "$2" = on ]; then t "Резерв через Cloudflare включён" "Cloudflare fallback is on"; else t "Резерв через Cloudflare выключен" "Cloudflare fallback is off"; fi
+		;;
+	remote)
+		[ -n "$2" ] || { get remote off; exit 0; }
+		case "$2" in on|off) ;; *) fail "flint-tg remote [on|off]" ;; esac
+		put remote "$2"
+		reload_fw || fail "$(t "Не удалось обновить firewall" "Firewall update failed")"
+		if [ "$2" = on ]; then t "Доступ из интернета открыт: порт $(port)" "Access from the internet is open: port $(port)"
+		else t "Доступ из интернета закрыт" "Access from the internet is closed"; fi
+		;;
+	addr)
+		[ -n "$2" ] || { get addr; exit 0; }
+		if [ "$2" = auto ]; then put addr ""; t "Адрес для интернета: IP провайдера" "Internet address: the provider IP"; exit 0; fi
+		a="$(echo "$2" | tr 'A-Z' 'a-z')"
+		echo "$a" | grep -qxE '([a-z0-9-]+\.)+[a-z0-9-]+' || fail "$(t "Это не адрес: $2" "Not an address: $2")"
+		put addr "$a"
+		t "Адрес для интернета: $a" "Internet address: $a"
+		;;
+	mask)
+		[ -n "$2" ] || { get mask; exit 0; }
+		if [ "$2" = off ]; then
+			put mask ""
+		else
+			m="$(host_of "$2" | tr 'A-Z' 'a-z')"
+			echo "$m" | grep -qxE '([a-z0-9-]+\.)+[a-z]{2,}' || fail "$(t "Это не домен: $2" "Not a domain: $2")"
+			put mask "$m"
+		fi
+		sync
+		if [ "$2" = off ]; then t "Маскировка выключена. Ссылки изменились — добавьте прокси в Telegram заново." "Masking is off. The links changed — add the proxy to Telegram again."
+		else t "Маскировка под $m. Ссылки изменились — добавьте прокси в Telegram заново." "Masked as $m. The links changed — add the proxy to Telegram again."; fi
+		;;
+	port)
+		[ -n "$2" ] || { port; exit 0; }
+		p="$2"
+		echo "$p" | grep -qxE '[0-9]{1,5}' && [ "$p" -ge 1024 ] && [ "$p" -le 65535 ] ||
+			fail "$(t "Порт — число от 1024 до 65535" "The port is a number from 1024 to 65535")"
+		[ "$p" = "$(port)" ] && { t "Порт $p" "Port $p"; exit 0; }
+		listening "$p" && fail "$(t "Порт $p уже занят" "Port $p is already in use")"
+		put port "$p"
+		sync
+		[ "$(get remote off)" = on ] && { reload_fw || fail "$(t "Не удалось обновить firewall" "Firewall update failed")"; }
+		t "Порт $p. Ссылки изменились — добавьте прокси в Telegram заново." "Port $p. The links changed — add the proxy to Telegram again."
+		;;
+	secret)
+		if [ "$2" = new ]; then
+			put secret ""
+			secret >/dev/null
+			sync
+			t "Новый секрет. Старые ссылки больше не работают — добавьте прокси в Telegram заново." \
+				"New secret. The old links no longer work — add the proxy to Telegram again."
+		elif [ -n "$2" ]; then
+			# A secret from a link or another proxy: dd<32 hex> and ee<32 hex><domain> carry the same 32 hex.
+			s="$(echo "$2" | tr 'A-F' 'a-f' | sed -E 's/^(dd|ee)([0-9a-f]{32}).*/\2/')"
+			echo "$s" | grep -qxE '[0-9a-f]{32}' ||
+				fail "$(t "Секрет — 32 шестнадцатеричных символа (можно с dd или ee в начале)" "The secret is 32 hex characters (dd or ee in front is fine)")"
+			put secret "$s"
+			sync
+			t "Секрет сохранён. Добавьте прокси в Telegram заново, если секрет сменился." \
+				"The secret is saved. Add the proxy to Telegram again if the secret changed."
+		else
+			secret
+		fi
+		;;
+	dc)
+		[ -n "$2" ] || { get dc; exit 0; }
+		if [ "$2" = default ]; then
+			put dc ""
+		else
+			list=""
+			for d in $(echo "$2" | tr ',;' '  '); do
+				echo "$d" | grep -qxE '[0-9]{1,3}:([0-9]{1,3}\.){3}[0-9]{1,3}' ||
+					fail "$(t "Не понял «$d»: нужно номер:IP, например 2:149.154.167.220" "Cannot read \"$d\": use number:IP, e.g. 2:149.154.167.220")"
+				list="${list:+$list,}$d"
+			done
+			put dc "$list"
+		fi
+		sync
+		if [ "$2" = default ]; then t "Адреса дата-центров — по умолчанию" "Data center addresses: the defaults"
+		else t "Адреса дата-центров: $(get dc)" "Data center addresses: $(get dc)"; fi
+		;;
+	cfdomain|worker)
+		[ -n "$2" ] || { get "$1"; exit 0; }
+		if [ "$2" = off ]; then put "$1" ""
+		else d="$(domains "$2")" || fail "$(t "Это не домены: $2" "Not domains: $2")"; put "$1" "$d"; fi
+		sync
+		v="$(get "$1")"
+		if [ "$1" = worker ]; then t "Cloudflare Worker: ${v:-выключен}" "Cloudflare Worker: ${v:-off}"
+		else t "Свои домены Cloudflare: ${v:-нет}" "Own Cloudflare domains: ${v:-none}"; fi
+		;;
+	cftls)
+		[ -n "$2" ] || { get cftls on; exit 0; }
+		case "$2" in on|off) ;; *) fail "flint-tg cftls [on|off]" ;; esac
+		put cftls "$2"
+		sync
+		if [ "$2" = on ]; then t "TLS к Cloudflare включён" "TLS to Cloudflare is on"; else t "TLS к Cloudflare выключен: ws:// на порт 80" "TLS to Cloudflare is off: ws:// on port 80"; fi
+		;;
+	pool)
+		[ -n "$2" ] || { get pool 4; exit 0; }
+		echo "$2" | grep -qxE '[0-9]{1,2}' && [ "$2" -ge 1 ] && [ "$2" -le 16 ] ||
+			fail "$(t "Пул — число от 1 до 16" "The pool is a number from 1 to 16")"
+		put pool "$2"
+		sync
+		t "Пул соединений на дата-центр: $2" "Connections per data center: $2"
+		;;
+	log)
+		[ -n "$2" ] || { get log off; exit 0; }
+		case "$2" in off|on|verbose) ;; *) fail "flint-tg log [off|on|verbose]" ;; esac
+		put log "$2"
+		sync
+		case "$2" in
+			off) t "Журнал прокси выключен" "The proxy log is off" ;;
+			on) t "Журнал прокси включён (logread -e tg-ws-proxy)" "The proxy log is on (logread -e tg-ws-proxy)" ;;
+			verbose) t "Подробный журнал прокси включён (logread -e tg-ws-proxy)" "The verbose proxy log is on (logread -e tg-ws-proxy)" ;;
+		esac
+		;;
+	logs)
+		esc="$(printf '\033')"
+		logread -e tg-ws-proxy 2>/dev/null | tail -n "${2:-30}" | sed "s/$esc\[[0-9;]*m//g"
+		;;
+	version) if [ -x "$BIN" ]; then echo "$VERSION"; else t "не установлен" "not installed"; fi ;;
+	latest)
+		api=https://api.github.com/repos/valnesfjord/tg-ws-proxy-rs/releases/latest
+		tag="$({ curl -fsS -m 15 -x http://127.0.0.1:1087 "$api" 2>/dev/null || curl -fsS -m 15 "$api" 2>/dev/null; } |
+			jsonfilter -e '@.tag_name' 2>/dev/null)"
+		[ -n "$tag" ] || fail "$(t "Не удалось узнать версию на GitHub" "Cannot get the version from GitHub")"
+		if [ "$tag" = "$VERSION" ]; then
+			t "Установлена последняя версия: $VERSION" "The latest version is installed: $VERSION"
+		else
+			t "Установлена $VERSION, на GitHub — $tag. Версия закреплена в комплекте: чтобы обновить, положите архив $tag в kit/bin, поменяйте VERSION и SHA256 в flint-tg и повторите деплой (README, «Откуда берётся прокси»)." \
+				"Installed: $VERSION, on GitHub: $tag. The version is pinned in the kit: to update, put the $tag archive into kit/bin, change VERSION and SHA256 in flint-tg and redeploy (README, \"Where the proxy comes from\")."
+		fi
+		;;
+	link) link "$2" ;;
+	check)
+		[ -x "$BIN" ] || fail "$NEED_BIN"
+		# A second copy on a free port next to the main one, with the same settings.
+		p=$(($(port) + 1)); [ "$p" -le 65535 ] || p=$(($(port) - 1))
+		esc="$(printf '\033')"
+		# shellcheck disable=SC2046
+		out="$(TG_SECRET="$(secret)" timeout 60 "$BIN" $(args 127.0.0.1 "$p") --check-listener 2>&1)"; rc=$?
+		printf '%s\n' "$out" | sed "s/$esc\[[0-9;]*m//g" | grep -E '\[(OK|FAIL)\]' | sed 's/^ *//'
+		[ "$rc" = 0 ] || fail "$(t "Не все проверки прошли (строки FAIL выше)" "Not every check passed (the FAIL lines above)")"
+		t "Прокси работает: Telegram отвечает" "The proxy works: Telegram answers"
+		;;
+	install)
+		install_bin "$2" || fail "$NEED_BIN"
+		"$BIN" --version 2>/dev/null | head -n1
+		;;
+	sync) sync ;;
+	rule) rule ;;
+	args) args ;;
+	*) sed -n '6,28s/^# \{0,1\}//p' "$0"; exit 1 ;;
+esac

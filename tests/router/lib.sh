@@ -25,6 +25,9 @@ restore_state() {
 	# The DoH config and the dnsmasq upstream are outside /etc/xray: bring them in line with the restored choice.
 	flint-dns synced || flint-dns apply >/dev/null 2>&1
 	flint-dns hosts apply
+	flint-tg sync
+	# The firewall rule for the proxy is outside /etc/xray: drop it when the restored settings keep access closed.
+	if [ "$(flint-tg remote)" != on ] && uci -q get firewall.flint_tg_remote >/dev/null; then flint-tg remote off >/dev/null 2>&1; fi
 	echo "  restored; vpn: $(vpn_works && echo ok || echo FAIL)"
 }
 finish() {

@@ -69,3 +69,5 @@ mkdir -p /tmp/dnsmasq.d
 cp -f /etc/dnsmasq.d/flint-*.conf /tmp/dnsmasq.d/ 2>/dev/null || true
 # /tmp is empty after a reboot: write the local names for dnsmasq again.
 flint-dns hosts apply
+# The Telegram proxy reaches Telegram through the VPN only while the VPN is on: follow the switch.
+flint-tg sync

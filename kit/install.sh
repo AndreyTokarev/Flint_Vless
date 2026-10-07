@@ -69,17 +69,19 @@ cp "$KIT/files/etc/xray/template.json" /etc/xray/
 cp "$KIT/files/usr/share/flint/vless.awk" "$KIT/files/usr/share/flint/lib.sh" /usr/share/flint/
 echo "$VERSION" > /usr/share/flint/version
 cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/flint-ui" "$KIT/files/etc/init.d/flint-doh" \
-	"$KIT/files/etc/init.d/flint-adblock" /etc/init.d/
+	"$KIT/files/etc/init.d/flint-adblock" "$KIT/files/etc/init.d/flint-tgproxy" /etc/init.d/
 cp "$KIT/files/etc/firewall.user" /etc/firewall.user
 cp "$KIT/files/usr/bin/flint-node" "$KIT/files/usr/bin/flint-geo-update" "$KIT/files/usr/bin/flint-sub-update" \
 	"$KIT/files/usr/bin/flint-custom" "$KIT/files/usr/bin/flint-watchdog" "$KIT/files/usr/bin/flint-adblock" \
-	"$KIT/files/usr/bin/flint-settings" "$KIT/files/usr/bin/flint-dns" /usr/bin/
+	"$KIT/files/usr/bin/flint-settings" "$KIT/files/usr/bin/flint-dns" "$KIT/files/usr/bin/flint-tg" /usr/bin/
 cp "$KIT/files/www/flint/index.html" "$KIT/files/www/flint/logo.svg" "$KIT/files/www/flint/icon.svg" \
 	"$KIT/files/www/flint/panel.css" /www/flint/
 cp "$KIT/files/www/flint/cgi-bin/panel.cgi" /www/flint/cgi-bin/
-chmod 755 /etc/init.d/xray /etc/init.d/flint-ui /etc/init.d/flint-doh /etc/init.d/flint-adblock /usr/bin/flint-node \
-	/usr/bin/flint-geo-update /usr/bin/flint-sub-update /usr/bin/flint-custom /usr/bin/flint-watchdog /usr/bin/flint-adblock \
-	/usr/bin/flint-settings /usr/bin/flint-dns \
+mkdir -p /lib/upgrade/keep.d
+cp "$KIT/files/lib/upgrade/keep.d/flint" /lib/upgrade/keep.d/
+chmod 755 /etc/init.d/xray /etc/init.d/flint-ui /etc/init.d/flint-doh /etc/init.d/flint-adblock /etc/init.d/flint-tgproxy \
+	/usr/bin/flint-node /usr/bin/flint-geo-update /usr/bin/flint-sub-update /usr/bin/flint-custom /usr/bin/flint-watchdog \
+	/usr/bin/flint-adblock /usr/bin/flint-settings /usr/bin/flint-dns /usr/bin/flint-tg \
 	/www/flint/cgi-bin/panel.cgi
 
 # User state from config/ (names in state-files); an entry missing there keeps the router's copy.
@@ -163,6 +165,8 @@ set firewall.flint_upstream_fwd.target='ACCEPT'
 EOF
 fi
 uci commit firewall
+# Telegram proxy clients from the internet: the rule follows the panel's settings (port, access).
+flint-tg rule
 
 say "services"
 for pid in $(pidof dnscrypt-proxy); do
@@ -185,6 +189,9 @@ fi
 flint-node use "$DEFAULT_NODE" 2>/dev/null || flint-node apply
 /etc/init.d/flint-ui enable
 /etc/init.d/flint-ui restart
+# Telegram proxy from the kit's archive, so the panel switch needs no download.
+flint-tg install "$KIT/bin/tg-ws-proxy-aarch64-unknown-linux-musl.tar.gz" >/dev/null ||
+	echo "Telegram proxy: not installed (kit/bin archive missing or damaged, GitHub unreachable)"
 # fw4 warns ("[!] ...") about the firmware's own disabled or unused GL rules on every reload: not ours, hidden.
 fw="$(/etc/init.d/firewall reload 2>&1)" || { echo "$fw"; die "firewall reload failed"; }
 printf '%s\n' "$fw" | grep -v -e '^\[!\]' -e '^$' || true
@@ -218,4 +225,11 @@ else
 	[ -n "$ip" ] && echo "VPN exit IP: $ip" || echo "VPN: FAIL (check the servers on the panel's Servers tab)"
 fi
 [ "$(flint-node vpn)" = off ] && echo "NOTE: VPN is switched off in the panel (flint-node vpn on to enable)"
+if [ "$(flint-tg state)" = on ]; then
+	sleep 2
+	pidof tg-ws-proxy >/dev/null && echo "Telegram proxy: on, port $(flint-tg port)" || echo "Telegram proxy: FAIL (not running)"
+fi
+kept="$(sysupgrade -l 2>/dev/null | grep -c -e '^/etc/xray/' -e '^/usr/bin/flint-' -e '^/www/flint/' || true)"
+if [ "${kept:-0}" -gt 0 ]; then echo "Firmware upgrade with \"Keep settings\": Flint stays ($kept files)"
+else echo "NOTE: sysupgrade -l lists no Flint files: a firmware upgrade removes Flint (redeploy after it)"; fi
 echo "Flint VPN $VERSION. Panel: http://vpn.lan:81/  (PIN from flint.env)"

@@ -6,8 +6,19 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-10-07
+
+### Added
+- Telegram proxy: a Telegram tab — an MTProto proxy on the router ([tg-ws-proxy-rs](https://github.com/valnesfjord/tg-ws-proxy-rs)), so Telegram works without the VPN: on devices without VPN, while the VPN is off, and without spending subscription traffic. "Add to Telegram" buttons for the Flint network, the main router's network and the internet; switches for the route to Telegram (directly or via VPN), the Cloudflare fallback and access from the internet; port, FakeTLS masking, a new secret and a proxy check. The proxy archive (v2.5.2, aarch64) is kept in the repository, in `kit/bin/`, and a deploy installs it without a download, checked by SHA-256. If the kit lacks it, the router downloads the same version from GitHub when the proxy is turned on. On the router: `flint-tg`. The settings go into backups and the settings file.
+- Advanced Telegram proxy settings, as in the desktop tg-ws-proxy: own secret (can be carried over from another proxy), data center addresses, own Cloudflare domains and Cloudflare Worker, TLS to Cloudflare off, the WebSocket pool, the proxy log (off, on, verbose) with the last lines on the tab, and a check for a newer version on GitHub.
+- Flint VPN survives a firmware upgrade with Keep Settings: `install.sh` puts the list of its files into `/lib/upgrade/keep.d/flint` (settings, scripts, panel, services and their autostart, Xray and the geo databases, the Telegram proxy, cron), and `sysupgrade` carries them over to the new firmware. A deploy ends with a check by `sysupgrade -l`; the README has a Firmware upgrade section.
+
 ### Changed
 - README and screenshots updated for Devices without VPN and Local names on the Routing and DNS tabs.
+- README: a detailed walkthrough of how the Telegram proxy works; screenshots retaken, with the Telegram tab added.
+
+### Fixed
+- `tests/run.ps1` without a scenario list could not follow the run: the run id got a trailing space and did not match the one on the router.
 
 ## [1.9.0] — 2026-10-05
 
@@ -279,7 +290,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.7.2...v1.8.0

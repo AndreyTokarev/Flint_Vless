@@ -38,7 +38,6 @@ rules() { [ -f "$RULES" ] && grep -v '^$' "$RULES"; }
 excluded() { [ -f "$EXCLUDE" ] && grep -v '^$' "$EXCLUDE"; }
 running() { curl -s -m 3 -o /dev/null "$API/status"; }
 answers() { nslookup "$CHECK_HOST" "127.0.0.1:$DNS_PORT" >/dev/null 2>&1; }
-lan_ip() { ip="$(uci -q get network.lan.ipaddr)"; echo "${ip%%/*}" | grep -E '^[0-9.]+$' || echo 192.168.8.1; }
 yaml() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
 json() { printf '"%s"' "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"; }
 # post <endpoint> <json> [timeout]: prints the HTTP code, the body goes to $OUT.

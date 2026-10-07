@@ -50,6 +50,7 @@ nodes_tsv() {
 	done
 }
 host_of() { echo "$1" | sed -e 's|^[a-zA-Z]*://||' -e 's|[/:?#].*||'; }
+lan_ip() { ip="$(uci -q get network.lan.ipaddr)"; echo "${ip%%/*}" | grep -E '^[0-9.]+$' || echo 192.168.8.1; }
 # mac <text>: the MAC in lower case with colons, nothing when it is not a MAC.
 mac() { echo "$1" | tr 'A-F-' 'a-f:' | grep -E '^([0-9a-f]{2}:){5}[0-9a-f]{2}$'; }
 # LAN devices "mac<TAB>ip<TAB>name": DHCP leases first (they have names), then the neighbour table for static IPs.

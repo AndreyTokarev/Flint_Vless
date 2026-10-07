@@ -42,7 +42,7 @@ The panel is available in English and Russian: the language follows your browser
 - **Russia geo filter.** Russian sites (`geosite:category-ru`) and IPs (`geoip:ru`) go direct, the rest via VPN. One button turns it off (everything via VPN).
 - **Your own rules.** Sites, IPs and subnets "always direct" or "always via VPN", taking priority over the geo filter.
 - **Devices without VPN.** Selected clients (a TV, console or work laptop) always go online directly by MAC address; the rest still go via VPN.
-- **Web panel** at `http://vpn.lan:81/`, protected by a PIN: server selection, VPN on/off, routing, own servers, subscriptions, ad blocking, PIN change, settings export and import. Works on phones.
+- **Web panel** at `http://vpn.lan:81/`, protected by a PIN: server selection, VPN on/off, routing, own servers, subscriptions, ad blocking, Telegram proxy, PIN change, settings export and import. Works on phones.
 - **Subscriptions from any providers.** Add several subscriptions in the v2rayN / Happ / Hiddify format — servers from all of them show up in the panel, grouped by provider. The subscription name, expiry date and traffic are picked up automatically. The list is refreshed on demand or automatically (every 30 minutes to once a day); the router downloads subscriptions directly, so refreshing works even when the current server is down.
 - **Own servers.** Add by `vless://` link, by copying a subscription server, or manually; TCP (xtls-rprx-vision) or gRPC transport.
 - **Failover.** Every 2 minutes the router checks the tunnel; if the server stopped responding while the internet is up, it refreshes the subscription and switches to the first working server.
@@ -52,8 +52,10 @@ The panel is available in English and Russian: the language follows your browser
   - **DNSCrypt** — a fallback when DoH is blocked on the network: AdGuard, Quad9, dnscry.pt or your own `sdns://…` stamp;
   - **plain UDP**: Cloudflare, Google, Quad9, AdGuard, Yandex, the main router's DNS or your own IPs.
 - **Ad blocking** for the whole network at the DNS level — AdGuard Home from the GL firmware, one button to turn it on. The default list is AdGuard DNS filter, the DNS version of the filters in paid AdGuard; add your own lists by URL and your own rules. Lists update by themselves, individual devices and sites can be excluded, and a recently blocked domain is allowed with one button.
+- **Telegram proxy** on the router ([tg-ws-proxy-rs](https://github.com/valnesfjord/tg-ws-proxy-rs)): Telegram works without the VPN — on devices without VPN, while the VPN is off, and without spending subscription traffic. It is added to Telegram with a button from the panel; the route to Telegram (directly or via VPN), the Cloudflare fallback and access from the internet are switches in the panel.
 - **Home network access.** The main router's LAN, NAS and printer are reachable directly, bypassing the VPN; local names (`nas01`) are set in the panel.
 - **Backup and restore** with one command; redeploying keeps the settings made in the panel. The panel settings can also be downloaded as a file and uploaded to the same or another Flint right from the browser.
+- **Survives a firmware upgrade** with Keep Settings: the VPN, panel and all settings stay, no redeploy needed.
 
 ## Screenshots
 
@@ -68,10 +70,12 @@ The panel is available in English and Russian: the language follows your browser
 | ![Edit](docs/screenshots/en/edit.png) | ![DNS](docs/screenshots/en/dns.png) |
 | **Routing** | **Ad blocking** |
 | ![Routing](docs/screenshots/en/routing.png) | ![Ad blocking](docs/screenshots/en/adblock.png) |
-| **Settings** | **Phone** |
-| ![Settings](docs/screenshots/en/settings.png) | ![Phone](docs/screenshots/en/mobile-status.png) |
-| **Phone: servers** | **No servers** |
-| ![Phone: servers](docs/screenshots/en/mobile-servers.png) | ![No servers](docs/screenshots/en/empty.png) |
+| **Telegram proxy** | **Settings** |
+| ![Telegram proxy](docs/screenshots/en/telegram.png) | ![Settings](docs/screenshots/en/settings.png) |
+| **Phone** | **Phone: servers** |
+| ![Phone](docs/screenshots/en/mobile-status.png) | ![Phone: servers](docs/screenshots/en/mobile-servers.png) |
+| **Phone: Telegram** | **No servers** |
+| ![Phone: Telegram](docs/screenshots/en/mobile-telegram.png) | ![No servers](docs/screenshots/en/empty.png) |
 
 The screenshots use demo data: documentation IP ranges, made-up servers and keys.
 
@@ -227,14 +231,15 @@ Address: **http://vpn.lan:81/** (port 80 is taken by the stock GL.iNet admin pan
 
 | Tab | What's there |
 |---|---|
-| **Status** | VPN on/off button, current server, IP via VPN and the provider IP (before VPN), geo filter, number of own sites and servers, last subscription check, failover state and last failure, ad blocking, DNS server |
+| **Status** | VPN on/off button, current server, IP via VPN and the provider IP (before VPN), geo filter, number of own sites and servers, last subscription check, failover state and last failure, ad blocking, DNS server, Telegram proxy |
 | **Subscriptions** | VPN provider subscriptions: add by link, change the link or name, delete; last update, number of servers, expiry and traffic; "Update all subscriptions now" and the auto-update interval |
 | **Servers** | one-click server selection — servers grouped by subscription, own servers apart; "White lists" block; failover on/off |
 | **Own servers** | servers not from the subscription: add by `vless://` link, copy a subscription server and edit the copy, enter manually; edit or delete |
 | **DNS** | DoH, DNSCrypt or plain UDP mode with a server for each — a preset or your own; the mode in use is marked. Local names for network devices (`nas01` → IP) |
 | **Routing** | Russia geo filter on/off; devices without VPN (by MAC); own sites, IPs and subnets "always direct" or "always via VPN" |
 | **Ad blocking** | ad blocking on/off and 24-hour stats; devices without blocking; sites without blocking and "Recently blocked" with an Allow button; filter lists — ready-made and your own by URL; auto-update and "Update the lists now"; own rules |
-| **Settings** | change the PIN; export the settings to a file and import them from a file (subscriptions, servers, sites, devices without VPN, ad blocking, DNS, local names, modes; no PIN or network) |
+| **Telegram** | Telegram proxy on/off and a check; "Add to Telegram" buttons for the Flint network, the main router's network and the internet, plus server, port and secret for manual entry; route to Telegram — directly or via VPN; Cloudflare fallback; access from the internet; port, masking (FakeTLS), a new or own secret; data center addresses, own Cloudflare domains and Worker, connection pool, proxy log, update check |
+| **Settings** | change the PIN; export the settings to a file and import them from a file (subscriptions, servers, sites, devices without VPN, ad blocking, DNS, local names, Telegram proxy, modes; no PIN or network) |
 
 The panel speaks English and Russian. On the first visit the language follows the browser (or `UI_LANG` in `flint.env`); after that use the **RU | EN** switch in the top right corner (next to "Sign out"; on the login page too) — the choice is remembered in the browser. Messages after panel actions use the same language.
 
@@ -333,6 +338,118 @@ On such sites only a blocker on the device itself helps: the [uBlock Origin](htt
 
 More on device settings in [Devices on the network](#devices-on-the-network). If a site you need broke after turning blocking on, add it to "Sites without blocking" or add the device to "Devices without blocking".
 
+## Telegram proxy
+
+An MTProto proxy on the router — [tg-ws-proxy-rs](https://github.com/valnesfjord/tg-ws-proxy-rs), the Rust version of [Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy). The Telegram app connects to the router as to a regular MTProto proxy, and the router reaches Telegram through its web servers over WebSocket on top of TLS — the same way Telegram Web does in a browser. The provider sees an HTTPS connection to a Telegram web server, not the MTProto protocol, which gets cut by its signature.
+
+### Why it is needed
+
+With the VPN on, Telegram on devices behind Flint works anyway: its servers are not Russian, so the geo filter sends them through VLESS. The proxy is for when Telegram has to work **without the VPN**:
+
+- on **devices without VPN** (Routing → Devices without VPN) — their traffic bypasses Xray, and the provider may slow Telegram down or break it;
+- while the **VPN is off** or the subscription servers are down — Telegram keeps working through the proxy;
+- **without spending subscription traffic** — photos, videos and files bypass VLESS (the "Directly" route);
+- **away from home**, with access from the internet open: a phone on mobile data reaches Telegram through the home router.
+
+While the proxy is off or not added to Telegram on a device, Telegram follows the router's usual rules like all other traffic.
+
+### Turning it on
+
+1. Telegram → Turn the proxy on. The proxy is already on the router (a deploy installs it), so it starts right away; the panel waits until it listens on the port.
+2. Open the Telegram tab on a device with Telegram and tap **"Add to Telegram"** — Telegram offers to connect the proxy. The `t.me` button next to it is the same link through Telegram's site, in case the app did not open on `tg://`.
+3. By hand: *Settings → Data and Storage → Proxy → Add Proxy → MTProto*, with the server, port and secret from the same tab.
+
+There are up to three links, each with its own server address:
+
+| Link | Server | For |
+|---|---|---|
+| On the Flint network | `192.168.8.1` (the router's LAN address) | devices on Flint's Wi‑Fi or LAN |
+| On the main router's network | Flint's address on the main router's network, e.g. `192.168.0.111` | devices on the main router's Wi‑Fi; shown when `UPSTREAM_NET` is set |
+| From the internet | the provider IP or your own domain | a phone away from home; shown when access from the internet is on |
+
+### How it works
+
+```
+ Telegram (phone, PC)
+    │  MTProto obfuscated with the secret (dd…), with masking wrapped in TLS (ee…)
+    ▼
+ Flint :1443 ── tg-ws-proxy ─┬─► WebSocket over TLS :443 → kwsN.web.telegram.org ─► Telegram data center
+                             ├─► fallback: Cloudflare (kwsN.<listed domain>)       ─► Telegram data center
+                             └─► last resort: TCP :443 straight to the data center
+    "Via VPN": every outgoing connection of the proxy goes into Xray (HTTP inbound 127.0.0.1:1087) ─► VLESS
+```
+
+1. **Connecting to the router.** Telegram opens a TCP connection to the router on the proxy port (1443). It is an address inside the network, so Xray leaves it alone even when the device itself goes via the VPN.
+2. **Handshake and secret.** The first 64 bytes are an obfuscated MTProto handshake. From it the proxy checks the secret and learns the data center (DC) number and the connection type: regular or media (photos, videos, files). A connection without the right secret is dropped, so knowing the address and port is not enough to use the proxy.
+3. **The WebSocket bridge.** The proxy opens a WebSocket connection `wss://kwsN.web.telegram.org/apiws` — the Telegram Web entrance for data center N. TCP goes to the data center's IP, while TLS carries the web server's name, so from outside it looks like ordinary HTTPS to Telegram Web. The stream is re-encrypted with AES-256-CTR (client keys ↔ bridge keys). The proxy does not see the messages: Telegram itself encrypts them, and the proxy passes on data that is already encrypted.
+4. **Connection pool.** For each data center the proxy keeps 4 WebSocket connections open in advance, so new chats and downloads do not wait for a TLS handshake.
+5. **Fallbacks.** Each connection takes the first route that works: direct WebSocket → Cloudflare (if the fallback is on) → a direct TCP connection to the data center on port 443. The Cloudflare fallback uses the shared domain list of the tg-ws-proxy project: the proxy downloads it from GitHub at startup and, if GitHub is unreachable, uses a short built-in list. Behind these domains are the same `kwsN` entrances, but the provider sees a connection to Cloudflare. If TCP to a data center address hangs until a timeout — which is what DPI blocking usually looks like — the proxy steps over that address for an hour and goes straight to a fallback. A refused connection does not count. If the fallbacks fail too, the address is tried again, and the first direct connection that succeeds clears the cooldown.
+6. **Route to Telegram.** "Directly": the proxy goes out to the internet as the router itself — the router's own traffic is not sent into Xray (interception covers only traffic from the LAN), so no VPN traffic is spent. "Via VPN": every outgoing connection of the proxy, the Cloudflare fallback included, goes into Xray's HTTP inbound on `127.0.0.1:1087` and then follows Xray's rules: Telegram's addresses are not Russian, so they go through VLESS. While the VPN is off or there are no servers, the proxy switches to "Directly" by itself and back once the VPN is on again.
+7. **Masking (FakeTLS).** With it the proxy accepts only clients with an `ee…` secret: the connection from the phone to the router starts as a TLS handshake with the given site (e.g. `www.google.com`). This protects the "phone → router" leg when it goes over the internet and a mobile operator. Masking does not change the router's path to Telegram.
+
+### How it is set up on the router
+
+| What | Where |
+|---|---|
+| Proxy | `/usr/bin/tg-ws-proxy` — a static aarch64 binary (3.8 MB), installed on every deploy from the archive in `kit/bin/` |
+| Service | `/etc/init.d/flint-tgproxy` (procd, restarted if it crashes). Enabled at boot only while the proxy is on in the panel |
+| Settings | `/etc/xray/tgproxy`, mode 600: `state`, `route`, `cf`, `remote`, `addr`, `mask`, `port`, `secret`, `dc`, `cfdomain`, `worker`, `cftls`, `pool`, `log` |
+| Control | `flint-tg` — used by the panel, `install.sh` and `firewall.user` |
+| Firewall | from the Flint network the router is open through the `lan` zone; from the main router's network through the `Allow-Upstream-LAN-to-Router` rule; from the internet through `Allow-Flint-Telegram-Proxy` (`firewall.flint_tg_remote`), which exists only while access from the internet is on and follows port changes |
+
+Details:
+
+- **The command line** comes from `flint-tg args`: `--host 0.0.0.0 --port <port> --link-ip <LAN address>`, plus `--default-domains` (Cloudflare fallback), `--listen-faketls-domain <site>` (masking) and `--outbound-proxy http://127.0.0.1:1087` (route via VPN, while the VPN works). The secret is passed in the `TG_SECRET` environment variable, so it does not show in the process list (`ps`).
+- **Sync.** `flint-tg sync` runs at the end of `/etc/firewall.user`, that is when the VPN is turned on or off, the server changes, the firewall reloads and the router boots. It restarts the proxy only when the command line or secret changed (the last ones are kept in `/tmp/flint-tg.applied`), so open Telegram connections are not dropped for nothing.
+- **The secret** is 16 random bytes (32 hex characters), created on first use. The link: `tg://proxy?server=<address>&port=<port>&secret=dd<secret>`, with masking `secret=ee<secret><site domain in hex>`.
+- **The check** ("Check the proxy", `flint-tg check`) starts a second copy of the proxy with the same settings on the next port (`port + 1`, `127.0.0.1` only) with `--check-listener`. That copy connects to itself as a Telegram client — handshake, a `req_pq_multi` request, a `resPQ` answer from the data center — checks the Cloudflare domains and prints an `[OK]` / `[FAIL]` line per route. The running proxy is not touched.
+
+### Where the proxy comes from
+
+So as not to depend on whether the project is still on GitHub, the release archive is kept in the repository: `kit/bin/tg-ws-proxy-aarch64-unknown-linux-musl.tar.gz` (v2.5.2) with its MIT license `kit/bin/tg-ws-proxy-LICENSE`. A deploy uploads it with the kit, and `install.sh` checks the archive's SHA-256 against the sum in `flint-tg` and installs `/usr/bin/tg-ws-proxy`. If the archive is missing from the kit or damaged, the install goes on without the proxy, and `flint-tg on` (the panel button) downloads the same archive from GitHub — via the VPN first, then directly — and checks the same sum. A foreign or modified file will not be installed.
+
+**Updating the proxy to a new version:**
+
+1. Download `tg-ws-proxy-aarch64-unknown-linux-musl.tar.gz` from the [tg-ws-proxy-rs releases](https://github.com/valnesfjord/tg-ws-proxy-rs/releases) and replace the archive in `kit/bin/` with it.
+2. In `kit/files/usr/bin/flint-tg` change `VERSION` and `SHA256` (the archive's sum: `Get-FileHash <file> -Algorithm SHA256` or `sha256sum <file>`; GitHub shows it next to the file in the release).
+3. Redeploy. The proxy restarts on the new version with the same settings and secret — the links in Telegram stay the same.
+
+### What does not go through the proxy
+
+- **Telegram calls.** An MTProto proxy does not carry them. Calls follow the network's usual rules: UDP behind Flint is not tunneled and goes directly.
+- **Telegram Web in a browser.** It is an ordinary site and follows the router's rules — via the VPN, if it is on.
+- **Devices where the proxy is not added in Telegram.** The proxy is not transparent: it works only once set up in the app.
+
+**Switches:**
+
+| Setting | What it does |
+|---|---|
+| Route to Telegram | **directly, bypassing the VPN** (default) or **via VPN** — when the provider blocks Telegram's web servers too. While the VPN is off, the proxy goes directly anyway |
+| Cloudflare fallback | if Telegram's servers are not reachable, the proxy goes to them through Cloudflare, using the shared domain list of the tg-ws-proxy project (on by default) |
+| Access from the internet | opens the proxy port in the WAN zone, so Telegram on a phone works through the home router away from home. Needs a TCP port forward on the main router to Flint's address there and a public IP from the provider (it won't work behind CGNAT). The address in the link is the provider IP or your own domain (DDNS) |
+| Port | 1443 by default |
+| Masking (FakeTLS) | connections to the proxy look like HTTPS to the given site (a link with an `ee…` secret). Turn it on when the proxy is open to the internet: without it a mobile operator may spot the proxy |
+| New secret | the old links stop working |
+| Own secret | 32 hex characters, e.g. from the desktop tg-ws-proxy, so Telegram keeps its secret (a secret with `dd`/`ee` in front works too) |
+| Data center addresses | number:IP, comma-separated (`--dc-ip`): the addresses the proxy connects to directly. Empty: the built-in ones (DC2 and DC4) |
+| Cloudflare: own domains | domains on your Cloudflare (`--cf-domain`), tried before the shared list |
+| Cloudflare Worker | your Worker domains (`--cf-worker-domain`): the last fallback, a TCP tunnel to Telegram |
+| TLS to Cloudflare | off means `ws://` on port 80 (`--cf-disable-tls`), only for providers that cut TLS to Cloudflare |
+| WebSocket pool | how many connections to each data center to keep open in advance (`--pool-size`, 4 by default) |
+| Proxy log | off, on or verbose (`--verbose`); goes to the router's in-memory system log (`logread -e tg-ws-proxy`), the last lines show on the tab |
+| Check for updates | compares the installed version with the latest on GitHub. It does not update by itself: the version is pinned in the kit, see [Where the proxy comes from](#where-the-proxy-comes-from) |
+
+The desktop tg-ws-proxy's "Buffer, KB" is not carried over: the Rust version accepts it but does not use it.
+
+After changing the port, masking or secret, add the proxy to Telegram again. "Check the proxy" starts a second copy of the proxy with the same settings, walks the whole path — from a client connection to an answer from Telegram's servers — and shows the result for each route (`[OK]` / `[FAIL]`).
+
+### Resources, backup, firmware
+
+- The proxy takes 3–5 MB of memory and 3.8 MB of flash; it is stopped while off.
+- Its settings and secret (`/etc/xray/tgproxy`) go into backups and the panel's settings file and come back with `restore` — the links in Telegram keep working after a restore.
+- A firmware upgrade with Keep Settings keeps the proxy along with the rest of the kit (see [Firmware upgrade](#firmware-upgrade)). Without it a redeploy installs the proxy again from `kit/bin/`, with no internet needed for that.
+- `uninstall` stops the proxy and removes the binary, the service and the firewall rule.
+
 ## Access from the main router's network
 
 `install.sh` allows incoming connections from `UPSTREAM_NET` to Flint and to devices behind it (`192.168.8.x`). If the main router's network changes, update `UPSTREAM_IF` / `UPSTREAM_NET` in `config/flint.env` and redeploy. On the main router, add a DHCP reservation for Flint (e.g. `192.168.0.111`) and a static route: network `192.168.8.0`, mask `255.255.255.0`, gateway `192.168.0.111`.
@@ -370,9 +487,36 @@ Without a computer, the panel settings can be saved as a file: Settings → "Dow
 ./restore.sh --full
 ```
 
-By default `flint.env`, servers, subscriptions, own servers and sites, ad blocking lists, rules and exclusions from the backup go into `config/`, then a normal deploy runs, and after it every panel setting from the backup comes back to the router: the chosen server, VPN and routing modes, DNS, local names, ad blocking, intervals and the watchdog. This works for a reset router too: first connect it to the internet in the GL admin panel. The current `config/` files are saved to `backup/config-before-restore-<time>/` before being replaced.
+By default `flint.env`, servers, subscriptions, own servers and sites, ad blocking lists, rules and exclusions from the backup go into `config/`, then a normal deploy runs, and after it every panel setting from the backup comes back to the router: the chosen server, VPN and routing modes, DNS, local names, ad blocking, the Telegram proxy (with the same secret, so the links in Telegram keep working), intervals and the watchdog. This works for a reset router too: first connect it to the internet in the GL admin panel. The current `config/` files are saved to `backup/config-before-restore-<time>/` before being replaced.
 
 `-Full` / `--full` is only for the **same** router: it brings back its network, Wi‑Fi (SSIDs and passwords), firewall, DHCP reservations, cron and SSH keys, then reboots. The script asks for confirmation (`-Yes` / `--yes` skips it).
+
+## Firmware upgrade
+
+Upgrade the firmware with **Keep Settings** checked, and Flint VPN survives the upgrade: after the reboot the VPN, panel, subscriptions, ad blocking and Telegram proxy work as before, no redeploy needed.
+
+**How it works.** An upgrade wipes everything installed on top of the firmware, and with Keep Settings it carries over only `/etc/config/*` (network, Wi‑Fi, DHCP, firewall rules) and files from explicit lists. `install.sh` puts such a list into `/lib/upgrade/keep.d/flint` — the standard OpenWrt place `sysupgrade` reads before flashing. The list holds:
+
+| What | Paths |
+|---|---|
+| Settings, servers, subscriptions, PIN | `/etc/xray` |
+| Scripts, panel, services | `/usr/bin/flint-*`, `/usr/share/flint`, `/www/flint`, `/etc/init.d/xray`, `/etc/init.d/flint-*` |
+| Service autostart | links `/etc/rc.d/*xray`, `/etc/rc.d/*flint-*` |
+| Xray, geoip/geosite databases, Telegram proxy | `/usr/bin/xray`, `/usr/share/xray`, `/usr/bin/tg-ws-proxy` |
+| Traffic interception, DNS, ad blocking | `/etc/firewall.user`, `/etc/dnsmasq.d/flint-*.conf`, `/etc/dnscrypt-proxy2/flint-doh.toml`, `/etc/flint-adguard` |
+| Cron jobs (subscriptions, watchdog, geo databases) | `/etc/crontabs/root` |
+
+The list includes itself, so the next upgrade keeps everything too. With Xray and the geo databases about 60 MB go into the upgrade archive — fine for this router.
+
+**Check beforehand** without changing anything: `sysupgrade -l` on the router prints the files that will be kept. It should list `/etc/xray/…`, `/usr/bin/flint-…`, `/www/flint/…`. A deploy checks this itself and ends with `Firmware upgrade with "Keep settings": Flint stays (N files)`.
+
+**When a deploy or restore is still needed:**
+
+- upgraded **without** Keep Settings or reset the router — `.\restore.ps1 -Full` (or a normal deploy and setting up again);
+- the new firmware is on another major OpenWrt version (e.g. 23.05 → 24.10) and something does not work after the upgrade — redeploy: it rewrites the kit's files, and the settings in `/etc/xray` stay;
+- packages `install.sh` installed with `opkg` (`dnscrypt-proxy2`, `iptables-nft`, etc., if the firmware lacked them) are removed by the upgrade — a redeploy brings them back. GL firmware 4.x already has them; Xray itself is kept as a file.
+
+Make a backup before a firmware upgrade anyway (`.\backup.ps1`), in case something goes wrong.
 
 ## Uninstall
 
@@ -387,7 +531,7 @@ By default `flint.env`, servers, subscriptions, own servers and sites, ad blocki
 ./uninstall.sh --no-backup
 ```
 
-The script asks for confirmation (`-Yes` / `--yes` skips it), backs up to `backup/<date>` and removes from the router everything Flint VPN installed: the panel, services, `flint-*` scripts, settings in `/etc/xray`, its own AdGuard Home instance, firewall rules and cron jobs, the `xray-core` package and the geoip/geosite databases. The DNS settings go back to the firmware defaults: dnsmasq takes DNS from the main router again. The firmware and its packages (`dnscrypt-proxy2`, `curl`, the firmware's AdGuard Home, etc.), network, Wi‑Fi and the root password stay as they are.
+The script asks for confirmation (`-Yes` / `--yes` skips it), backs up to `backup/<date>` and removes from the router everything Flint VPN installed: the panel, services, `flint-*` scripts, settings in `/etc/xray`, its own AdGuard Home instance, the Telegram proxy, firewall rules and cron jobs, the `xray-core` package and the geoip/geosite databases. The DNS settings go back to the firmware defaults: dnsmasq takes DNS from the main router again. The firmware and its packages (`dnscrypt-proxy2`, `curl`, the firmware's AdGuard Home, etc.), network, Wi‑Fi and the root password stay as they are.
 
 After uninstalling, devices go online directly. Flint is no longer reachable from the main router's network (Flint VPN's rules did that): connect to it over Wi‑Fi or a cable. To bring everything back, run `.\restore.ps1` / `./restore.sh` with the backup just made.
 
@@ -427,6 +571,14 @@ flint-dns dnscrypt quad9             # DNSCrypt; your own: flint-dns dnscrypt sd
 flint-dns udp provider               # plain DNS: a preset, provider or IPs separated by spaces
 flint-dns mode doh                   # switch the mode: doh, dnscrypt, udp
 flint-dns hosts                      # local names; add: flint-dns hosts add nas01 192.168.0.145, delete: hosts del nas01
+flint-tg on                          # Telegram proxy (off — turn it off)
+flint-tg link                        # tg://proxy link for the Flint network (upstream — main router's network, remote — internet)
+flint-tg route vpn                   # route to Telegram via VPN (direct — directly)
+flint-tg check                       # check the proxy up to an answer from Telegram's servers
+flint-tg secret <hex>                # own secret (new: a new random one)
+flint-tg dc 2:149.154.167.220        # data center addresses (default: the built-in ones)
+flint-tg log verbose                 # proxy log (on, off); flint-tg logs shows the last lines
+flint-tg latest                      # is there a newer proxy version on GitHub
 logread -e xray                # Xray logs
 ```
 
@@ -441,7 +593,7 @@ logread -e xray                # Xray logs
 
 Built for and tested only on the GL-BE6500. It should work elsewhere if:
 
-- the CPU is **aarch64** (the installer stops otherwise; for `armv7`/`mips` remove the check in `kit/install.sh` and provide Xray for your architecture);
+- the CPU is **aarch64** (the installer stops otherwise; for `armv7`/`mips` remove the check in `kit/install.sh` and provide Xray for your architecture; the Telegram proxy in `kit/bin/` is an aarch64 build too — replace the archive and `URL`/`SHA256` in `flint-tg` with a build from the [tg-ws-proxy-rs releases](https://github.com/valnesfjord/tg-ws-proxy-rs/releases));
 - the firmware is **OpenWrt 22.03+ with fw4**; rules use `iptables` in `/etc/firewall.user`, the installer adds `iptables-nft` and `iptables-mod-nat-extra` when needed;
 - the LAN bridge is **`br-lan`**; the LAN address is read from `uci`;
 - `UPSTREAM_IF` names the uplink interface (`wan`, `sta1`, `wwan`…);
@@ -464,8 +616,10 @@ If you run it on another device, please report the result in [Issues](https://gi
 | Forgot the PIN | see it: `ssh root@192.168.8.1 "grep UI_PIN /etc/xray/flint.env"`. Set a new one (here `1234`, letters and digits only): `ssh root@192.168.8.1 "sed -i '/^UI_PIN=/d' /etc/xray/flint.env && echo UI_PIN=1234 >> /etc/xray/flint.env"` — it works at once, nothing needs a restart; put it into `config/flint.env` too, or a deploy brings the old one back. Or just redeploy — the PIN becomes the one in `config/flint.env` |
 | A NAS or other device of the main network doesn't open | find it in the main router's client list: it may have a new address after a reboot. Fix the address (DHCP reservation or static IP on the device) and update its name on the DNS → Local names tab |
 | Ads are not blocked on a device | turn off Private DNS, browser DoH and any VPN client (Happ, etc.) on it; check it is not excluded |
+| Telegram doesn't connect through the proxy | Telegram → Check the proxy: if every route shows `[FAIL]`, turn the Cloudflare fallback on or choose the route "Via VPN". Turn off any VPN client on the device; after changing the port, masking or secret, add the proxy to Telegram again. "On, but not running" — turn the proxy off and on again |
 | Ads remain on VK, YouTube, etc. | they come from the same domain as the content and DNS blocking can't remove them — install uBlock Origin in the browser (see [Where ads remain](#where-ads-remain)) |
 | `opkg install ... failed` | `/tmp/flint-opkg.log`; router internet; put Xray into `backup/bin/xray` |
+| The VPN and panel are gone after a firmware upgrade | upgraded without Keep Settings — `.\restore.ps1 -Full`; with it — redeploy, the settings in `/etc/xray` were kept (see [Firmware upgrade](#firmware-upgrade)) |
 
 ## Limitations
 
@@ -486,7 +640,7 @@ Pull requests and issues are welcome: fixes, support for other routers, panel tr
 
 ## Credits
 
-[Xray-core](https://github.com/XTLS/Xray-core), [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat), [dnscrypt-proxy](https://github.com/DNSCrypt/dnscrypt-proxy), [AdGuard Home](https://github.com/AdguardTeam/AdGuardHome) and [AdGuard filters](https://github.com/AdguardTeam/AdGuardSDNSFilter), [OpenWrt](https://openwrt.org), [GL.iNet](https://www.gl-inet.com).
+[Xray-core](https://github.com/XTLS/Xray-core), [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat), [dnscrypt-proxy](https://github.com/DNSCrypt/dnscrypt-proxy), [AdGuard Home](https://github.com/AdguardTeam/AdGuardHome) and [AdGuard filters](https://github.com/AdguardTeam/AdGuardSDNSFilter), [tg-ws-proxy-rs](https://github.com/valnesfjord/tg-ws-proxy-rs) and [Flowseal/tg-ws-proxy](https://github.com/Flowseal/tg-ws-proxy), [OpenWrt](https://openwrt.org), [GL.iNet](https://www.gl-inet.com).
 
 ## License
 

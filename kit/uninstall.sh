@@ -17,7 +17,7 @@ echo "Flint VPN $(cat /usr/share/flint/version 2>/dev/null || echo "?"): uninsta
 [ -f /etc/xray/flint.env ] && . /etc/xray/flint.env
 
 say "services"
-for s in flint-ui flint-adblock flint-doh xray; do
+for s in flint-ui flint-adblock flint-tgproxy flint-doh xray; do
 	[ -x "/etc/init.d/$s" ] || continue
 	"/etc/init.d/$s" stop >/dev/null 2>&1
 	"/etc/init.d/$s" disable >/dev/null 2>&1
@@ -37,7 +37,7 @@ if [ -n "$UPSTREAM_IF" ] && [ -n "$UPSTREAM_NET" ]; then
 	del filter FORWARD -i br-lan -o "$UPSTREAM_IF" -d "$UPSTREAM_NET" -j ACCEPT
 	del filter FORWARD -i "$UPSTREAM_IF" -o br-lan -s "$UPSTREAM_NET" -j ACCEPT
 fi
-for sec in flint_ui xray_socks xray_http flint_upstream_in flint_upstream_fwd; do uci -q delete "firewall.$sec"; done
+for sec in flint_ui xray_socks xray_http flint_upstream_in flint_upstream_fwd flint_tg_remote; do uci -q delete "firewall.$sec"; done
 while sec="$(uci -q show firewall | sed -n "s|^firewall\.\([^.]*\)\.path='/etc/firewall\.user'$|\1|p" | head -n1)" && [ -n "$sec" ]; do
 	uci delete "firewall.$sec" || break
 done
@@ -56,9 +56,9 @@ uci commit dhcp
 say "files"
 [ -f /etc/crontabs/root ] && sed -i '/\/usr\/bin\/flint-/d' /etc/crontabs/root
 rm -rf /etc/xray /etc/flint-adguard /www/flint /usr/share/flint
-rm -f /usr/bin/flint-* /etc/init.d/flint-ui /etc/init.d/flint-adblock /etc/init.d/flint-doh \
-	/etc/dnsmasq.d/flint-*.conf /tmp/dnsmasq.d/flint-*.conf /etc/dnscrypt-proxy2/flint-doh.toml \
-	/tmp/flint-*.log /tmp/flint-ip.* /tmp/flint-adblock.out* /tmp/hosts/flint
+rm -f /usr/bin/flint-* /etc/init.d/flint-ui /etc/init.d/flint-adblock /etc/init.d/flint-doh /etc/init.d/flint-tgproxy \
+	/usr/bin/tg-ws-proxy /etc/dnsmasq.d/flint-*.conf /tmp/dnsmasq.d/flint-*.conf /etc/dnscrypt-proxy2/flint-doh.toml \
+	/tmp/flint-*.log /tmp/flint-ip.* /tmp/flint-adblock.out* /tmp/hosts/flint /tmp/flint-tg.applied /lib/upgrade/keep.d/flint
 rmdir /etc/dnsmasq.d 2>/dev/null || true
 
 if [ "$KEEP_XRAY" = 1 ]; then
@@ -88,7 +88,7 @@ nslookup example.com 127.0.0.1 2>/dev/null | awk '/^Name:/ { n = 1 } n && /^Addr
 left="$(
 	[ -e /etc/xray ] && echo /etc/xray
 	[ -e /www/flint ] && echo /www/flint
-	ls /usr/bin/flint-* /etc/init.d/flint-* 2>/dev/null
+	ls /usr/bin/flint-* /etc/init.d/flint-* /usr/bin/tg-ws-proxy /lib/upgrade/keep.d/flint 2>/dev/null
 	iptables -t nat -S 2>/dev/null | grep -E 'XRAY|FLINT_DNS' || true
 	iptables -S 2>/dev/null | grep FLINT_QUIC || true
 )"

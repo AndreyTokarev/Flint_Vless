@@ -27,6 +27,9 @@ label{display:block;margin-top:8px}
 label input{width:100%;box-sizing:border-box;margin-top:4px}
 input,select{padding:10px;border-radius:8px;border:1px solid #374151;background:#0b1220;color:#e5e7eb;font-size:15px}
 pre{white-space:pre-wrap;margin:0}
+pre.log{font:12px/1.4 ui-monospace,Consolas,monospace;color:#9ca3af;background:#0b1220;border:1px solid #374151;border-radius:8px;padding:8px;max-height:320px;overflow:auto;word-break:break-all}
+code{font-family:ui-monospace,Consolas,monospace;word-break:break-all;color:#fbbf24}
+.stat code{min-width:0}
 small{color:#9ca3af}
 .ok{color:#34d399}.err{color:#f87171}
 .logo{display:flex;align-items:center;gap:.35em;font-size:22px}
