@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # DNS for the router and the LAN, in one of three modes:
 #   doh (default) — dnsmasq forwards every query to dnscrypt-proxy (flint-doh, 127.0.0.1:5053), which sends it
 #                   encrypted over HTTPS to a DoH server: a preset or any https:// address;
@@ -19,6 +21,10 @@
 #        flint-dns hosts [add <name> <IP> | del <name>]       local names for LAN devices: list (name, IP) / add / delete
 #        flint-dns hosts apply                                write the names for dnsmasq (boot, settings import)
 MODE_F=/etc/xray/dns-mode
+# The comment block above the code: every "# Usage:" line up to the first line that is not a comment.
+help() {
+	awk '/^# Usage:/ { u = 1 } u && /^#/ { sub(/^# ?/, ""); print; next } u { exit }' "$0"
+}
 DOH_F=/etc/xray/dns-doh
 DNSCRYPT_F=/etc/xray/dns-dnscrypt
 UDP_F=/etc/xray/dns-udp
@@ -314,5 +320,5 @@ case "$1" in
 			*) fail "flint-dns hosts [add <name> <IP> | del <name> | apply]" ;;
 		esac
 		;;
-	*) sed -n '9,20s/^# \{0,1\}//p' "$0"; exit 1 ;;
+	*) help; exit 1 ;;
 esac

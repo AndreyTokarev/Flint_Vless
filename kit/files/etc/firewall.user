@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # Flint: transparent Xray for LAN clients, router DNS enforcement, direct access to upstream LAN.
 # Safe to re-run on every firewall reload.
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin

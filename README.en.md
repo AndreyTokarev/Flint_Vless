@@ -21,6 +21,9 @@
   <a href="LICENSE.en.md">License</a>
 </p>
 
+> [!IMPORTANT]
+> **Free for home, study and hobby use.** Companies, government bodies and government-controlled companies need the author's written permission (which may be paid). Forking, changing and reusing ideas are welcome, but the **reference to the original must be kept**: a whole fork, and any project that reuses even a part of this code, must carry the `Required Notice:` lines from [LICENSE](LICENSE) and a link to this repository. The source is open, but the license is noncommercial — see [LICENSE.en.md](LICENSE.en.md) and [LICENSE](LICENSE).
+
 ![Panel: status](docs/screenshots/en/status.png)
 
 ## About
@@ -491,6 +494,14 @@ By default `flint.env`, servers, subscriptions, own servers and sites, ad blocki
 
 `-Full` / `--full` is only for the **same** router: it brings back its network, Wi‑Fi (SSIDs and passwords), firewall, DHCP reservations, cron and SSH keys, then reboots. The script asks for confirmation (`-Yes` / `--yes` skips it).
 
+### If opkg is unavailable
+
+`install.sh` installs the packages it needs itself: `curl`, `ca-bundle`, `dnscrypt-proxy2`, `unzip`, `xray-core` (log in `/tmp/flint-opkg.log`). On GL.iNet it also fixes the architecture list in `/etc/opkg.conf`: the GL feed builds `xray-core` for `aarch64_cortex-a53`, while the firmware declares `aarch64_cortex-a53_neon-vfpv4`.
+
+If `xray-core` from `opkg` did not install, Xray is taken in this order:
+1. `backup/bin/xray` — save it beforehand from a working router: `.\backup.ps1 -WithBinary`;
+2. the official GitHub release (`XRAY_VERSION`).
+
 ## Firmware upgrade
 
 Upgrade the firmware with **Keep Settings** checked, and Flint VPN survives the upgrade: after the reboot the VPN, panel, subscriptions, ad blocking and Telegram proxy work as before, no redeploy needed.
@@ -628,6 +639,13 @@ If you run it on another device, please report the result in [Issues](https://gi
 - **Xray 1.8.x from opkg:** no XHTTP transport; the gRPC "white list" servers of some providers fail the REALITY handshake with it, so they are not imported by default.
 - **The panel is for the home network:** plain HTTP, the PIN travels in the request URL. Never expose port 81 to the internet.
 
+## Security
+
+- UUIDs, the PIN, subscription links and servers are kept only in `config/flint.env`, `config/nodes*.conf`, `config/subscriptions` and `backup/` — all of them are in `.gitignore`. Before publishing a fork, check that they did not get into commits.
+- On the router these files live in `/etc/xray/` with mode `600`.
+- The panel listens on port 81. The firewall lets in only the Flint LAN and the main router's network (`UPSTREAM_NET`); any other traffic to the router from outside is closed.
+- The Telegram proxy (port 1443) is likewise reachable only from those two networks; the port is opened to the internet only while "Access from the internet" is on. Without the secret the proxy cannot be used.
+
 ## Versions
 
 Versions follow [SemVer](https://semver.org): `1.2.3` is major (incompatible changes), minor (new features), patch (fixes). The number is in `kit/VERSION`, every version has a `vX.Y.Z` git tag, and the changes are in [CHANGELOG.en.md](CHANGELOG.en.md).
@@ -645,5 +663,7 @@ Pull requests and issues are welcome: fixes, support for other routers, panel tr
 ## License
 
 Free for personal and noncommercial use, with mandatory credit to the original project. Commercial use and use by government bodies and government-controlled companies require the author's permission. License text: [LICENSE](LICENSE) (Flint VPN Noncommercial License 1.0, based on PolyForm Noncommercial 1.0.0); summary and contribution terms: [LICENSE.en.md](LICENSE.en.md).
+
+The source is open, but the license is noncommercial: this is not an OSI license, but source-available software. Your own changes, forks and reuse of the code are allowed, but the project name, the `Required Notice:` lines and the link to the original must be kept — including when only a part of the code is reused in another project. Permission for commercial or government use is granted in writing: open an [issue](https://github.com/AndreyTokarev/Flint_Vless/issues).
 
 This project is not affiliated with GL.iNet or any VPN provider. Use it in accordance with the laws of your country.

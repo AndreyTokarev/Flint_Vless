@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # VPN health check, run by cron every 2 minutes. When the current node stops passing traffic
 # while the internet itself works: refresh the subscription (fetched directly, not through the
 # dead tunnel) and, if that does not help, switch to the first node that works.
@@ -7,6 +9,10 @@
 #        flint-watchdog state        print on|off
 #        flint-watchdog last         last failure line (for the panel)
 STATE=/etc/xray/watchdog
+# The comment block above the code: every "# Usage:" line up to the first line that is not a comment.
+help() {
+	awk '/^# Usage:/ { u = 1 } u && /^#/ { sub(/^# ?/, ""); print; next } u { exit }' "$0"
+}
 LAST=/etc/xray/watchdog-last
 LOCK=/tmp/flint-watchdog.lock
 . /usr/share/flint/lib.sh
@@ -17,7 +23,7 @@ case "$1" in
 	state) cat "$STATE" 2>/dev/null || echo on; exit 0 ;;
 	last) cat "$LAST" 2>/dev/null || true; exit 0 ;;
 	"") ;;
-	*) sed -n '5,8s/^# \{0,1\}//p' "$0"; exit 1 ;;
+	*) help; exit 1 ;;
 esac
 # Ad blocking runs in the DNS path, so it is checked even with failover off.
 flint-adblock check >/dev/null 2>&1

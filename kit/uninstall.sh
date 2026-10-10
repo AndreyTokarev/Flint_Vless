@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # Removes Flint VPN from the router: services, files, settings in /etc/xray, firewall rules, cron jobs,
 # the DNS changes and the xray-core package. The firmware, its packages, network and Wi-Fi stay:
 # LAN devices go online directly, DNS comes from the main router as on a fresh firmware.

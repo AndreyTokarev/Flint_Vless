@@ -1,4 +1,6 @@
 #!/bin/sh /etc/rc.common
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # DoH resolver for dnsmasq on 127.0.0.1:5053.
 # Separate from GL's dnscrypt-proxy service, which only runs in GL "secure DNS" mode.
 START=18

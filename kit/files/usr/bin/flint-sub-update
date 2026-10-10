@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # VPN subscriptions from any providers. Each subscription's servers live in /etc/xray/nodes.d/<id>.conf;
 # nodes.conf is for manual servers, nodes-custom.conf for own ones (flint-custom). A subscription that
 # fails to download keeps its previous file; files of subscriptions no longer listed are removed.
@@ -13,6 +15,10 @@
 #        flint-sub-update interval [off|30m|1h|3h|6h|12h|24h]   show / set the auto-update schedule
 #        flint-sub-update status               last check line (for the panel)
 ENV=/etc/xray/flint.env
+# The comment block above the code: every "# Usage:" line up to the first line that is not a comment.
+help() {
+	awk '/^# Usage:/ { u = 1 } u && /^#/ { sub(/^# ?/, ""); print; next } u { exit }' "$0"
+}
 SUB_STATUS=/etc/xray/sub-status
 STATUS=/etc/xray/sub-checked
 INTERVAL=/etc/xray/sub-interval
@@ -280,6 +286,6 @@ EOF
 		commit
 		;;
 	*)
-		sed -n '8,15s/^# \{0,1\}//p' "$0"; exit 1
+		help; exit 1
 		;;
 esac

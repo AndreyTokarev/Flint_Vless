@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
+# The Flint VPN panel: one CGI page per tab, Russian or English, rendered on the router.
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 qs="$QUERY_STRING"
 raw() { echo "$qs" | tr '&' '\n' | sed -n "s/^$1=//p" | head -n1; }

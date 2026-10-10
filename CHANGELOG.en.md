@@ -6,6 +6,15 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ## [Unreleased]
 
+### Added
+- The license explained in plain language: an "In short" block at the top of [LICENSE](LICENSE), [LICENSE.ru.md](LICENSE.ru.md) and [LICENSE.en.md](LICENSE.en.md), a short terms notice at the top of both READMEs, a section index in `LICENSE`, and a pointer from it to the summaries.
+- Crediting the original is mandatory when reusing a part of the code, not only for a full fork: the "Notices" section of `LICENSE`, "Name and logo" and "Mandatory condition" in the summaries were made explicit. Forks and builds that use the project's code must say so honestly.
+- Machine-readable license tags `SPDX-FileCopyrightText` and `SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0` in the scripts, init scripts and the panel: a company's license scanner sees the noncommercial terms automatically.
+- The README now says it plainly: the source is open, but the license is noncommercial (source-available, not OSI).
+
+### Changed
+- The `flint-*` usage text no longer depends on line numbers: it is taken from the `# Usage:` block in the comment above the code (it used to be `sed -n '8,15p'`). `flint-adblock` and `flint-sub-update` now print their usage in full instead of losing the last line.
+
 ## [1.10.0] — 2026-10-07
 
 ### Added

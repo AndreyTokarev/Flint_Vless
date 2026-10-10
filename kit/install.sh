@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # Flint kit installer for GL.iNet GL-BE6500 (Flint), firmware 4.x.
 # Run on the router from the unpacked kit dir: sh install.sh
 # Expects config/flint.env next to this script (see config/*.example); servers are optional:

@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # Own VLESS REALITY nodes, kept in nodes-custom.conf apart from the subscription list
 # (flint-sub-update never touches them). Same format as nodes.conf.
 # Usage: flint-custom list                  code<TAB>name of own nodes
@@ -8,6 +10,10 @@
 #        flint-custom del <code>
 . /usr/share/flint/lib.sh
 ENV=/etc/xray/flint.env
+# The comment block above the code: every "# Usage:" line up to the first line that is not a comment.
+help() {
+	awk '/^# Usage:/ { u = 1 } u && /^#/ { sub(/^# ?/, ""); print; next } u { exit }' "$0"
+}
 PARSER=/usr/share/flint/vless.awk
 
 # nodes-custom.conf without node $1 (and its name line).
@@ -81,6 +87,6 @@ EOF
 		if [ "$(flint-node current)" = "$2" ]; then flint-node apply; fi
 		;;
 	*)
-		sed -n '4,8s/^# \{0,1\}//p' "$0"; exit 1
+		help; exit 1
 		;;
 esac

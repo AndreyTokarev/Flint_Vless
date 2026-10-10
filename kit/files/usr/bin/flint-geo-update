@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # Download geoip.dat / geosite.dat (Loyalsoldier v2ray-rules-dat) for RU split routing,
 # then re-apply the current node if anything changed. Runs weekly from cron.
 DIR=/usr/share/xray

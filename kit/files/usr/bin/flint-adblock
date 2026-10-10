@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # DNS ad blocking with AdGuard Home (the binary ships with GL firmware 4.x).
 # LAN DNS is redirected by the FLINT_DNS firewall chain: to AdGuard Home (:5054) when blocking is on,
 # else to dnsmasq (:53). AdGuard Home forwards to dnsmasq, so local names and DoH keep working.
@@ -18,6 +20,10 @@
 #        flint-adblock fw [bypass]                     rebuild the FLINT_DNS chain (firewall.user)
 #        flint-adblock config                          write the AdGuard Home config (init script)
 STATE=/etc/xray/adblock
+# The comment block above the code: every "# Usage:" line up to the first line that is not a comment.
+help() {
+	awk '/^# Usage:/ { u = 1 } u && /^#/ { sub(/^# ?/, ""); print; next } u { exit }' "$0"
+}
 LISTS=/etc/xray/adblock-lists
 RULES=/etc/xray/adblock-rules
 EXCLUDE=/etc/xray/adblock-exclude
@@ -302,5 +308,5 @@ case "$1" in
 		;;
 	fw) fw "$2" ;;
 	config) write_config ;;
-	*) sed -n '7,18s/^# \{0,1\}//p' "$0"; exit 1 ;;
+	*) help; exit 1 ;;
 esac

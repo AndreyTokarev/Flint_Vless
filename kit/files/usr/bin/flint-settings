@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # Export and import the settings made in the panel: subscriptions, manual and own servers, sites, devices without VPN,
 # ad blocking, DNS server, local names, Telegram proxy, modes and intervals. flint.env (PIN, network) is not included,
 # so a file fits another Flint.
@@ -6,6 +8,11 @@
 # content line prefixed by "|". Import replaces all these settings; the previous ones go to $PREV.
 # Usage: flint-settings export [dir]        print the settings (from another copy of /etc/xray, e.g. a backup)
 #        flint-settings import [file]       load settings from the file (default: stdin) and apply them
+
+# The comment block above the code: every "# Usage:" line up to the first line that is not a comment.
+help() {
+	awk '/^# Usage:/ { u = 1 } u && /^#/ { sub(/^# ?/, ""); print; next } u { exit }' "$0"
+}
 . /usr/share/flint/lib.sh
 . /etc/xray/flint.env 2>/dev/null || true
 ENTRIES="subscriptions nodes.d nodes.conf nodes-custom.conf current-node routing-mode vpn-state custom-sites
@@ -65,5 +72,5 @@ case "$1" in
 		t "Настройки загружены: подписок ${subs:-0}, серверов $nodes. Прежние настройки — в $PREV до перезагрузки." \
 			"Settings loaded: ${subs:-0} subscriptions, $nodes servers. The previous settings are in $PREV until a reboot."
 		;;
-	*) sed -n '6,7s/^# \{0,1\}//p' "$0"; exit 1 ;;
+	*) help; exit 1 ;;
 esac

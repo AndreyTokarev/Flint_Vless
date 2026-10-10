@@ -7,6 +7,10 @@ Required Notice: Based on Flint VPN - https://github.com/AndreyTokarev/Flint_Vle
 
 This license is based on the PolyForm Noncommercial License 1.0.0 (<https://polyformproject.org/licenses/noncommercial/1.0.0>), modified to exclude use by government institutions and government-controlled companies. It is not the PolyForm Noncommercial License and is not endorsed by the PolyForm Project.
 
+The sections of this license, in order: [Acceptance](#acceptance), [Copyright License](#copyright-license), [Distribution License](#distribution-license), [Notices](#notices), [Changes and New Works License](#changes-and-new-works-license), [Patent License](#patent-license), [Noncommercial Purposes](#noncommercial-purposes), [Personal Uses](#personal-uses), [Noncommercial Organizations](#noncommercial-organizations), [Government Use](#government-use), [Fair Use](#fair-use), [No Other Rights](#no-other-rights), [Patent Defense](#patent-defense), [Violations](#violations), [No Liability](#no-liability), [Definitions](#definitions).
+
+In short, without replacing the text below: use Flint VPN at home, in study, in hobby projects and in noncommercial organizations — free of charge. Use it as part of a business, or by, for or on behalf of a government entity — only under a separate written license from the licensor, which may be paid. Fork it, change it, share it and take its ideas — as long as everyone who gets a copy from you also gets this license and the two `Required Notice:` lines above, and your build is not presented as the official Flint VPN. Removing those lines is not a formatting choice: it ends your right to distribute the software and, under [Violations](#violations), the rest of your licenses with it. A plain-language summary is in [LICENSE.ru.md](LICENSE.ru.md) (по-русски) and [LICENSE.en.md](LICENSE.en.md) (in English).
+
 ## Acceptance
 
 In order to get any license under these terms, you must agree to them as both strict obligations and conditions to all your licenses.
@@ -21,7 +25,7 @@ The licensor grants you an additional copyright license to distribute copies of 
 
 ## Notices
 
-You must ensure that anyone who gets a copy of any part of the software from you also gets a copy of these terms or the URL for them above, as well as copies of any plain-text lines beginning with `Required Notice:` that the licensor provided with the software.  For example:
+You must ensure that anyone who gets a copy of any part of the software from you also gets a copy of these terms or the URL for them above, as well as copies of any plain-text lines beginning with `Required Notice:` that the licensor provided with the software.  This applies to the software as a whole and to any part of it: a fork, a modified or extended version, and a project that reuses its code, scripts or files, whether or not the rest of the project is new.  For example:
 
 > Required Notice: Copyright Yoyodyne, Inc. (http://example.com)
 

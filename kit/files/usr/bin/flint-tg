@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # Telegram proxy on the router: tg-ws-proxy-rs, an MTProto proxy for the Telegram apps on the network.
 # It reaches Telegram over WebSocket (TLS) to Telegram's web servers, with Cloudflare as a fallback, so
 # Telegram works without the VPN: on devices without VPN, while the VPN is off, or to spare subscription traffic.
@@ -27,6 +29,10 @@
 #        flint-tg rule                    write the firewall rule for clients from the internet (install.sh)
 #        flint-tg args                    the proxy command line (init script)
 CONF=/etc/xray/tgproxy
+# The comment block above the code: every "# Usage:" line up to the first line that is not a comment.
+help() {
+	awk '/^# Usage:/ { u = 1 } u && /^#/ { sub(/^# ?/, ""); print; next } u { exit }' "$0"
+}
 BIN=/usr/bin/tg-ws-proxy
 # The release archive is kept in kit/bin, so a deploy does not depend on GitHub; a new version replaces it there.
 VERSION=v2.5.2
@@ -344,5 +350,5 @@ case "$1" in
 	sync) sync ;;
 	rule) rule ;;
 	args) args ;;
-	*) sed -n '6,28s/^# \{0,1\}//p' "$0"; exit 1 ;;
+	*) help; exit 1 ;;
 esac

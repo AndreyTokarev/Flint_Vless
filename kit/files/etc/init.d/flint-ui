@@ -1,4 +1,6 @@
 #!/bin/sh /etc/rc.common
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # Web panel on :81 (:80 belongs to the GL.iNet admin UI).
 START=99
 USE_PROCD=1

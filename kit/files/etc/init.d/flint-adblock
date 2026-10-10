@@ -1,4 +1,6 @@
 #!/bin/sh /etc/rc.common
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # AdGuard Home for flint-adblock: DNS 127.0.0.1:5054, API 127.0.0.1:3054.
 # Separate from GL's AdGuard Home service (ports 3053/3000), which stays disabled.
 START=19

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # Shared helpers for Flint shell tools (sourced, not executed).
 # The flint-* commands do not use set -e: errors are checked explicitly (fail); only install.sh stops on any error.
 NODES=/etc/xray/nodes.conf

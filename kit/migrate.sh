@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # Migrations from older kits, sourced by install.sh. Each one does nothing on an up-to-date router;
 # delete a migration once no router runs the version it comes from.
 
