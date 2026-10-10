@@ -1,5 +1,7 @@
 # Install the uploaded kit, then run the scenarios, detached from the ssh session (tests/run.ps1, tests/run.sh).
 # A dropped connection does not stop it: the wrappers poll /tmp/flint-test.log, which ends with ALL PASSED or SOME FAILED.
+# The log, its pid file and /tmp/flint-test.run stay after the run: the wrappers tell "finished" from "never started"
+# by them, and the next run removes them. The kit and the scenarios are removed.
 # Usage: sh job.sh <kit dir> [scenario ...]
 DIR="$(cd "$(dirname "$0")" && pwd)"
 KIT="${1:?kit dir}"; shift

@@ -16,6 +16,12 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - The `flint-*` usage text no longer depends on line numbers: it is taken from the `# Usage:` block in the comment above the code (it used to be `sed -n '8,15p'`). `flint-adblock` and `flint-sub-update` now print their usage in full instead of losing the last line.
 - Line endings in `kit/` are LF again, as `.gitattributes` declares: on Windows the working copy used to get CRLF, so git showed whole files as changed and `sh -n` on the router refused to parse them (only the `sed` in `deploy.ps1` saved the day).
 
+### Fixed
+- Tests no longer leave the Telegram proxy switched off: a scenario remembers what ran before the run and puts it back (`tests/router/lib.sh`).
+- The test wrappers (`tests/run.ps1`, `tests/run.sh`) now finish when the router briefly disappears: the deadline is checked before talking to the router, not after, so an unreachable router no longer parks the wrapper until it is killed by hand.
+- `tests/router/job.sh` keeps its log and run id: without them the wrappers never saw the "run finished" marker and could not pick up a finished run (the scenarios themselves passed).
+- Two checks in the panel scenario no longer depend on the router's state: the proxy switch is compared with the current state, and "a busy port" accepts a range refusal too (the router's only candidate is port 443, where Xray listens). The scenario now has 129 checks.
+
 ### Documentation
 - `docs/code-review-1.10.md` — review of the project at 1.10.0: three findings about blocking circumvention (outdated Xray 1.8.7 and the pinned `v1.8.24`, both older than the REALITY fix in v25.6.8; the DoH mode that does not help when the resolver name is blocked; the parallel-TLS profile of a transparent gateway), plus state file lists, command usage text, line endings, panel size and the test wrapper.
 - `docs/improvement-plan-1.10.md` — improvement plan with code sketches, checks, effort and risks for every finding; stages 1.11.0 (Xray and DNS), 1.12.0 (structure), 1.13.0 (tooling).

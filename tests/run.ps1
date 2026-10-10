@@ -20,7 +20,8 @@ $ssh = "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInter
 $stash = git -C $root stash create 2>$null
 $tree = git -C $root rev-parse "$(if ($stash) { $stash } else { 'HEAD' })^{tree}"
 $id = ((@($tree) + $Scenarios) -join " ").Trim()
-# "<running|done|none> <run id>": done = the log ends with the summary line of job.sh.
+# "<running|done|none> <run id>": running = the pid file is alive; done = the log ends with the summary
+# line of all.sh. job.sh keeps the log after it ends, so a finished run is always recognised.
 $statusCmd = 'id=$(cat /tmp/flint-test.run 2>/dev/null); if [ -f /tmp/flint-test.pid ] && kill -0 $(cat /tmp/flint-test.pid) 2>/dev/null; then s=running; ' +
     'elif tail -n1 /tmp/flint-test.log 2>/dev/null | grep -qE ''^(ALL PASSED|SOME FAILED)''; then s=done; else s=none; fi; echo $s $id'
 
@@ -49,15 +50,19 @@ if (-not $Force -and $run -and $run.Id -eq $id -and $run.Status -ne "none") {
         Remove-Item $archive -Force -ErrorAction SilentlyContinue
     }
     $start = "rm -rf /tmp/flint-test && mkdir -p /tmp/flint-test && tar -xf /tmp/flint-test.tar -C /tmp/flint-test && rm -f /tmp/flint-test.tar && " +
-        "find /tmp/flint-test -type f -exec sed -i 's/\r$//' {} + && echo $id > /tmp/flint-test.run && rm -f /tmp/flint-test.log && " +
+        "find /tmp/flint-test -type f -exec sed -i 's/\r$//' {} + && echo $id > /tmp/flint-test.run && rm -f /tmp/flint-test.log /tmp/flint-test.pid && " +
         "sh -c 'sh /tmp/flint-test/router/job.sh /tmp/flint-kit $($Scenarios -join ' ') </dev/null >/tmp/flint-test.log 2>&1 &'"
     ssh @ssh $start
     if ($LASTEXITCODE) { throw "starting the tests failed" }
     Start-Sleep 5
 }
 
-$shown = 0; $last = ""; $offline = $false; $deadline = (Get-Date).AddMinutes(30)
+$shown = 0; $last = ""; $offline = $false
+# The deadline is checked in the loop, before any ssh call, so an unreachable router cannot park the wrapper
+# inside a connection attempt until it is killed by hand. On Windows PowerShell ssh has no timeout of its own.
+$deadline = (Get-Date).AddMinutes(30)
 while ($true) {
+    if ((Get-Date) -gt $deadline) { throw "No result after 30 minutes" }
     $run = Get-Run
     $lines = if ($run) { ssh @ssh "tail -n +$($shown + 1) /tmp/flint-test.log 2>/dev/null" 2>$null }
     if ($run -and -not $LASTEXITCODE) {
@@ -69,12 +74,16 @@ while ($true) {
         }
         if ($run.Id -ne $id) { throw "The router log belongs to another run: $($run.Id)" }
         if ($run.Status -eq "done") { break }
-        if ($run.Status -eq "none") { throw "The run stopped without a result (router rebooted?): see /tmp/flint-test.log" }
+        # job.sh removes its log, its pid file and the run id when it finishes, so "no trace of the run" is
+        # also how a finished run looks. Trust the summary line when it was read, otherwise report it.
+        if ($run.Status -eq "none") {
+            if ($last -match '^(ALL PASSED|SOME FAILED)') { break }
+            throw "The run stopped without a result (router rebooted?): see /tmp/flint-test.log"
+        }
     } elseif (-not $offline) {
         Write-Host "  (router unreachable; the run goes on there, retrying)"
         $offline = $true
     }
-    if ((Get-Date) -gt $deadline) { throw "No result after 30 minutes" }
     Start-Sleep 10
 }
 if ($last -notmatch '^ALL PASSED') { throw "tests failed" }

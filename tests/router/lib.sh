@@ -13,7 +13,15 @@ save_state() {
 	if ! { [ -s /etc/xray/flint.env ] && tar -C /etc -czf "$STATE" xray; }; then
 		rmdir "$LOCK"; echo "  cannot snapshot /etc/xray, scenario skipped"; exit 1
 	fi
+	keep_state
 	trap restore_state EXIT
+}
+# keep_state: remember what runs now. Services outside /etc/xray (the Telegram proxy) are not in the
+# snapshot, so a scenario that switches them off would otherwise leave the router in a state the user
+# did not choose. Called by save_state.
+keep_state() {
+	TG_WAS_RUNNING=
+	pidof tg-ws-proxy >/dev/null && TG_WAS_RUNNING=1
 }
 restore_state() {
 	trap - EXIT
@@ -26,6 +34,10 @@ restore_state() {
 	flint-dns synced || flint-dns apply >/dev/null 2>&1
 	flint-dns hosts apply
 	flint-tg sync
+	# flint-tg sync only restarts the proxy the settings ask for: put back the one that ran before the scenario.
+	if [ -n "${TG_WAS_RUNNING:-}" ] && ! pidof tg-ws-proxy >/dev/null; then
+		flint-tg on >/dev/null 2>&1
+	fi
 	# The firewall rule for the proxy is outside /etc/xray: drop it when the restored settings keep access closed.
 	if [ "$(flint-tg remote)" != on ] && uci -q get firewall.flint_tg_remote >/dev/null; then flint-tg remote off >/dev/null 2>&1; fi
 	echo "  restored; vpn: $(vpn_works && echo ok || echo FAIL)"
