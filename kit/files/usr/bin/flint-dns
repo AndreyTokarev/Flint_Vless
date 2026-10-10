@@ -6,10 +6,13 @@
 #                   encrypted over HTTPS to a DoH server: a preset or any https:// address;
 #   dnscrypt      — the same dnscrypt-proxy, but over the DNSCrypt protocol: a preset or own sdns:// stamps;
 #   udp           — dnsmasq asks ordinary DNS servers itself: a preset, own IPs or the main router's DNS.
+#   tunnel        — dnsmasq asks the Xray DNS input (127.0.0.1:15353), which resolves through the tunnel:
+#                   the only mode that survives providers blocking DoH/DNSCrypt by the resolver name.
+#                   Needs Xray on the server from v25.6.8 and a working VPN: it does not work with the VPN off.
 # Each mode keeps its own server. A switch is checked: if DNS stops answering, the previous setup comes back.
 # The choice lives in /etc/xray, so it survives redeploys.
 # Usage: flint-dns [title]                                    the current mode and server, for people
-#        flint-dns mode [doh|dnscrypt|udp]                    print / switch the mode; each mode keeps its server
+#        flint-dns mode [doh|dnscrypt|udp|tunnel]              print / switch the mode; each mode keeps its server
 #        flint-dns doh [preset|https://host[:port][/path]]   print / set the DoH server (switches to DoH)
 #        flint-dns dnscrypt [preset|sdns://... [sdns://...]]  print / set the DNSCrypt servers (switches to DNSCrypt)
 #        flint-dns udp [preset|provider|IP [IP...]]           print / set the UDP servers (switches to UDP)
@@ -74,7 +77,7 @@ presets() {
 				adguard "AdGuard DNS — $ADS" ;;
 	esac
 }
-mode() { case "$(cat "$MODE_F" 2>/dev/null)" in udp) echo udp ;; dnscrypt) echo dnscrypt ;; *) echo doh ;; esac; }
+mode() { case "$(cat "$MODE_F" 2>/dev/null)" in udp) echo udp ;; dnscrypt) echo dnscrypt ;; tunnel) echo tunnel ;; *) echo doh ;; esac; }
 # Saved choices. DoH: a preset name or "<https address><TAB><its IPv4>"; DNSCrypt: a preset name or stamps;
 # UDP: a preset name, provider or IPs.
 doh_choice() { line="$(head -n1 "$DOH_F" 2>/dev/null)"; if [ -n "$(doh_server "$line")" ]; then echo "$line"; else echo cloudflare; fi; }
@@ -112,11 +115,12 @@ name_of() {
 			else presets "$1" | awk -F '\t' -v n="$2" '$1 == n { print $2 }'; fi ;;
 	esac
 }
-# title [mode doh dnscrypt udp]: "DoH: ...", "DNSCrypt: ..." or "UDP: ...", the saved setup by default.
+# title [mode doh dnscrypt udp]: "DoH: ...", "DNSCrypt: ...", "Tunnel" or "UDP: ...", the saved setup by default.
 title() {
 	case "${1:-$(mode)}" in
 		udp) echo "UDP: $(name_of udp "${4:-$(udp_choice)}")" ;;
 		dnscrypt) echo "DNSCrypt: $(name_of dnscrypt "${3:-$(dnscrypt_choice)}")" ;;
+		tunnel) t "Туннель: запросы уходят через VPN" "Tunnel: queries go through the VPN" ;;
 		*) echo "DoH: $(name_of doh "${2:-$(doh_choice)}")" ;;
 	esac
 }
@@ -165,6 +169,7 @@ EOF
 # dnsmasq upstream as "<noresolv> [servers...]": dnscrypt-proxy, the chosen servers, or (noresolv 0)
 # the main router's DNS from resolv.conf.auto.
 upstream() {
+	if [ "$1" = tunnel ]; then echo "1 127.0.0.1#15353"; return; fi
 	if [ "$1" != udp ]; then echo "1 127.0.0.1#5053"; return; fi
 	s="$(udp_servers "$2")"
 	if [ "$s" = provider ]; then echo 0; else echo "1 $s"; fi
@@ -181,18 +186,34 @@ set_upstream() {
 	} | uci -q batch
 }
 services() {
-	if [ "$1" = udp ]; then
-		/etc/init.d/flint-doh stop >/dev/null 2>&1
-		/etc/init.d/flint-doh disable
-	else
-		/etc/init.d/flint-doh enable
-		/etc/init.d/flint-doh restart >/dev/null 2>&1
-	fi
+	case "$1" in
+		udp|tunnel)
+			/etc/init.d/flint-doh stop >/dev/null 2>&1
+			/etc/init.d/flint-doh disable ;;
+		*)
+			/etc/init.d/flint-doh enable
+			/etc/init.d/flint-doh restart >/dev/null 2>&1 ;;
+	esac
 }
 # busybox nslookup exits 0 on an empty answer too: look for an address after the "Name:" line.
 answers() { nslookup example.com 127.0.0.1 2>/dev/null | awk '/^Name:/ { n = 1 } n && /^Address/ { f = 1 } END { exit !f }'; }
+# tunnel_port_free: the Xray DNS input must be able to bind. A port held by another program is a problem
+# (on GL.iNet, avahi holds UDP 5353, which once put Xray into a restart loop); a port already held by our
+# own Xray is normal — the input is part of the running config.
+tunnel_port_free() {
+	p="$(sed -n 's/.*"tag": "dns-in".*"port": \([0-9]*\).*/\1/p' /etc/xray/template.json 2>/dev/null | head -n1)"
+	[ -n "$p" ] || p=15353
+	holder="$(netstat -lnup 2>/dev/null | awk -v p=":$p\$" '$4 ~ p { print $NF }'; netstat -lntp 2>/dev/null | awk -v p=":$p\$" '$4 ~ p { print $NF }')"
+	[ -z "$holder" ] && return 0
+	echo "$holder" | grep -q xray && return 0
+	return 1
+}
 # setup <mode> <doh> <dnscrypt> <udp>: write the configs, restart, wait for an answer through dnsmasq.
 setup() {
+	if [ "$1" = tunnel ] && ! tunnel_port_free; then
+		fail "$(t "Порт DNS-туннеля занят — выберите другой режим или освободите порт" \
+			"The tunnel DNS port is taken — pick another mode or free the port")"
+	fi
 	write_config "$1" "$2" "$3"
 	want="$(upstream "$1" "$4")"
 	[ "$1" = udp ] || services "$1"
@@ -241,7 +262,7 @@ case "$1" in
 	""|title) title ;;
 	mode)
 		[ -n "$2" ] || { mode; exit 0; }
-		case "$2" in doh|dnscrypt|udp) ;; *) fail "flint-dns mode doh|dnscrypt|udp" ;; esac
+		case "$2" in doh|dnscrypt|udp|tunnel) ;; *) fail "flint-dns mode doh|dnscrypt|udp|tunnel" ;; esac
 		switch "$2" "$(doh_choice)" "$(dnscrypt_choice)" "$(udp_choice)"
 		;;
 	doh)
@@ -298,6 +319,19 @@ case "$1" in
 	synced)
 		[ "$(sed -n '1s/^# flint-dns: //p' "$CONF" 2>/dev/null)" = "$(toml_line "$(mode)" "$(doh_choice)" "$(dnscrypt_choice)")" ] &&
 			[ "$(live_upstream)" = "$(upstream "$(mode)" "$(udp_choice)")" ]
+		;;
+	# answercheck: the LAN's DNS path (through dnsmasq) answers. Used by the watchdog before falling
+	# back from the tunnel mode to DoH.
+	answercheck)
+		answers && exit 0
+		exit 1
+		;;
+	# forwardercheck: the Xray DNS input answers on the loopback address, without dnsmasq and without
+	# needing name resolution — the watchdog uses it to tell "the tunnel is down" from "dnsmasq is stuck".
+	forwardercheck)
+		p="$(sed -n 's/.*"tag": "dns-in".*"port": \([0-9]*\).*/\1/p' /etc/xray/template.json 2>/dev/null | head -n1)"
+		[ -n "$p" ] || p=15353
+		nslookup example.com "127.0.0.1:$p" 2>/dev/null | awk '/^Address/ && $NF ~ /^[0-9]+\./ { f = 1 } END { exit !f }'
 		;;
 	hosts)
 		n="$(printf '%s' "$3" | tr 'A-Z' 'a-z' | tr -d ' \t\r\n')"; n="${n%.}"

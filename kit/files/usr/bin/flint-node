@@ -9,6 +9,9 @@
 #        flint-node vpn [on|off]   off = LAN clients go to the internet directly, bypassing Xray
 #                                  (so they do while there are no servers at all)
 #        flint-node site list | add direct|proxy <site> | del <site>
+#        flint-node probe         TCP time to every server: "code<TAB>ms", "-" when it does not answer
+#        flint-node fastest       the server that answers soonest
+#        flint-node probe-mode [fastest|first]   what to pick when the current server is gone
 #        flint-node direct | direct add <mac> [name] | direct del <mac>
 #                                  LAN devices that always go online directly, bypassing Xray (firewall.user)
 #   ru     - Russian sites/IPs go direct, the rest via VPN (needs /usr/share/xray/geo*.dat)
@@ -29,7 +32,44 @@ current() { [ -s "$CONF" ] || return 0; cat "$CUR" 2>/dev/null || true; }
 mode() { cat "$MODE_FILE" 2>/dev/null || echo ru; }
 sub_hosts() { host_of "$(echo "$SUB_URL"; cut -f2 "$SUBS" 2>/dev/null)"; }
 vpn_state() { cat "$VPN_FILE" 2>/dev/null || echo on; }
-# pick: sets pick_code (and pick_switched=1 when a previous current code is gone).
+# probe: connect time to every node, "code<TAB>ms" sorted by time, "-" when it does not answer. The
+# request carries the node's REALITY serverName: without it the camouflage server closes the connection,
+# so a plain handshake says nothing. It is a connection to the server, not a request through the tunnel,
+# so it works before a node is applied. Hosts are probed in parallel; the time comes from curl.
+probe() {
+	dir=/tmp/flint-probe
+	rm -rf "$dir"; mkdir -p "$dir" || return 1
+	nodes_tsv | awk -F '\t' '{ print $1 "|" $3 "|" $6 "|" $4 }' | sort -u -t'|' -k2,2 -k4,4 |
+	while IFS='|' read -r code host sni port; do
+		[ -n "$code" ] && [ -n "$host" ] || continue
+		(
+			# The first answer of nslookup is the resolver itself, written as 127.0.0.1:53: only lines
+			# that are an address and nothing else (no port) are accepted.
+			ip="$(nslookup "$host" 2>/dev/null | sed -n 's/^Address: *//p' | tr -d '\r' |
+				grep -E '^[0-9]+(\.[0-9]+){3}$' | head -n1)"
+			ms=$(
+				curl -s -o /dev/null -m 6 -w '%{time_connect}' --resolve "$sni:${port:-443}:$ip" "https://$sni/" 2>/dev/null |
+					awk '{ printf "%d", $1 * 1000 }'
+			)
+			[ -n "$ms" ] && [ "$ms" != 0 ] || ms=-
+			printf '%s\t%s\n' "$code" "$ms" > "$dir/$code"
+		) &
+		sleep 1
+	done
+	wait
+	for f in "$dir"/*; do
+		[ -f "$f" ] && cat "$f"
+	done | awk -F '\t' -v OFS='\t' '{ if ($2 == "-") { printf "%09d\t%s\t-\n", 999999999, $1 } else { printf "%09d\t%s\t%s\n", $2, $1, $2 } }' |
+		sort -n | cut -f2,3
+	rm -rf "$dir"
+}
+# fastest: the code of the node with the smallest time among the ones that answered ("" when none did).
+fastest() {
+	pick_fastest="$(probe 2>/dev/null | awk -F '\t' '$2 != "-" { print $1; exit }')"
+}
+
+# pick: sets pick_code (and pick_switched=1 when a previous current code is gone). With probe=fastest the
+# replacement is the node that answers soonest rather than the first one in the list.
 pick() {
 	pick_switched=
 	pick_code="$(cat "$CUR" 2>/dev/null || true)"
@@ -37,7 +77,15 @@ pick() {
 		return 0
 	fi
 	prev="$pick_code"
-	pick_code="$(nodes | awk 'NR == 1 { print $1 }')"
+	# The current code is gone: clear it before choosing a replacement. Without this the old code stayed
+	# in place (the variable is only set when it is empty) and apply() rendered a config for a server that
+	# no longer exists — an empty address, a broken JSON, and the router left on the previous config.
+	pick_code=""
+	if [ "$(cat /etc/xray/probe 2>/dev/null)" = fastest ]; then
+		fastest
+		pick_code="$pick_fastest"
+	fi
+	[ -n "$pick_code" ] || pick_code="$(nodes | awk 'NR == 1 { print $1 }')"
 	if [ -n "$prev" ] && [ -n "$pick_code" ]; then pick_switched=1; fi
 }
 
@@ -77,6 +125,9 @@ EOF
 	cdi="$(sites_json direct ip)"; cpi="$(sites_json proxy ip)"
 	if [ "$RENDER_MODE" = ru ] || [ -n "$cdi$cpi" ]; then strategy=IPIfNonMatch; else strategy=AsIs; fi
 	umask 077
+	# Keep the config in use: apply() puts it back when the new one does not come up.
+	rm -f "$CONF.prev"
+	[ -f "$CONF" ] && cp "$CONF" "$CONF.prev"
 	sed -e "s|__UUID__|$uuid|" -e "s|__ADDR__|$host|" -e "s|__PORT__|$port|" -e "s|__SNI__|$sni|" \
 		-e "s|__PBK__|$pbk|" -e "s|__SID__|$sid|" -e "s|__DOMAIN_STRATEGY__|$strategy|" \
 		-e "s|__NET__|$net|" -e "s|__FLOW__|$flow|" -e "s|__GRPC_SERVICE__|$svc|" \
@@ -89,6 +140,27 @@ EOF
 		sed -i -e '/geosite:category-ru/d' -e '/"geoip:ru"/d' "$CONF.new"
 	fi
 	XRAY_LOCATION_ASSET=$GEO xray run -test -format json -c "$CONF.new" > /tmp/flint-xray-test.log 2>&1
+}
+
+# xray_listening: the service holds the transparent port. This is the hard sign of a config that Xray
+# accepts but cannot run (a busy listen port, an option the binary dropped): the process then restarts
+# in a loop with no listener at all. The check waits: right after a restart the port is not bound yet.
+xray_listening() {
+	for i in 1 2 3 4 5 6 7 8 9 10; do
+		netstat -ltn 2>/dev/null | grep -q ':12345 ' && return 0
+		sleep 1
+	done
+	return 1
+}
+# xray_passes: traffic really goes through the tunnel. This depends on the server as much as on the
+# config, so a failure here is a warning, not a reason to roll the config back.
+xray_passes() {
+	for i in 1 2 3 4 5; do
+		[ -n "$(curl -s -m 8 -x http://127.0.0.1:1087 https://www.google.com/generate_204 2>/dev/null ||
+			curl -s -m 8 -o /dev/null -x http://127.0.0.1:1087 https://ifconfig.me 2>/dev/null)" ] && return 0
+		sleep 2
+	done
+	return 1
 }
 
 # apply [code]: with a code — switch to that server (unknown = error); without — pick() chooses.
@@ -127,6 +199,20 @@ apply() {
 	fi
 	mv "$CONF.new" "$CONF" && echo "$code" > "$CUR" || fail "Cannot write $CONF"
 	/etc/init.d/xray restart 2>/dev/null || fail "Xray did not restart"
+	# The config must listen. If it does not, Xray cannot run it and the previous one goes back: the
+	# router must not be left without VPN while the service restarts in a loop.
+	if ! xray_listening; then
+		[ -f "$CONF.prev" ] && mv "$CONF.prev" "$CONF"
+		/etc/init.d/xray restart >/dev/null 2>&1 || true
+		sleep 3
+		xray_listening && fail "Config did not come up ($(tail -n 2 /tmp/flint-xray-test.log 2>/dev/null)); the previous one is back"
+		fail "Config did not come up: see logread -e xray"
+	fi
+	# Traffic through it depends on the server too: a node that is slow or down is not a broken config,
+	# so this only warns. Switching to another server is the watchdog's job.
+	xray_passes || t "Сервер не отвечает — конфиг применён, автопереключение подберёт рабочий сервер" \
+		"The server is not answering — the config is applied, failover will pick a working server"
+	rm -f "$CONF.prev"
 	sh /etc/firewall.user >/dev/null 2>&1 || true
 	echo "Node: $code, routing: $RENDER_MODE"
 }
@@ -139,6 +225,30 @@ case "$cmd" in
 		;;
 	codes)
 		nodes | awk '{print $1}'
+		;;
+	probe)
+		# TCP time to each server: "code<TAB>ms" sorted, "-" when it does not answer.
+		probe
+		;;
+	fastest)
+		# The node that answers soonest; nothing when none answers.
+		fastest
+		echo "$pick_fastest"
+		;;
+	probe-mode)
+		# probe-mode fastest|first: what apply() picks when the current server is gone.
+		case "$2" in
+			fastest|first)
+				echo "$2" > /etc/xray/probe
+				if [ "$2" = fastest ]; then
+					t "Замена при сбое: самый быстрый сервер" "Replacement on failure: the fastest server"
+				else
+					t "Замена при сбое: первый в списке" "Replacement on failure: the first in the list"
+				fi
+				;;
+			"") cat /etc/xray/probe 2>/dev/null || echo first ;;
+			*) fail "flint-node probe-mode [fastest|first]" ;;
+		esac
 		;;
 	names)
 		# "code<TAB>name<TAB>ip|domain<TAB>group"; the name is the comment line right above the node.

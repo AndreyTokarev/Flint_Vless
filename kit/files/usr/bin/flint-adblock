@@ -297,6 +297,17 @@ case "$1" in
 		echo "${q:-0} ${b:-0}"
 		;;
 	check)
+		# The tunnel DNS mode works only while the tunnel does: with the VPN down, dnsmasq waits for an
+		# answer that never comes and the whole network loses name resolution. Then the mode goes back
+		# to DoH, which the router reaches itself, and the log says why.
+		# The check itself must not need DNS: first the Xray input answers on the loopback address, and
+		# only then the answer through dnsmasq counts.
+		if [ "$(flint-dns mode)" = tunnel ]; then
+			if ! flint-dns forwardercheck 2>/dev/null || ! flint-dns answercheck 2>/dev/null; then
+				logger -t flint-adblock "tunnel DNS stopped answering: switching back to DoH"
+				flint-dns mode doh >/dev/null 2>&1 || true
+			fi
+		fi
 		[ "$(state)" = on ] || exit 0
 		redirected() { iptables -t nat -S FLINT_DNS 2>/dev/null | grep -q -- "--to-ports $DNS_PORT"; }
 		if answers; then redirected || fw; exit 0; fi

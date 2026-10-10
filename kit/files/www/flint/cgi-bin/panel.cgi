@@ -102,7 +102,7 @@ HTML
 fi
 
 # The action is the first non-empty parameter from this list; every form sends exactly one of them.
-ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsurl dnscrypt dnsstamp dnsudp dnsip hostadd hostdel directadd directdel tg tgroute tgcf tgremote tgaddr tgmask tgport tgsecret tgsecretset tgcheck tgdc tgcfd tgworker tgcftls tgpool tglog tgupdate "
+ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsmode dnsurl dnscrypt dnsstamp dnsudp dnsip hostadd hostdel directadd directdel tg tgroute tgcf tgremote tgaddr tgmask tgport tgsecret tgsecretset tgcheck tgdc tgcfd tgworker tgcftls tgpool tglog tgupdate probemode "
 a="$(echo "$qs" | tr '&' '\n' | awk -F = -v l="$ACTIONS" '$2 != "" && index(l, " " $1 " ") { print $1; exit }')"
 msg=""; form=""; subedit=""; subsave=""
 case "$a" in
@@ -118,6 +118,7 @@ case "$a" in
   subdel) msg="$(flint-sub-update del "$(get subdel)" 2>&1)" ;;
   subedit) subedit="$(get subedit)" ;;
   wd) msg="$(flint-watchdog "$(get wd)" 2>&1)" ;;
+  probemode) case "$(get probemode)" in fastest|first) msg="$(flint-node probe-mode "$(get probemode)" 2>/dev/null || true)" ;; esac ;;
   adblock) msg="$(flint-adblock "$(get adblock)" 2>&1)" ;;
   abpreset)
     abpreset="$(get abpreset)"
@@ -183,6 +184,7 @@ EOF
       msg="$(T "Не удалось записать PIN в flint.env" "Could not write the PIN to flint.env")"
     fi ;;
   dns) msg="$(flint-dns doh "$(get dns)" 2>&1)" ;;
+  dnsmode) case "$(get dnsmode)" in doh|dnscrypt|udp|tunnel) msg="$(flint-dns mode "$(get dnsmode)" 2>&1)" ;; esac ;;
   dnsurl) msg="$(flint-dns doh "$(param dnsurl)" 2>&1)" ;;
   dnscrypt) msg="$(flint-dns dnscrypt "$(get dnscrypt)" 2>&1)" ;;
   dnsstamp) msg="$(flint-dns dnscrypt "$(param dnsstamp)" 2>&1)" ;;
@@ -315,7 +317,18 @@ servers)
     btn wd on " class=on" "$(T "Включить автопереключение" "Turn failover on")"
   fi
   WLAST="$(flint-watchdog last | esc)"
-  echo "<small>$(T "Последнее срабатывание" "Last triggered"): ${WLAST:-$NEVER}</small></div>"
+  echo "<small>$(T "Последнее срабатывание" "Last triggered"): ${WLAST:-$NEVER}</small>"
+  # Which server to switch to: the first in the list or the one that answers soonest.
+  if [ "$(flint-node probe-mode)" = fastest ]; then
+    echo "<p>$(T "Замена при сбое" "Replacement on failure"): <b class=ok>$(T "самый быстрый" "the fastest")</b> — $(
+      T "роутер проверяет задержку до серверов и переходит на тот, что отвечает быстрее всех." \
+        "the router measures the time to each server and switches to the one that answers soonest.")</p>"
+    btn probemode first "" "$(T "Переключаться на первый из списка" "Switch to the first in the list")"
+  else
+    echo "<p>$(T "Замена при сбое" "Replacement on failure"): <b>$(T "первый в списке" "the first in the list")</b></p>"
+    btn probemode fastest " class=on" "$(T "Переключаться на самый быстрый" "Switch to the fastest")"
+  fi
+  echo "</div>"
   ;;
 own)
   if [ -n "$form" ]; then
@@ -580,6 +593,16 @@ dns)
   ips=""; echo "$UDP" | grep -qE '^[0-9. ]+$' && ips="$UDP"
   echo "<form method=get class=row>$(hidden)<input type=text name=dnsip value='$ips' placeholder='1.1.1.1 8.8.8.8' required>"
   echo "<button>$(T "Свои DNS-серверы" "Own DNS servers")</button></form></div>"
+  # Tunnel: the router's own DNS goes through the VPN, so blocking the resolver by name does not matter.
+  dns_card tunnel "$(T "Через туннель" "Through the tunnel")" "$(T "Запросы уходят через VPN на выбранный сервер, поэтому провайдер не видит ни имена, ни сам резолвер. Помогает, когда DoH и DNSCrypt перестали отвечать из-за блокировки по имени сервера. Не работает при выключенном VPN или без серверов." \
+    "Queries go through the VPN to the server, so the provider sees neither the names nor the resolver. Helps when DoH and DNSCrypt stopped answering because the resolver name is blocked. Needs a working VPN: it does not work with the VPN off.")"
+  if [ "$DNSMODE" = tunnel ]; then
+    echo "$ON — $(T "адреса сайтов роутер узнаёт через VPN, переключение обратно вернёт прежний режим." "the router looks up site addresses through the VPN; switching back restores the previous mode.")"
+    btn dnsmode doh "" "$(T "Вернуться к DoH" "Back to DoH")"
+  else
+    btn dnsmode tunnel " class=on" "$(T "Использовать туннель" "Use the tunnel")"
+  fi
+  echo "</div>"
   DEL="$(T "Удалить" "Delete")"
   echo "<div class=card><h2>$(T "Локальные имена" "Local names")</h2><small>$(T "Устройство в сети открывается по имени вместо IP: nas01, nas01.lan и nas01.local. Имя с точкой, например nas.home, работает как есть. Повторное добавление имени меняет его адрес. Закрепите за устройством постоянный IP на роутере, который его выдаёт, иначе имя может перестать работать после перезагрузки." \
     "A device on the network opens by name instead of IP: nas01, nas01.lan and nas01.local. A name with a dot, such as nas.home, works as is. Adding a name again changes its address. Give the device a fixed IP on the router that hands it out, or the name may stop working after a reboot.")</small>"

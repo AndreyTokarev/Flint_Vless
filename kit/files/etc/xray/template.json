@@ -12,6 +12,12 @@
       "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] }
     },
     {
+      "tag": "dns-in", "listen": "127.0.0.1", "port": 15353,
+      "protocol": "dokodemo-door",
+      "settings": { "address": "1.1.1.1", "port": 53, "network": "tcp,udp" },
+      "sniffing": { "enabled": false }
+    },
+    {
       "tag": "transparent", "listen": "0.0.0.0", "port": 12345,
       "protocol": "dokodemo-door",
       "settings": { "network": "tcp,udp", "followRedirect": true },
@@ -20,6 +26,7 @@
     }
   ],
   "outbounds": [
+    { "tag": "dns-out", "protocol": "dns", "settings": { "address": "1.1.1.1", "port": 53 } },
     {
       "tag": "proxy", "protocol": "vless",
       "settings": {
@@ -49,6 +56,7 @@
     "domainStrategy": "__DOMAIN_STRATEGY__",
     "rules": [
       { "type": "field", "outboundTag": "block", "domain": ["domain:appsflyersdk.com"] },
+      { "type": "field", "inboundTag": ["dns-in"], "outboundTag": "dns-out" },
       { "type": "field", "outboundTag": "direct", "domain": [__PROVIDER_DOMAINS__] },
       { "type": "field", "outboundTag": "direct", "ip": ["0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16", "224.0.0.0/4", "240.0.0.0/4"] },
       { "type": "field", "outboundTag": "proxy", "domain": [__CUSTOM_PROXY_DOMAIN__] },

@@ -12,9 +12,13 @@ line="$(grep -v -E '^[[:space:]]*(#|$)' "$f" | head -n1)"
 echo "zzgone ${line#* }" >> "$f"
 flint-node use zzgone >/dev/null 2>&1
 check "fake server is current" current_is zzgone
-flint-sub-update > /tmp/flint-test.log 2>&1
-check "update reports the switch" grep -q 'больше нет\|is gone' /tmp/flint-test.log
-check "switched to the first server" current_is "$first"
+flint-sub-update > /tmp/flint-test-case.log 2>&1
+check "update reports the switch" grep -q 'больше нет\|is gone' /tmp/flint-test-case.log
+# The fake server is gone; the router is on some real server of the list. Which one depends on the order
+# of the files and, with probe-mode=fastest, on the measured times, so the exact code is not asserted.
+echo "  (current после обновления: [$(flint-node current)], zzgone в списке: $(flint-node codes | grep -c zzgone))"
+check "the fake server is no longer current" fails current_is zzgone
+check "the router is on a server from the list" sh -c 'flint-node codes | grep -qx "$(flint-node current)"'
 vpn_mode
-rm -f /tmp/flint-test.log
+rm -f /tmp/flint-test-case.log
 finish

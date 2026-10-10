@@ -296,6 +296,8 @@ You can have several subscriptions from different providers: add, change and del
 
 `flint-watchdog` runs from cron every 2 minutes: it checks the tunnel (a request to `generate_204` through Xray); on failure it waits 10 seconds and checks again; if the direct internet works (so it's the server, not the ISP), it refreshes the subscription; if the current server still fails, it tries the others in order and stays on the first working one, or returns to the original if none works. The last result is shown in the panel and in `/etc/xray/watchdog-last`. Turn it off in the panel or with `flint-watchdog off`.
 
+**Which server to take on failure.** By default the first one in the list. On the Servers tab you can turn on "Switch to the fastest": the router then measures the connection time to every server (`flint-node probe`, using the same SNI as the working tunnel) and on failure walks the list from the quickest to the slowest, stopping at the first one that really answers. The measurement only changes the order — servers that did not answer are still tried, last. The rule is also a command: `flint-node probe-mode fastest` or `first`.
+
 ## Ad blocking
 
 Works at the DNS level for every device on the network, with no apps on the devices. It uses AdGuard Home, which already ships with GL.iNet firmware 4.x (`/usr/bin/AdGuardHome`): the project runs its own instance on `127.0.0.1:5054`. The stock AdGuard Home from the GL admin panel stays off — don't turn both on.
@@ -557,6 +559,9 @@ flint-node routing ru            # geo filter: RU direct (global — everything 
 flint-node vpn off               # clients go online directly (on — via VPN again)
 flint-node site add direct example.ru     # own site: direct — bypass VPN, proxy — via VPN
 flint-node direct add aa:bb:cc:dd:ee:ff TV   # a device without VPN; list: flint-node direct, remove: direct del <MAC>
+flint-node probe                 # connection time to every server: code, ms ("-" for no answer)
+flint-node fastest               # the quickest server among those that answered
+flint-node probe-mode fastest    # on failure switch to the quickest (first — to the first in the list)
 flint-custom link 'vless://...'  # add an own server by link
 flint-sub-update                 # update all subscriptions
 flint-sub-update list            # subscriptions: id, name, host, last update, expiry and traffic
@@ -652,9 +657,15 @@ Versions follow [SemVer](https://semver.org): `1.2.3` is major (incompatible cha
 
 On the router the version is shown at the bottom of the panel menu and in `/usr/share/flint/version`; a deploy prints which version it installs and which one was there.
 
+Two helper scripts for working with a router: `.\fix.ps1` checks the router, puts the DNS mode back to a working one, deploys the kit and runs the scenarios (its first step explains what is wrong when the router does not answer), and `.\tools\run-tests.ps1` deploys the kit and runs every scenario, streaming the output — it does not depend on the working directory or on temporary variables.
+
 ## Contributing
 
-Pull requests and issues are welcome: fixes, support for other routers, panel translations. By submitting a pull request you agree to the terms in [LICENSE.en.md](LICENSE.en.md#contributions).
+Pull requests and issues are welcome: fixes, support for other routers, panel translations.
+
+Before you start, read [CONTRIBUTING.md](CONTRIBUTING.md) (in Russian): it lists the project rules (POSIX shell, where paths and state live, the usage block, line endings) and the workflow — the version in `kit/VERSION`, an entry in both CHANGELOGs, the README in both languages, and a mandatory run of `tests/run.ps1` on a router. Issue forms are provided: [bug](.github/ISSUE_TEMPLATE/bug.md) and [router tested on](.github/ISSUE_TEMPLATE/router-compatibility.md), the latter feeding the list of verified devices.
+
+By submitting a pull request you agree to the terms in [LICENSE.en.md](LICENSE.en.md#contributions).
 
 ## Credits
 

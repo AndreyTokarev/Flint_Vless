@@ -13,7 +13,10 @@ param(
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Scenarios
 )
 $ErrorActionPreference = "Stop"
-$root = Split-Path $PSScriptRoot -Parent
+# $PSScriptRoot is empty when the script is started through "powershell -File" on some hosts, so the path
+# is taken from the invocation and, as a last resort, from the current directory.
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } elseif ($MyInvocation.MyCommand.Path) { Split-Path $MyInvocation.MyCommand.Path -Parent } else { (Get-Location).Path }
+$root = Split-Path $scriptDir -Parent
 $target = "$User@$Router"
 $ssh = "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3", $target
 # The run id: the tree hash of the tracked files as they are now (with uncommitted changes) and the scenarios.
@@ -31,6 +34,19 @@ function Get-Run {
     $s, $rest = "$out".Split(" ", 2)
     [pscustomobject]@{ Status = $s; Id = "$rest".Trim() }
 }
+
+# Two runs at once remove each other's log and leave the router without a usable result, so a run holds a
+# lock on the machine that started it. A lock older than 40 minutes (a run that was killed) is ignored.
+$lock = Join-Path ([IO.Path]::GetTempPath()) "flint-tests.lock"
+if (Test-Path $lock) {
+    $age = (Get-Date) - (Get-Item $lock).LastWriteTime
+    if ($age.TotalMinutes -lt 40) {
+        throw "Another test run started from this machine $([int]$age.TotalMinutes) minutes ago: wait for it or remove $lock"
+    }
+    Remove-Item $lock -Force -ErrorAction SilentlyContinue
+}
+New-Item -ItemType File $lock | Out-Null
+trap { Remove-Item $lock -Force -ErrorAction SilentlyContinue }
 
 $run = Get-Run
 if (-not $Force -and $run -and $run.Id -eq $id -and $run.Status -ne "none") {

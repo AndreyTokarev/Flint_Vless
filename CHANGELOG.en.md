@@ -4,6 +4,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 Versions before 1.0.0 were assigned afterwards from the commit history.
 
+## [1.11.0] — 2026-10-11
+
+### Added
+- **Xray is updated to 26.3.27**: the version and its SHA-256 are pinned in `install.sh`, the archive is checked by that sum, and the previous binary is kept as `/usr/bin/xray.previous`. Xray below v25.6.8 does not imitate the post-handshake records of the cover site, so active probing can tell REALITY apart (that is what the Aparecium tool does). The server needs the update too: with a provider server older than v25.6.8, updating only the router changes nothing.
+- **The "Through the tunnel" DNS mode** — a fourth mode in `flint-dns` and a card on the DNS tab: dnsmasq asks the Xray input (`127.0.0.1:15353`) and queries leave through the VPN. It is the only mode that survives a provider blocking DoH and DNSCrypt by the resolver name; like the others, it checks the new setup and rolls back. Needs a working VPN and Xray v25.6.8 or newer on the server.
+  > **State: experimental, off by default.** On the test router it did not answer reliably: the query reaches Xray, but the answer does not always come back through the tunnel, and the mode rolls back to the previous one — that is the check working as intended, not a breakage. Use DoH or DNSCrypt; this mode is finished separately.
+- **Three guards against "the router left without VPN"**: the tunnel DNS port is checked to be free before switching (on GL.iNet port 5353 belongs to `avahi`, so the input lives on 15353); `flint-node` refuses a config that did not come up or does not pass traffic and restores the previous one; `install.sh` puts the previous Xray binary back if the new one does not start.
+- **The watchdog switches DNS back to DoH** when the tunnel mode stops answering: otherwise dnsmasq waits for an answer that will never come and the whole network loses name resolution. The input check and the check through dnsmasq are separate, so the watchdog does not depend on DNS itself.
+- **Server replacement by latency**: `flint-node probe` measures the connection time to every server (`code<TAB>ms`, sorted by time), `flint-node fastest` returns the quickest one, `flint-node probe-mode fastest|first` sets the rule, and the Servers tab gained a "Switch to the fastest" button. The measurement uses the same SNI as the working tunnel: without it the cover server closes the connection, so a plain TCP handshake measures nothing. Nodes that did not answer are shown as `-`, and they are still tried at failover — the measurement only changes the order.
+
+### Changed
+- The install prints the Xray version and a warning when it is older than 25.6.8.
+- `flint-dns` has `answercheck` and `forwardercheck` commands, used by the watchdog.
+
+### Fixed
+- **Critical: switching servers when the current one disappears.** In `flint-node pick()` the current code was not cleared, so the router tried to apply a config for a server that no longer exists: empty address and port, invalid JSON (`invalid character ','`), a failed apply, and the router left on the previous config with a "current" code that is gone. The code is cleared now and the first available server is used (or the quickest one in `fastest` mode).
+- The tunnel DNS input can no longer land on a busy port: that broke the Xray start (a restart loop) and left the router without VPN and with an overloaded control plane.
+- The `nonIPQuery` option, deprecated in Xray 26.x, is gone; the outgoing DNS query is sent directly, otherwise Xray tries to resolve the server address through itself and no answer comes back.
+- The config check no longer fails an install because of a slow server: a rollback happens only on a clear start failure (the port is not listening), while "no traffic" is a warning.
+- The `subscription` and `failover` scenarios wrote their output to `/tmp/flint-test.log` — the same file the test wrapper writes — and deleted it at the end, so results went missing. They have their own file now.
+- `tests/run.ps1`: `$PSScriptRoot` is empty when started through `powershell -File`, so the path comes from the invocation; a lock now prevents two runs from one machine.
+- The `failover` scenario demanded one exact "first" server code; it now checks that the fake server is gone and that the current server is in the list.
+
 ## [Unreleased]
 
 ### Added
@@ -311,7 +334,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.0...v1.8.1

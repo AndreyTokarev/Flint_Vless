@@ -48,12 +48,41 @@ if ! command -v xray >/dev/null; then
 		say "xray from kit/bin/xray"
 		cp "$KIT/bin/xray" /usr/bin/xray
 	else
-		XRAY_VERSION="${XRAY_VERSION:-v1.8.24}"
+		# Xray before v25.6.8 does not imitate the post-handshake records of the target, so active
+		# probing can tell REALITY apart (the Aparecium tool does exactly that). v26.3.27 is the
+		# latest stable release; the 26.9.x line is still marked prerelease.
+		XRAY_VERSION="${XRAY_VERSION:-v26.3.27}"
+		XRAY_SHA256_ARM64="${XRAY_SHA256_ARM64:-4d30283ae614e3057f730f67cd088a42be6fdf91f8639d82cb69e48cde80413c}"
 		say "xray $XRAY_VERSION from GitHub"
-		curl -fL -m 300 -o /tmp/xray.zip \
-			"https://github.com/XTLS/Xray-core/releases/download/$XRAY_VERSION/Xray-linux-arm64-v8a.zip" &&
-			unzip -o -q /tmp/xray.zip xray -d /usr/bin || true
 		rm -f /tmp/xray.zip
+		curl -fL -m 600 -o /tmp/xray.zip \
+			"https://github.com/XTLS/Xray-core/releases/download/$XRAY_VERSION/Xray-linux-arm64-v8a.zip" || true
+		if [ "$(sha256sum /tmp/xray.zip 2>/dev/null | cut -d ' ' -f1)" = "$XRAY_SHA256_ARM64" ] &&
+			unzip -o -q /tmp/xray.zip xray -d /tmp/xray-new; then
+			# The running Xray holds the old file: stop it, keep a copy that can be put back, replace, start.
+			/etc/init.d/xray stop >/dev/null 2>&1 || true
+			[ -f /usr/bin/xray ] && cp /usr/bin/xray /usr/bin/xray.previous
+			chmod 755 /tmp/xray-new/xray
+			mv /tmp/xray-new/xray /usr/bin/xray
+			/etc/init.d/xray start >/dev/null 2>&1 || /etc/init.d/xray restart >/dev/null 2>&1
+			# The new binary must run with the config that is on the router. A crash loop here (a busy port,
+			# an option it no longer accepts) leaves the router without VPN and with a loaded control plane,
+			# so the previous binary goes back and the service is started again.
+			sleep 3
+			if [ -s /etc/xray/config.json ] && ! pidof xray >/dev/null; then
+				say "xray $XRAY_VERSION did not start: the previous binary goes back"
+				cp /usr/bin/xray.previous /usr/bin/xray
+				chmod 755 /usr/bin/xray
+				/etc/init.d/xray start >/dev/null 2>&1 || /etc/init.d/xray restart >/dev/null 2>&1
+				sleep 2
+				pidof xray >/dev/null && say "xray: the previous version runs again" || say "xray: did not start at all, check /etc/xray/config.json"
+			else
+				say "xray replaced (the previous binary is in /usr/bin/xray.previous)"
+			fi
+		else
+			say "xray archive did not download or the checksum did not match: keeping the current binary"
+		fi
+		rm -rf /tmp/xray.zip /tmp/xray-new
 	fi
 	if [ -f /usr/bin/xray ]; then chmod 755 /usr/bin/xray; fi
 fi
@@ -215,6 +244,11 @@ grep -q flint-watchdog /etc/crontabs/root 2>/dev/null ||
 /etc/init.d/cron restart
 
 say "check"
+# REALITY below v25.6.8 is told apart by active probing; the server side must be updated too.
+xray_ver="$(xray version 2>/dev/null | head -n1)"
+case "$xray_ver" in
+	*" 1."*) echo "NOTE: $xray_ver is older than 25.6.8: active probing can tell REALITY apart." ;;
+esac
 nslookup youtube.com 127.0.0.1 >/dev/null && echo "DNS: ok" || echo "DNS: FAIL"
 if [ -z "$(flint-node codes)" ]; then
 	echo "VPN: no servers yet, devices go online directly. Add a subscription in the panel (Subscriptions tab)."

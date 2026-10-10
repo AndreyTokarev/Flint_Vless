@@ -54,7 +54,15 @@ if tunnel_ok; then
 	log "$(t "сервер «$was» не отвечал, помогло обновление подписки" "server \"$was\" was down, a subscription refresh fixed it")"
 	exit 0
 fi
-for code in $(flint-node codes); do
+# The order: with probe-mode=fastest the servers are tried by their TCP time, so the first one that
+# works is the quickest one rather than the first in the list. A node that answers the probe can still
+# fail the handshake, hence the live check below for every candidate.
+candidates="$(flint-node codes)"
+if [ "$(cat /etc/xray/probe 2>/dev/null)" = fastest ]; then
+	by_time="$(probe 2>/dev/null | awk -F '\t' '$2 != "-" { print $1 }' | tr '\n' ' ')"
+	[ -n "$by_time" ] && candidates="$by_time"
+fi
+for code in $candidates; do
 	[ "$code" = "$cur" ] && continue
 	flint-node use "$code" >/dev/null 2>&1 || continue
 	sleep 3
