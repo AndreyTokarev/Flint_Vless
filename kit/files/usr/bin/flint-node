@@ -70,18 +70,18 @@ start_xray() {
 		return 0
 	fi
 	/etc/init.d/xray stop >/dev/null 2>&1 || true
-	/etc/init.d/xray start >/dev/null 2>&1 || true
-	if xray_listening; then cp "$CONF" "$CONF.running" 2>/dev/null; return 0; fi
-	i=0
-	while [ "$i" -lt 90 ]; do
-		i=$((i + 1))
-		busy="$(port_timewait "$TRANSPARENT_PORT")"
-		[ "$busy" = 0 ] || [ "$((i % 10))" != 1 ] ||
-			echo "$(t "Xray не поднялся: порт $TRANSPARENT_PORT держат $busy сокетов прошлых подключений (TIME_WAIT), жду" \
-				"Xray did not come up: $busy sockets from earlier connections (TIME_WAIT) hold port $TRANSPARENT_PORT, waiting")"
-		sleep 1
+	# Four rounds of waiting: sockets a busy LAN left in TIME_WAIT hold the port for about a minute each, and
+	# on a network with several devices the last ones expire well after the first. Giving up here means the
+	# router keeps the old server, so waiting longer is worth it.
+	round=0
+	while [ "$round" -lt 4 ]; do
+		round=$((round + 1))
 		/etc/init.d/xray start >/dev/null 2>&1 || true
 		if xray_listening; then cp "$CONF" "$CONF.running" 2>/dev/null; return 0; fi
+		busy="$(port_timewait "$TRANSPARENT_PORT")"
+		echo "$(t "Xray не встал: порт $TRANSPARENT_PORT держат $busy сокетов прошлых подключений (TIME_WAIT), ждём (попытка $round из 4)" \
+			"Xray did not come up: $busy sockets from earlier connections (TIME_WAIT) hold port $TRANSPARENT_PORT, waiting (attempt $round of 4)")"
+		port_free_wait "$TRANSPARENT_PORT" 60 || true
 	done
 	return 1
 }
@@ -284,6 +284,8 @@ apply() {
 		fi
 	fi
 	mv "$CONF.new" "$CONF" && echo "$code" > "$CUR" || fail "Cannot write $CONF"
+	# The time of the switch: the watchdog leaves a fresh switch alone while the tunnel comes back up.
+	date +%s > /etc/xray/switch-at
 	# start_xray stops the service, waits for the transparent port and starts it again; if it still cannot
 	# listen, the config itself is the problem, so the previous one goes back and the tunnel is kept.
 	if ! start_xray; then

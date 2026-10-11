@@ -25,6 +25,14 @@ check "the login page has one PIN form" [ "$(wget -qO- 'http://127.0.0.1:81/cgi-
 check "an open page is one page" [ "$(panel 'tab=status' | grep -c DOCTYPE)" = 1 ]
 check "an open page has one header" [ "$(panel 'tab=status' | grep -c 'class=layout')" = 1 ]
 check "status shows the provider IP" panel_has status 'IP провайдера'
+# The two addresses on the status tab come from $IP_LOOKUP, which is defined in lib.sh for the command line
+# tools. The panel must not source lib.sh (it would override the panel's own t(), fail() and lock()), so it
+# defines the value itself: without it the variable was empty, curl was asked for an empty URL and both
+# addresses showed "n/a" — while the page still rendered, so nothing else noticed. The checks look at the
+# values, not at the page text: the address of the service is not printed anywhere in the HTML.
+check "the provider address is not n/a" fails sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=status' | grep -q 'IP провайдера (до VPN): <b>n/a'"
+check "the provider address looks like an address" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=status' | grep -qE 'IP провайдера \(до VPN\): <b>[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'"
+check "the panel defines the IP service itself" sh -c "grep -q 'IP_LOOKUP=' /usr/share/flint/panel/ui.sh"
 check "settings shows the PIN form" panel_has settings 'name=pinold'
 panel "tab=settings&pin=1&pinold=bad&pinnew=zzPinTest9&pinok=zzPinTest9" >/tmp/flint-test-pin
 check "PIN change rejects a wrong current PIN" grep -q 'Неверный текущий PIN' /tmp/flint-test-pin
@@ -269,8 +277,10 @@ flint-node site add proxy zz-import-test.example >/dev/null 2>&1
 check "the site to be restored is in place" sh -c "flint-node site list | grep -q zz-import-test"
 curl -s -m 120 -F "file=@/tmp/flint-test-settings.txt;type=text/plain" \
 	"http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=settings&import=1" > /tmp/flint-test-page
-# The message the panel printed, so a failure shows what the import said instead of only that it failed.
-echo "  (import: $(grep -oE '<pre class=ok>[^<]*' /tmp/flint-test-page | head -n 1 | cut -c1-120))"
+# What the panel answered, so a failure shows what happened instead of only that it failed: the size, the
+# message, and whether the uploaded file reached the router at all.
+echo "  (import: ответ $(wc -c < /tmp/flint-test-page) байт, файл на роутере: $(wc -c < /tmp/flint-import.txt 2>/dev/null || echo нет))"
+echo "  (import: сообщение: $(grep -oE '<pre class=ok>[^<]*' /tmp/flint-test-page | head -n 1 | cut -c1-100))"
 check "the panel takes the file and answers at once" grep -q 'Файл принят' /tmp/flint-test-page
 # The import runs in the background because it restarts Xray, and that restart can wait for the transparent
 # port (TIME_WAIT sockets): waiting for it inside the request made uhttpd drop the connection. So the answer

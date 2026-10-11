@@ -23,6 +23,11 @@ if [ ! -f /etc/xray/flint.env ]; then
   return 0
 fi
 . /etc/xray/flint.env
+# The service that reports the external address for the status tab. It is defined in lib.sh for the command
+# line tools, and lib.sh itself is NOT sourced here: it defines t(), fail(), lock() and others that the panel
+# has its own versions of, and pulling it in broke the panel (the import stopped answering). The default is
+# repeated instead, and flint.env above can still override it.
+IP_LOOKUP="${IP_LOOKUP:-https://ifconfig.me}"
 
 # Language: ?lang= (remembered in a cookie), then the cookie, then UI_LANG, then the browser's first language.
 lang="$(get lang)"

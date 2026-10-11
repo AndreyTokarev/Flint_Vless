@@ -31,6 +31,19 @@ flint-adblock check >/dev/null 2>&1
 [ "$(flint-node vpn)" = on ] || exit 0
 [ -s /etc/xray/config.json ] || exit 0
 
+# A deliberate switch (the panel, flint-node use, a subscription update) restarts Xray, and the tunnel takes
+# a moment to pass traffic again. Checking right then sees a dead tunnel and switches further, undoing the
+# choice the user just made — that is why the panel sometimes showed the previous server after a switch.
+# flint-node apply writes the time of the switch; here it means "leave it alone for a couple of minutes".
+switch_grace() {
+	[ -f /etc/xray/switch-at ] || return 1
+	at="$(cat /etc/xray/switch-at 2>/dev/null)"
+	case "$at" in ''|*[!0-9]*) return 1 ;; esac
+	now="$(date +%s)"
+	[ $((now - at)) -lt 120 ]
+}
+switch_grace && exit 0
+
 tunnel_ok() { [ "$(curl -s -o /dev/null -m 8 -w '%{http_code}' -x http://127.0.0.1:1087 https://www.google.com/generate_204)" = 204 ]; }
 online() { curl -s -o /dev/null -m 8 https://ya.ru || curl -s -o /dev/null -m 8 https://www.google.com/generate_204; }
 name() { flint-node names | awk -F '\t' -v c="$1" '$1 == c { print $2 }'; }
