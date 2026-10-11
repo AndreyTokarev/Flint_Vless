@@ -4,6 +4,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 Versions before 1.0.0 were assigned afterwards from the commit history.
 
+## [1.16.0] — 2026-10-11
+
+### Fixed
+- **Both addresses on the Status tab were gone** ("IP via VPN" and "Provider IP" showed `n/a`). The address of the service that reports the external IP is defined in `lib.sh`, and the panel never sourced that file: the variable was empty and curl was asked for an empty URL. Sourcing `lib.sh` as a whole is not an option — it defines its own `t()`, `fail()` and `lock()` while the panel has its own, and pulling it in silently broke the settings import (the page kept rendering). The value is defined in `ui.sh` now, and `flint.env` can still override it.
+- **Failover undid a server the user had chosen by hand.** Switching a server restarts Xray, the tunnel needs a few seconds, and the health check that runs in that moment saw a dead tunnel and moved to another server — which is why the panel showed the previous one. `flint-node apply` now records when the switch happened and the watchdog leaves the next two minutes alone.
+- Waiting for a free port before starting Xray goes in four rounds instead of a single window: sockets from earlier connections release the port gradually, and giving up meant staying on the old server.
+- **The `panel` scenario checked for something the page does not contain**, so it failed on a healthy panel: the address checks look at the value now (the address of the service is not printed in the HTML), and the import diagnostics print the size of the answer and whether the uploaded file reached the router.
+
+### Added
+- **The panel screenshots are refreshed with one command.** `tests/demo.sh` on the router fills the panel with invented data and saves every tab in both languages, and `tools/screenshot.js` captures them through a headless browser (Chrome is driven over its DevTools protocol, with no third-party packages). The data is deliberately made up: documentation IP ranges, invented servers and keys, and the addresses the panel reads from the router are replaced with `192.0.2.10`, so neither the external address nor the household's device addresses reach a published picture. The demo restarts nothing: Xray is not touched. Every screenshot in the READMEs is refreshed and `whitelist.png` is gone — that is a collapsed section inside the Servers tab, not a screen of its own.
+- **The service the router asks for its own external address is a setting** (`IP_LOOKUP` in `/etc/xray/flint.env`, `https://ifconfig.me` by default); it used to be written in four places.
+- `tools/check.ps1`, the local equivalent of the CI job: it runs on a developer machine what GitHub Actions runs.
+- **A measurement of parallel TLS connections** — `tests/tls_parallel.sh` (read-only: it looks at the connection table and writes a log) and the report `docs/measurement-parallel-tls.md`. The first sample showed up to eight devices connected to one address at once, so the "more than three connections to one address" condition holds on this line. The decision about mux stays as it was: off by default, with an automatic rollback.
+- **The panel and the READMEs explain what to do when the encrypted DNS stops working** (plan item I.2): another DoH server does not help when the resolver's name is blocked; the order is to check that DNS is the problem, try DNSCrypt, then the tunnel mode, with plain UDP as the last resort.
+- The `tests/router/adblock.sh` scenario: it checks that ad blocking survives a restore. The filter list URLs, your rules and exclusions live in `/etc/xray` and are part of a backup, while the downloaded filter cache in `/etc/flint-adguard` is not; the scenario deliberately throws the cache away and verifies that AdGuard Home downloads the lists again, that blocking answers, and that the original cache is put back.
+- A pre-commit secret check (`tools/check-secrets.sh`, hook `.githooks/pre-commit`): it refuses to commit a subscription link, the panel PIN, a Wi-Fi password or a private key. Enable it once: `git config core.hooksPath .githooks`.
+- Router-free checks (`tools/check-scripts.sh`) and CI (`.github/workflows/checks.yml`): the syntax of every kit script, the absence of CRLF, the Xray template being valid JSON, a warning about a placeholder nobody substitutes, and `shellcheck`.
+
+### Note
+- **The improvement plan is closed**: all sixteen items of `docs/improvement-plan-1.10.md` are done or deliberately left with the reason written down. The tunnel DNS mode stays off and marked experimental: some servers do not answer through the tunnel, and the router then returns to the previous mode.
+
 ## [1.15.0] — 2026-10-11
 
 ### Fixed
@@ -41,16 +62,6 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - **The panel parts no longer end the whole request**: inside the sourced files `exit 0` became `return 0`, otherwise the first return (the login form) cut the whole response short and the browser got an empty page.
 - **The `panel` scenario no longer depends on traces of an earlier run**: the test site is removed before the import check, otherwise it ended up in the exported file and the "the site is gone after the import" check failed on the test's own leftover rather than on the panel.
 - The `failover` scenario prints the state of the interception rules after a server switch, so the line shows whether the config brought the firewall rules back.
-
-## [Unreleased]
-
-### Added
-- **The panel screenshots are refreshed with one command.** `tests/demo.sh` on the router fills the panel with invented data and saves every tab in both languages, and `tools/screenshot.js` captures them through a headless browser (Chrome is driven over its own DevTools protocol, with no third-party packages). The data is deliberately made up: documentation IP ranges, invented servers and keys, and the addresses the panel reads from the router are replaced with `192.0.2.10`, so neither the external address nor the household's device addresses reach a published picture. The demo restarts nothing at all: Xray is not touched.
-- **The service the router asks for its own external address is a setting** (`IP_LOOKUP` in `/etc/xray/flint.env`, `https://ifconfig.me` by default); it used to be written in four places. Useful in real life — if that service is unreachable — and for the demo, which points it at its own local answer.
-- `tools/check.ps1`, the local equivalent of the CI job: it runs on a developer machine what GitHub Actions runs.
-- The `tests/router/adblock.sh` scenario: it checks that ad blocking survives a restore. The filter list URLs, your rules and exclusions live in `/etc/xray` and are part of a backup, while the downloaded filter cache in `/etc/flint-adguard` is not; the scenario deliberately throws the cache away and verifies that AdGuard Home downloads the lists again, that blocking answers, and that the original cache is put back. Both READMEs explain this behaviour now.
-- A pre-commit secret check (`tools/check-secrets.sh`, hook `.githooks/pre-commit`): it refuses to commit a subscription link, the panel PIN, a Wi-Fi password or a private key. It also checks that the files a user fills in (`config/flint.env`, `config/subscriptions` and the rest of `kit/state-files`) are not in the index and that the values from this machine do not appear in other files; documentation and `*.example` are skipped because they show the formats on purpose. Enable it once: `git config core.hooksPath .githooks`.
-- Router-free checks (`tools/check-scripts.sh`) and CI (`.github/workflows/checks.yml`): the syntax of every kit script, the absence of CRLF (busybox ash does not parse such a file), the Xray template being valid JSON with placeholders filled by type, the required inbounds and outbounds still being there, a warning about a placeholder nobody substitutes, and `shellcheck`.
 
 ## [1.12.0] — 2026-10-11
 
@@ -396,7 +407,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.16.0...HEAD
+[1.16.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.15.0...v1.16.0
 [1.13.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.12.0...v1.13.0
 [1.14.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.13.0...v1.14.0
 [1.15.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.14.0...v1.15.0
