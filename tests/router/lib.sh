@@ -57,7 +57,7 @@ restore_state() {
 	fi
 	# The firewall rule for the proxy is outside /etc/xray: drop it when the restored settings keep access closed.
 	if [ "$(flint-tg remote)" != on ] && uci -q get firewall.flint_tg_remote >/dev/null; then flint-tg remote off >/dev/null 2>&1; fi
-	echo "  restored; vpn: $(vpn_works && echo ok || echo FAIL)"
+	echo "  restored; vpn: $(vpn_works && echo ok || echo 'no answer right away')"
 }
 finish() {
 	restore_state

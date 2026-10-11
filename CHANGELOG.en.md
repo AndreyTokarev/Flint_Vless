@@ -7,6 +7,7 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 ## [Unreleased]
 
 ### Added
+- The `tests/router/adblock.sh` scenario: it checks that ad blocking survives a restore. The filter list URLs, your rules and exclusions live in `/etc/xray` and are part of a backup, while the downloaded filter cache in `/etc/flint-adguard` is not; the scenario deliberately throws the cache away and verifies that AdGuard Home downloads the lists again, that blocking answers, and that the original cache is put back. Both READMEs explain this behaviour now.
 - A pre-commit secret check (`tools/check-secrets.sh`, hook `.githooks/pre-commit`): it refuses to commit a subscription link, the panel PIN, a Wi-Fi password or a private key. It also checks that the files a user fills in (`config/flint.env`, `config/subscriptions` and the rest of `kit/state-files`) are not in the index and that the values from this machine do not appear in other files; documentation and `*.example` are skipped because they show the formats on purpose. Enable it once: `git config core.hooksPath .githooks`.
 - Router-free checks (`tools/check-scripts.sh`) and CI (`.github/workflows/checks.yml`): the syntax of every kit script, the absence of CRLF (busybox ash does not parse such a file), the Xray template being valid JSON with placeholders filled by type, the required inbounds and outbounds still being there, a warning about a placeholder nobody substitutes, and `shellcheck`.
 

@@ -326,6 +326,8 @@ Rules take effect in a few seconds.
 
 AdGuard Home uses 40–60 MB of RAM; with blocking off it is stopped.
 
+**After a restore from a backup** the blocking comes back on its own: the filter list URLs, your rules and exclusions live in `/etc/xray` and are part of a backup and of the settings file, while the downloaded filter cache in `/etc/flint-adguard` is not (4–5 MB of flash, and it goes stale anyway). AdGuard Home downloads the lists again on its first start, so blocking works without you doing anything; only the last-24-hours statistics and "Recently blocked" start empty and fill up as requests come in. To make it quicker, press "Update the lists now".
+
 ### Where ads remain
 
 DNS blocking sees only the names of the sites a device connects to, not the page content. Hence the limits:
