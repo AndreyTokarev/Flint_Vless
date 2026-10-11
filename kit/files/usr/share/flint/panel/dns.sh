@@ -38,9 +38,13 @@
   ips=""; echo "$UDP" | grep -qE '^[0-9. ]+$' && ips="$UDP"
   echo "<form method=get class=row>$(hidden)<input type=text name=dnsip value='$ips' placeholder='1.1.1.1 8.8.8.8' required>"
   echo "<button>$(T "Свои DNS-серверы" "Own DNS servers")</button></form></div>"
+  # What to do when the encrypted DNS stops answering. Told before the cards, because the first reaction is
+  # to try another DoH server, which does not help when the resolver's *name* is what is blocked.
+  echo "<div class=card><small>$(T "Если защищённый DNS перестал отвечать: смена сервера внутри DoH обычно не помогает — блокируют по имени резолвера. Тогда берите DNSCrypt или режим «через туннель» ниже." \
+    "If the encrypted DNS stopped answering: another DoH server usually does not help, because it is the resolver's name that is blocked. Use DNSCrypt or the tunnel mode below instead.")</small></div>"
   # Tunnel: the router's own DNS goes through the VPN, so blocking the resolver by name does not matter.
-  dns_card tunnel "$(T "Через туннель" "Through the tunnel")" "$(T "Запросы уходят через VPN на выбранный сервер, поэтому провайдер не видит ни имена, ни сам резолвер. Помогает, когда DoH и DNSCrypt перестали отвечать из-за блокировки по имени сервера. Не работает при выключенном VPN или без серверов." \
-    "Queries go through the VPN to the server, so the provider sees neither the names nor the resolver. Helps when DoH and DNSCrypt stopped answering because the resolver name is blocked. Needs a working VPN: it does not work with the VPN off.")"
+  dns_card tunnel "$(T "Через туннель (экспериментально)" "Through the tunnel (experimental)")" "$(T "Запросы уходят через VPN на выбранный сервер, поэтому провайдер не видит ни имена, ни сам резолвер. Помогает, когда DoH и DNSCrypt перестали отвечать из-за блокировки по имени сервера. Не работает при выключенном VPN или без серверов. Режим помечен экспериментальным: на части серверов ответ через туннель приходит не всегда, тогда роутер сам возвращает прежний режим." \
+    "Queries go through the VPN to the server, so the provider sees neither the names nor the resolver. Helps when DoH and DNSCrypt stopped answering because the resolver name is blocked. Needs a working VPN: it does not work with the VPN off. Marked experimental: some servers do not answer through the tunnel reliably, and the router then returns to the previous mode by itself.")"
   if [ "$DNSMODE" = tunnel ]; then
     echo "$ON — $(T "адреса сайтов роутер узнаёт через VPN, переключение обратно вернёт прежний режим." "the router looks up site addresses through the VPN; switching back restores the previous mode.")"
     btn dnsmode doh "" "$(T "Вернуться к DoH" "Back to DoH")"

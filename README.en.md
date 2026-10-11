@@ -644,6 +644,19 @@ If you run it on another device, please report the result in [Issues](https://gi
 | Ads remain on VK, YouTube, etc. | they come from the same domain as the content and DNS blocking can't remove them — install uBlock Origin in the browser (see [Where ads remain](#where-ads-remain)) |
 | `opkg install ... failed` | `/tmp/flint-opkg.log`; router internet; put Xray into `backup/bin/xray` |
 | The VPN and panel are gone after a firmware upgrade | upgraded without Keep Settings — `.\restore.ps1 -Full`; with it — redeploy, the settings in `/etc/xray` were kept (see [Firmware upgrade](#firmware-upgrade)) |
+| The encrypted DNS stopped answering and another DoH server does not help | the resolver's **name** is what is blocked, so trying DoH servers is pointless. Switch to DNSCrypt or to the tunnel mode (see [What to do when the encrypted DNS stops working](#what-to-do-when-the-encrypted-dns-stops-working)) |
+
+## What to do when the encrypted DNS stops working
+
+When your provider starts blocking encrypted DNS it looks like "the sites stopped opening" although the internet works. What to do, in order:
+
+1. **Check that DNS is the problem:** `nslookup youtube.com 127.0.0.1` on the router. No answer while `curl https://1.1.1.1` works means DNS is being blocked.
+2. **Another DoH server will almost certainly not help.** What is blocked is the resolver's **name** (`cloudflare-dns.com` and the like): every DoH server is reached by name, and the same rule catches it. Do not spend time on it.
+3. **DNSCrypt** is a different protocol with different names and often gets through where DoH no longer does. DNS tab, the DNSCrypt card; an own server is set with an `sdns://` stamp.
+4. **"Through the tunnel"** sends the query inside the VPN, so the provider sees neither the name nor the address of the resolver at all. That is the most reliable option **if** your server resolves on its own. The mode is marked **experimental**: some servers do not answer through the tunnel, and the router then returns to the previous mode (the panel says that no answer came). It does not work with the VPN off.
+5. **Plain UDP** (`1.1.1.1`, `8.8.8.8`) is the last resort, when nothing else gets through: the addresses are not encrypted, the provider sees them and can substitute answers.
+
+How to tell it got better: `flint-dns mode` shows the current mode, `flint-dns answercheck` checks that answers arrive, and `flint-dns forwardercheck` checks that Xray's own DNS input answers (without dnsmasq).
 
 ## Limitations
 
