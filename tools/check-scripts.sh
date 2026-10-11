@@ -48,12 +48,15 @@ ARRAYS = {
     "__CUSTOM_DIRECT_DOMAIN__", "__CUSTOM_DIRECT_IP__",
 }
 STRINGS = {"__UUID__", "__ADDR__", "__SNI__", "__PBK__", "__SID__", "__NET__", "__FLOW__",
-           "__GRPC_SERVICE__", "__DOMAIN_STRATEGY__"}
+           "__GRPC_SERVICE__", "__DOMAIN_STRATEGY__", "__FINGERPRINT__"}
+# The mux placeholder is replaced by an object and its comma, or by nothing at all: an empty value keeps
+# the JSON valid, so it is checked that way too.
+MAYBE_JSON = {"__MUX__"}
 
 text = open(TEMPLATE, encoding="utf-8").read()
 found = set(re.findall(r"__[A-Z_]+__", text))
-unknown = found - NUMBERS - ARRAYS - STRINGS
-unused = (NUMBERS | ARRAYS | STRINGS) - found
+unknown = found - NUMBERS - ARRAYS - STRINGS - MAYBE_JSON
+unused = (NUMBERS | ARRAYS | STRINGS | MAYBE_JSON) - found
 ok = True
 if unknown:
     print("!! placeholders nobody substitutes:", ", ".join(sorted(unknown)), file=sys.stderr)
@@ -69,13 +72,28 @@ for name in ARRAYS:
     filled = filled.replace(name, '"example.com"')
 for name in STRINGS:
     filled = filled.replace(name, "x")
+for name in MAYBE_JSON:
+    filled = filled.replace(name, "")
+
+# The template has to stay valid both without mux and with it, because that is what flint-node renders.
+with_mux = text.replace("__MUX__", ' "mux": { "enabled": true, "concurrency": 8 },')
+for name in NUMBERS:
+    with_mux = with_mux.replace(name, "1")
+for name in ARRAYS:
+    with_mux = with_mux.replace(name, '"example.com"')
+for name in STRINGS:
+    with_mux = with_mux.replace(name, "x")
 try:
-    config = json.loads(filled)
+    json.loads(filled)
+    json.loads(with_mux)
 except Exception as error:
     print(f"!! template is not valid JSON once filled: {error}", file=sys.stderr)
     ok = False
 else:
-    # The rendered config must still have the parts the project relies on.
+    # The rendered config must still have the parts the project relies on, and the mux form has to keep
+    # the proxy outbound intact as well.
+    config = json.loads(filled)
+    mux_cfg = json.loads(with_mux)
     tags = [i.get("tag") for i in config.get("inbounds", [])]
     out_tags = [o.get("tag") for o in config.get("outbounds", [])]
     for want in ("transparent", "http-in", "socks-in", "dns-in"):
@@ -86,6 +104,13 @@ else:
         if want not in out_tags:
             print(f"!! the template lost the {want} outbound", file=sys.stderr)
             ok = False
+    proxy = next((o for o in mux_cfg.get("outbounds", []) if o.get("tag") == "proxy"), None)
+    if proxy is None or "vnext" not in proxy.get("settings", {}):
+        print("!! the proxy outbound is broken when mux is on", file=sys.stderr)
+        ok = False
+    elif proxy.get("mux", {}).get("enabled") is not True:
+        print("!! the mux option did not reach the proxy outbound", file=sys.stderr)
+        ok = False
 sys.exit(0 if ok else 1)
 EOF
 else
