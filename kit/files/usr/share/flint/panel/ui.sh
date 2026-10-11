@@ -37,11 +37,18 @@ case "$lang" in
 esac
 export FLINT_LANG="$L"
 T() { if [ "$L" = en ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
-  echo "Content-Type: text/plain; charset=utf-8"
-  echo "Content-Disposition: attachment; filename=flint-settings-$(date +%Y%m%d-%H%M).txt"
-  echo ""
+# The settings export: only when the request asks for it AND the PIN in it is the router's. This lives here
+# rather than in panel.cgi because UI_PIN is read from flint.env just above. The check must stay: a copy of
+# this block once lost its condition and ran on every request, so the panel answered with the settings file
+# — subscriptions and servers — to anyone, without a PIN. The scenario "panel" now fails when a response
+# carries Content-Disposition without a valid PIN.
+if [ -n "$UI_PIN" ] && [ "$pass" = "$UI_PIN" ] && [ -n "$(get export)" ]; then
+  # A different response: its own headers, then the file. Nothing below runs (the return ends ui.sh, and
+  # panel.cgi stops after sourcing it), so the HTML headers panel.cgi already sent are the only ones.
+  printf 'Content-Type: text/plain; charset=utf-8\nContent-Disposition: attachment; filename=flint-settings-%s.txt\n\n' "$(date +%Y%m%d-%H%M)"
   flint-settings export
   return 0
+fi
 case "$tab" in status|servers|own|subs|routing|adblock|dns|telegram|settings) ;; *) tab=status ;; esac
 # Ready-made lists from AdGuard's registry of DNS blocklists: id:name.
 PRESET_URL=https://adguardteam.github.io/HostlistsRegistry/assets/filter_

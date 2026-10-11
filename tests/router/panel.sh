@@ -9,6 +9,21 @@ page_ok() { panel "$1" | grep -c '</html>'; }
 for t in status servers own subs routing adblock dns telegram settings; do check "tab $t renders" page_ok "tab=$t"; done
 check "no hidden action fields" fails sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&tab=servers' | grep -c 'name=a '"
 check "wrong PIN shows the login form" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=bad' | grep -c 'type=password'"
+# The settings export must happen only when the request asks for it AND the PIN is right. A copy of the
+# export block once ran on every request, so the panel answered with the settings file — subscriptions
+# and servers — instead of the login form, to anyone. The exported body starts with "# Flint VPN settings"
+# (the Content-Disposition header is not in the body, so that is what a body check can see).
+check "no export without a PIN" fails sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi' | grep -q '^# Flint VPN settings'"
+check "no export with a wrong PIN" fails sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=bad&export=1' | grep -q '^# Flint VPN settings'"
+check "a right PIN alone does not export" fails sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin' | grep -q '^# Flint VPN settings'"
+check "the right PIN and export= do" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&export=1' | grep -q '^# Flint VPN settings'"
+check "the export is not a page" fails sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&export=1' | grep -q 'DOCTYPE'"
+# The page is rendered once. A second copy of the header and the login form was left in panel.cgi while the
+# same block lived in ui.sh, and the browser showed two PIN forms one after another.
+check "the login page is one page" [ "$(wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi' | grep -c DOCTYPE)" = 1 ]
+check "the login page has one PIN form" [ "$(wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi' | grep -c 'type=password')" = 1 ]
+check "an open page is one page" [ "$(panel 'tab=status' | grep -c DOCTYPE)" = 1 ]
+check "an open page has one header" [ "$(panel 'tab=status' | grep -c 'class=layout')" = 1 ]
 check "status shows the provider IP" panel_has status 'IP провайдера'
 check "settings shows the PIN form" panel_has settings 'name=pinold'
 panel "tab=settings&pin=1&pinold=bad&pinnew=zzPinTest9&pinok=zzPinTest9" >/tmp/flint-test-pin

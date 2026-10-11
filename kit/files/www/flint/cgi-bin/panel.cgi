@@ -41,70 +41,37 @@ esac
 export FLINT_LANG="$L"
 T() { if [ "$L" = en ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
 pass="$(get pass)"; tab="$(get tab)"
-if [ -n "$UI_PIN" ] && [ "$pass" = "$UI_PIN" ] && [ -n "$(get export)" ]; then
-  # The settings file: its own HTTP headers, then the content. The HTML headers below do not follow it.
-  printf 'Content-Type: text/plain; charset=utf-8\nContent-Disposition: attachment; filename=flint-settings-%s.txt\n\n' "$(date +%Y%m%d-%H%M)"
-  flint-settings export
-  exported=1
-  return 0
+
+# The HTTP headers come before anything is printed, and before ui.sh is sourced: ui.sh answers with the
+# login page or with the panel, so its output starts the body. A CGI response whose first line is not a
+# header is rejected by the server (that is a 502 from uhttpd), which is what happened when the headers
+# were sent after ui.sh.
+#
+# The settings export is the one response with different headers (text/plain and a download name), so it is
+# recognised here first. That needs UI_PIN, which comes from flint.env — the same file ui.sh reads later;
+# sourcing it twice is harmless, the values are assignments.
+. /etc/xray/flint.env
+if [ -z "$UI_PIN" ] || [ "$pass" != "$UI_PIN" ] || [ -z "$(get export)" ]; then
+  echo "Content-Type: text/html; charset=utf-8"
+  [ "$lang" = "$L" ] && echo "Set-Cookie: lang=$L; Path=/; Max-Age=31536000; SameSite=Lax"
+  echo ""
 fi
 
-# Shared markup, the language switch, the login gate and the tab data.
+# Shared markup, the language switch, the login gate, the settings export and the tab data. The export
+# block itself lives in ui.sh, right after it has read flint.env: it prints its own headers and ends the
+# request, so everything below belongs to a normal page.
+# Shared markup, the language switch, the login gate, the settings export, the page header and the data
+# the tabs read: all of it is in ui.sh. This file must not repeat any of it — a second copy of the page
+# header and the login form was left here once and the panel rendered the whole page twice, one form after
+# another.
 . /usr/share/flint/panel/ui.sh
-
-# Send the HTML headers unless the export above already answered.
-if [ -z "$exported" ]; then
-echo "Content-Type: text/html; charset=utf-8"
-[ "$lang" = "$L" ] && echo "Set-Cookie: lang=$L; Path=/; Max-Age=31536000; SameSite=Lax"
-echo ""
-fi
-case "$tab" in status|servers|own|subs|routing|adblock|dns|telegram|settings) ;; *) tab=status ;; esac
-# Ready-made lists from AdGuard's registry of DNS blocklists: id:name.
-PRESET_URL=https://adguardteam.github.io/HostlistsRegistry/assets/filter_
-PRESETS="1:AdGuard DNS filter
-59:AdGuard DNS Popup Hosts filter
-48:HaGeZi's Pro Blocklist
-5:OISD Blocklist Small
-33:Steven Black's List
-18:Phishing Army
-11:Malicious URL Blocklist (URLHaus)"
-TITLE="$(echo "${UI_TITLE:-Flint VPN}" | esc)"
-TAGLINE="$(echo "${UI_TAGLINE-Sail the internet}" | esc)"
-FOOTER='<footer><span>YOUR NETWORK. <b>YOUR RULES.</b></span></footer>'
-VER="$(cat /usr/share/flint/version 2>/dev/null | esc)"
-[ -n "$VER" ] && VER="<div class=ver>Flint VPN v$VER</div>"
-logo() {
-  last="${TITLE##* }"; first="${TITLE% *}"
-  [ "$first" = "$TITLE" ] && last=""
-  [ -n "$last" ] && last=" <b>$last</b>"
-  tag=""; [ -n "$TAGLINE" ] && tag="<div class=tag>$TAGLINE</div>"
-  echo "<div class=\"logo $1\"><img src=/logo.svg alt=\"\"><div><div class=word>$first$last</div>$tag</div></div>"
-}
-# Language switch; $1 is the link prefix ending in "?" or "&amp;".
-langs() {
-  if [ "$L" = en ]; then echo "<div class=lang><a href='${1}lang=ru'>RU</a><b>EN</b></div>"
-  else echo "<div class=lang><b>RU</b><a href='${1}lang=en'>EN</a></div>"; fi
-}
-# Top bar: $1 = left side (logo or empty), $2 = right side (language switch, sign out).
-top() { echo "<header class=top>$1<div class=tools>$2</div></header>"; }
-cat <<HTML
-<!DOCTYPE html><html lang=$L><head>
-<meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>$TITLE</title>
-<link rel=icon type=image/svg+xml href=/icon.svg>
-<link rel=stylesheet href=/panel.css>
-</head><body>
-HTML
+# ui.sh answers with the login page and returns when the PIN is wrong or missing — but "return" ends only
+# that sourced file, so the request has to be ended here too. Without this the panel went on to render the
+# status page after the login form, and the browser showed a form and a full page one after another.
 if [ -z "$UI_PIN" ] || [ "$pass" != "$UI_PIN" ]; then
-  err=""; [ -n "$pass" ] && err="<p class='err login-err'>$(T "Неверный PIN, попробуйте ещё раз" "Wrong PIN, please try again")</p>"
-  cat <<HTML
-$(top "" "$(langs "?")")<main>$(logo big)<div class="card login"><div class=lock>🔒</div>
-<p class=login-hint>$(T "Введите PIN, чтобы управлять VPN" "Enter the PIN to manage the VPN")</p>$err
-<form method=get><input type=password name=pass placeholder=PIN autocomplete=current-password autofocus required>
-<button class=on>$(T "Войти" "Sign in")</button></form></div></main>$FOOTER$VER</body></html>
-HTML
   exit 0
 fi
+case "$tab" in status|servers|own|subs|routing|adblock|dns|telegram|settings) ;; *) tab=status ;; esac
 # The action is the first non-empty parameter from this list; every form sends exactly one of them.
 ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsmode dnsurl dnscrypt dnsstamp dnsudp dnsip hostadd hostdel directadd directdel tg tgroute tgcf tgremote tgaddr tgmask tgport tgsecret tgsecretset tgcheck tgdc tgcfd tgworker tgcftls tgpool tglog tgupdate probemode fingerprint mux "
 a="$(echo "$qs" | tr '&' '\n' | awk -F = -v l="$ACTIONS" '$2 != "" && index(l, " " $1 " ") { print $1; exit }')"
