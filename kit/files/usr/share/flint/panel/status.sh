@@ -3,16 +3,18 @@
 # The status tab of the panel: this body runs inside the case of panel.cgi.
   echo "<div class=card>"
   if [ -z "$NAMES" ]; then
-    IP="$(curl -s -m 8 https://ifconfig.me 2>/dev/null || echo n/a)"
+    IP="$(curl -s -m 8 "$IP_LOOKUP" 2>/dev/null || echo n/a)"
     echo "<b class=err>$(T "Серверов пока нет" "No servers yet")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>$(T "IP провайдера" "Provider IP"): <b>$IP</b>$ADD_SERVERS"
   elif [ "$VPN" = off ]; then
-    IP="$(curl -s -m 8 https://ifconfig.me 2>/dev/null || echo n/a)"
+    IP="$(curl -s -m 8 "$IP_LOOKUP" 2>/dev/null || echo n/a)"
     echo "<b class=err>$(T "VPN выключен" "VPN is off")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>$(T "IP провайдера" "Provider IP"): <b>$IP</b>"
     btn vpn on " class=on" "$(T "Включить VPN" "Turn VPN on")"
   else
     # The router's own traffic bypasses Xray, so a plain request shows the provider's IP; both run at once.
-    curl -s -m 8 https://ifconfig.me > /tmp/flint-ip.$$ 2>/dev/null &
-    IP="$(curl -s -m 8 -x http://127.0.0.1:1087 https://ifconfig.me 2>/dev/null || echo n/a)"
+    # The address comes from $IP_LOOKUP (lib.sh, overridable in flint.env): a demo or a test points it at a
+    # local answer, so a published screenshot never carries the real address of whoever ran the demo.
+    curl -s -m 8 "$IP_LOOKUP" > /tmp/flint-ip.$$ 2>/dev/null &
+    IP="$(curl -s -m 8 -x http://127.0.0.1:1087 "$IP_LOOKUP" 2>/dev/null || echo n/a)"
     wait
     DIRECT_IP="$(head -c 64 /tmp/flint-ip.$$ | esc)"; rm -f /tmp/flint-ip.$$
     echo "VPN: <b class=ok>$(T "включён" "on")</b><br>$(T "Сервер" "Server"): <b class=ok>${CUR_NAME:-$CUR}</b>"

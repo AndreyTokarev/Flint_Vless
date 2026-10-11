@@ -67,20 +67,22 @@ The panel is available in English and Russian: the language follows your browser
 | ![Login](docs/screenshots/en/login.png) | ![Status](docs/screenshots/en/status.png) |
 | **Subscriptions** | **Servers** |
 | ![Subscriptions](docs/screenshots/en/subs.png) | ![Servers](docs/screenshots/en/servers.png) |
-| **White lists** | **Own servers** |
-| ![White lists](docs/screenshots/en/whitelist.png) | ![Own servers](docs/screenshots/en/own.png) |
-| **Editing a server** | **DNS** |
-| ![Edit](docs/screenshots/en/edit.png) | ![DNS](docs/screenshots/en/dns.png) |
-| **Routing** | **Ad blocking** |
-| ![Routing](docs/screenshots/en/routing.png) | ![Ad blocking](docs/screenshots/en/adblock.png) |
-| **Telegram proxy** | **Settings** |
-| ![Telegram proxy](docs/screenshots/en/telegram.png) | ![Settings](docs/screenshots/en/settings.png) |
-| **Phone** | **Phone: servers** |
-| ![Phone](docs/screenshots/en/mobile-status.png) | ![Phone: servers](docs/screenshots/en/mobile-servers.png) |
-| **Phone: Telegram** | **No servers** |
-| ![Phone: Telegram](docs/screenshots/en/mobile-telegram.png) | ![No servers](docs/screenshots/en/empty.png) |
+| **Own servers** | **Adding a server** |
+| ![Own servers](docs/screenshots/en/own.png) | ![Adding a server](docs/screenshots/en/edit.png) |
+| **DNS** | **Routing** |
+| ![DNS](docs/screenshots/en/dns.png) | ![Routing](docs/screenshots/en/routing.png) |
+| **Ad blocking** | **Telegram proxy** |
+| ![Ad blocking](docs/screenshots/en/adblock.png) | ![Telegram proxy](docs/screenshots/en/telegram.png) |
+| **Settings** | **Phone** |
+| ![Settings](docs/screenshots/en/settings.png) | ![Phone](docs/screenshots/en/mobile-status.png) |
+| **Phone: servers** | **Phone: Telegram** |
+| ![Phone: servers](docs/screenshots/en/mobile-servers.png) | ![Phone: Telegram](docs/screenshots/en/mobile-telegram.png) |
+| **No servers** |  |
+| ![No servers](docs/screenshots/en/empty.png) |  |
 
-The screenshots use demo data: documentation IP ranges, made-up servers and keys.
+The screenshots use demo data: documentation IP ranges, made-up servers and keys. They are refreshed with one
+command — `tests/demo.sh` on the router saves every page in both languages, and `tools/screenshot.js` captures
+them through a headless browser.
 
 ## How it works
 

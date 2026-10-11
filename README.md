@@ -66,20 +66,19 @@ Flint VPN превращает роутер GL.iNet в прозрачный VPN-
 | ![Вход](docs/screenshots/login.png) | ![Статус](docs/screenshots/status.png) |
 | **Подписки** | **Серверы** |
 | ![Подписки](docs/screenshots/subs.png) | ![Серверы](docs/screenshots/servers.png) |
-| **Белые списки** | **Свои серверы** |
-| ![Белые списки](docs/screenshots/whitelist.png) | ![Свои серверы](docs/screenshots/own.png) |
-| **Редактирование сервера** | **DNS** |
-| ![Редактирование](docs/screenshots/edit.png) | ![DNS](docs/screenshots/dns.png) |
-| **Маршрутизация** | **Блокировка рекламы** |
-| ![Маршрутизация](docs/screenshots/routing.png) | ![Блокировка рекламы](docs/screenshots/adblock.png) |
-| **Прокси для Telegram** | **Настройки** |
-| ![Прокси для Telegram](docs/screenshots/telegram.png) | ![Настройки](docs/screenshots/settings.png) |
-| **Телефон** | **Телефон: серверы** |
-| ![Телефон](docs/screenshots/mobile-status.png) | ![Телефон: серверы](docs/screenshots/mobile-servers.png) |
-| **Телефон: Telegram** | **Без серверов** |
+| **Свои серверы** | **Добавление сервера** |
+| ![Свои серверы](docs/screenshots/own.png) | ![Добавление сервера](docs/screenshots/edit.png) |
+| **DNS** | **Маршрутизация** |
+| ![DNS](docs/screenshots/dns.png) | ![Маршрутизация](docs/screenshots/routing.png) |
+| **Блокировка рекламы** | **Прокси для Telegram** |
+| ![Блокировка рекламы](docs/screenshots/adblock.png) | ![Прокси для Telegram](docs/screenshots/telegram.png) |
+| **Настройки** | **Телефон** |
+| ![Настройки](docs/screenshots/settings.png) | ![Телефон](docs/screenshots/mobile-status.png) |
+| **Телефон: серверы** | **Телефон: Telegram** |
+| ![Телефон: серверы](docs/screenshots/mobile-servers.png) | ![Телефон: Telegram](docs/screenshots/mobile-telegram.png) |
 | ![Телефон: Telegram](docs/screenshots/mobile-telegram.png) | ![Без серверов](docs/screenshots/empty.png) |
 
-На скриншотах демо-данные: адреса из документационных диапазонов, выдуманные серверы и ключи.
+На скриншотах демо-данные: адреса из документационных диапазонов, выдуманные серверы и ключи. Обновляются они одной командой — `tests/demo.sh` на роутере сохраняет все страницы в двух языках, а `tools/screenshot.js` снимает их через headless-браузер.
 
 ## Как это работает
 

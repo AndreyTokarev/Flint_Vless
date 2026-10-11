@@ -82,6 +82,10 @@ devices() {
 	} | awk -F '\t' '!seen[tolower($1)]++ { print tolower($1) "\t" $2 "\t" $3 }'
 }
 direct_devices() { [ -f "$DIRECT" ] && grep -v '^$' "$DIRECT"; }
+# ip_lookup: the service that tells the router its own external address. It is a variable so a demo or a
+# test can point it at a local answer instead of a real service (see tests/demo.sh), and so a user who
+# prefers another one can change it in flint.env: IP_LOOKUP=https://example.net/ip
+IP_LOOKUP="${IP_LOOKUP:-https://ifconfig.me}"
 # port_timewait <port>: how many sockets are still in TIME_WAIT on that port. Xray's listener is bound
 # without SO_REUSEADDR, so a socket a LAN client left behind makes the next start fail with "address
 # already in use" even though nothing is listening: the restart has to wait for those to go.

@@ -14,3 +14,6 @@ tmp
 tools/flint-run.tar
 tools/last-run.log
 tools/.stage/
+
+# pages saved by tests/demo.sh for the screenshots (generated, not sources)
+docs/demo-html/

@@ -152,7 +152,7 @@ link() {
 	case "${1:-lan}" in
 		lan) host="$(lan_ip)" ;;
 		upstream) host="$(upstream_ip)" ;;
-		remote) host="$(get addr)"; [ -n "$host" ] || host="$(curl -s -m 8 https://ifconfig.me 2>/dev/null)" ;;
+		remote) host="$(get addr)"; [ -n "$host" ] || host="$(curl -s -m 8 "$IP_LOOKUP" 2>/dev/null)" ;;
 		*) fail "flint-tg link [lan|upstream|remote]" ;;
 	esac
 	[ -n "$host" ] || fail "$(t "Не удалось узнать адрес" "Cannot find the address")"
