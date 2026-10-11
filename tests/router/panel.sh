@@ -271,7 +271,18 @@ curl -s -m 120 -F "file=@/tmp/flint-test-settings.txt;type=text/plain" \
 	"http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=settings&import=1" > /tmp/flint-test-page
 # The message the panel printed, so a failure shows what the import said instead of only that it failed.
 echo "  (import: $(grep -oE '<pre class=ok>[^<]*' /tmp/flint-test-page | head -n 1 | cut -c1-120))"
-check "import through the panel reports success" grep -q 'Настройки загружены' /tmp/flint-test-page
+check "the panel takes the file and answers at once" grep -q 'Файл принят' /tmp/flint-test-page
+# The import runs in the background because it restarts Xray, and that restart can wait for the transparent
+# port (TIME_WAIT sockets): waiting for it inside the request made uhttpd drop the connection. So the answer
+# above is only "the file was taken" — the result is waited for here, with a limit.
+i=0
+while [ "$i" -lt 60 ]; do
+	[ -s /tmp/flint-import.status ] && break
+	sleep 2
+	i=$((i + 2))
+done
+echo "  (import finished: $(head -c 100 /tmp/flint-import.status 2>/dev/null))"
+check "the import reports success" grep -q 'Настройки загружены' /tmp/flint-import.status
 check "import brings back the exported sites" fails sh -c "flint-node site list | grep -q zz-import-test"
 check "import keeps the servers" [ "$(flint-node codes | wc -l)" = "$n" ]
 check "import rejects a foreign file" fails sh -c "echo hello | flint-settings import"

@@ -28,3 +28,4 @@ dns-hosts
 direct-devices
 tgproxy
 xray-opts
+config.json.running

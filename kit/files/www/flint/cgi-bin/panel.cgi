@@ -129,14 +129,33 @@ EOF
   newnode) form=new; f_port=443 ;;
   import)
     # The settings file comes as the "file" part of a multipart POST (the form keeps pass/tab in the URL).
+    # The import runs in the background on purpose: it ends with flint-node apply, which restarts Xray, and
+    # that restart waits for the transparent port to be free of TIME_WAIT sockets (up to 90 s). uhttpd does
+    # not wait that long for a CGI request — it drops the connection and the browser shows a broken page
+    # with no message, although the import itself had worked. So the uploaded file is stored here, the
+    # answer is sent at once, and the import runs on its own.
+    rm -f /tmp/flint-import.txt /tmp/flint-import.status
     if [ "$REQUEST_METHOD" = POST ] && [ "${CONTENT_LENGTH:-0}" -gt 0 ] && [ "${CONTENT_LENGTH:-0}" -le 1048576 ]; then
       b="--$(printf '%s' "$CONTENT_TYPE" | sed -n 's/.*boundary=//p' | tr -d '"')"
-      msg="$(head -c "$CONTENT_LENGTH" | awk -v b="$b" '
+      head -c "$CONTENT_LENGTH" | awk -v b="$b" '
         { sub(/\r$/, "") }
         index($0, b) == 1 { if (body) exit; hdr = 0; next }
         body { print; next }
         hdr && $0 == "" { body = 1; next }
-        /^Content-Disposition:/ && /name="file"/ { hdr = 1 }' | flint-settings import 2>&1)"
+        /^Content-Disposition:/ && /name="file"/ { hdr = 1 }' > /tmp/flint-import.txt
+      if [ -s /tmp/flint-import.txt ]; then
+        # The import has to survive this CGI: it ends with flint-node apply, which restarts Xray, and that
+        # restart waits for the transparent port to be free of TIME_WAIT sockets. This firmware has no
+        # setsid and no nohup, and a plain "( ... ) &" is killed together with the CGI, which left the status
+        # file empty; start-stop-daemon detaches it properly. It must NOT be given -b: that option closes the
+        # output of the process, and the status file the panel reads stayed empty with it.
+        start-stop-daemon -S -x /usr/bin/flint-settings -- import /tmp/flint-import.txt \
+          > /tmp/flint-import.status 2>&1
+        msg="$(T "Файл принят: настройки загружаются в фоне, панель обновится через минуту" \
+          "The file was taken: the settings load in the background, the panel updates in a minute")"
+      else
+        msg="$(T "Файл не принят: в нём нет настроек" "The file was not taken: there are no settings in it")"
+      fi
     else
       msg="$(T "Выберите файл настроек (не больше 1 МБ)" "Choose a settings file (up to 1 MB)")"
     fi ;;

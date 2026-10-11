@@ -54,18 +54,24 @@ set_opt() { grep -v "^$1=" "$OPTS" 2>/dev/null > "$OPTS.new"; printf '%s=%s\n' "
 # apply(): they must not probe the servers or move the user to another one. The config still has to come
 # up, so the same check is made and a bad value is rolled back.
 # start_xray: bring the service up and return 0 only when the transparent port is really held.
-# The port matters here. Xray binds it without SO_REUSEADDR, so sockets a LAN client left in TIME_WAIT — the
-# kernel holds each for about a minute after Xray closed the connection first, and every LAN connection open
-# at that moment becomes one — make the new process fail with "address already in use" while nothing is
-# listening. That cannot be forced away: conntrack does not track the redirected LAN traffic, the firmware
-# has no ss -K, tcp_tw_reuse is already at its most aggressive and only helps outgoing connections, and
-# Xray 26 has no reusePort option (it ignores the unknown key). So the start is attempted at once and the
-# port is waited for in short steps, which also lets a start through as soon as the first sockets expire
-# instead of sleeping through the whole window.
+#
+# When the running Xray already holds the port with exactly this config, nothing is done: that is the common
+# case (a subscription update that found no changes, a panel button that only rewrote modes, an install over
+# an identical setup). A restart is not free — it drops every LAN connection for a moment, and Xray binds
+# the port without SO_REUSEADDR, so the sockets the LAN left behind in TIME_WAIT (the kernel holds each for
+# about a minute) make the new process fail with "address already in use" while nothing is listening. That
+# cannot be forced away: conntrack does not track the redirected LAN traffic, the firmware has no ss -K,
+# tcp_tw_reuse only helps outgoing connections, and Xray 26 ignores an unknown reusePort key. So when a
+# start is really needed it is attempted at once, and the port is waited for in short steps, which lets a
+# start through as soon as the first sockets expire instead of sleeping through the whole window.
 start_xray() {
+	if [ -s "$CONF" ] && [ -s "$CONF.running" ] && pidof xray >/dev/null && xray_listening &&
+		cmp -s "$CONF" "$CONF.running"; then
+		return 0
+	fi
 	/etc/init.d/xray stop >/dev/null 2>&1 || true
 	/etc/init.d/xray start >/dev/null 2>&1 || true
-	xray_listening && return 0
+	if xray_listening; then cp "$CONF" "$CONF.running" 2>/dev/null; return 0; fi
 	i=0
 	while [ "$i" -lt 90 ]; do
 		i=$((i + 1))
@@ -75,7 +81,7 @@ start_xray() {
 				"Xray did not come up: $busy sockets from earlier connections (TIME_WAIT) hold port $TRANSPARENT_PORT, waiting")"
 		sleep 1
 		/etc/init.d/xray start >/dev/null 2>&1 || true
-		xray_listening && return 0
+		if xray_listening; then cp "$CONF" "$CONF.running" 2>/dev/null; return 0; fi
 	done
 	return 1
 }
