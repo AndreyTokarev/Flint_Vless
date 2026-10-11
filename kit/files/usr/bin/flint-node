@@ -54,23 +54,30 @@ set_opt() { grep -v "^$1=" "$OPTS" 2>/dev/null > "$OPTS.new"; printf '%s=%s\n' "
 # apply(): they must not probe the servers or move the user to another one. The config still has to come
 # up, so the same check is made and a bad value is rolled back.
 # start_xray: bring the service up and return 0 only when the transparent port is really held.
-# "restart" is not used, and neither is a plain stop followed at once by a start: Xray binds without
-# SO_REUSEADDR, so a socket a LAN client left in TIME_WAIT makes the start fail with "address already in
-# use" even though nothing is listening. procd also respawns the service, which keeps starting it while the
-# port is still busy. Stopping, waiting for the port to clear (as long as it takes) and only then starting
-# is what makes a switch reliable — without it the router lost the tunnel and the switch silently did not
-# happen.
+# The port matters here. Xray binds it without SO_REUSEADDR, so sockets a LAN client left in TIME_WAIT — the
+# kernel holds each for about a minute after Xray closed the connection first, and every LAN connection open
+# at that moment becomes one — make the new process fail with "address already in use" while nothing is
+# listening. That cannot be forced away: conntrack does not track the redirected LAN traffic, the firmware
+# has no ss -K, tcp_tw_reuse is already at its most aggressive and only helps outgoing connections, and
+# Xray 26 has no reusePort option (it ignores the unknown key). So the start is attempted at once and the
+# port is waited for in short steps, which also lets a start through as soon as the first sockets expire
+# instead of sleeping through the whole window.
 start_xray() {
 	/etc/init.d/xray stop >/dev/null 2>&1 || true
-	port_free_wait "$TRANSPARENT_PORT" 90 || true
 	/etc/init.d/xray start >/dev/null 2>&1 || true
 	xray_listening && return 0
-	echo "$(t "Xray не поднялся (порт $TRANSPARENT_PORT ещё занят), жду и пробую снова" \
-		"Xray did not come up (port $TRANSPARENT_PORT is still busy), waiting and trying again")"
-	/etc/init.d/xray stop >/dev/null 2>&1 || true
-	port_free_wait "$TRANSPARENT_PORT" 90 || true
-	/etc/init.d/xray start >/dev/null 2>&1 || true
-	xray_listening
+	i=0
+	while [ "$i" -lt 90 ]; do
+		i=$((i + 1))
+		busy="$(port_timewait "$TRANSPARENT_PORT")"
+		[ "$busy" = 0 ] || [ "$((i % 10))" != 1 ] ||
+			echo "$(t "Xray не поднялся: порт $TRANSPARENT_PORT держат $busy сокетов прошлых подключений (TIME_WAIT), жду" \
+				"Xray did not come up: $busy sockets from earlier connections (TIME_WAIT) hold port $TRANSPARENT_PORT, waiting")"
+		sleep 1
+		/etc/init.d/xray start >/dev/null 2>&1 || true
+		xray_listening && return 0
+	done
+	return 1
 }
 # render_only: render the current server once more with the new options in place. Rendering the same server
 # again is not a switch, so the panel's option changes do not go through apply(): they must not probe the

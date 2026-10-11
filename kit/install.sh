@@ -43,14 +43,41 @@ if [ -n "${need% }" ]; then
 	done
 fi
 
-if ! command -v xray >/dev/null; then
+# Xray is installed when it is missing and also when the one on the router is too old. A firmware upgrade
+# or an `opkg install xray-core` can put an old binary back (the GL.iNet repository still ships 1.8.7),
+# and that version does not imitate the post-handshake records of the target, so active probing can tell
+# REALITY apart (the Aparecium tool does exactly that). The check is by version, not by presence.
+XRAY_MIN=25.6.8
+need_xray() {
+	command -v xray >/dev/null || return 0
+	v="$(xray version 2>/dev/null | awk 'NR == 1 { print $2 }' | sed 's/^v//')"
+	[ -n "$v" ] || return 0
+	old="$(printf '%s\n%s\n' "$XRAY_MIN" "$v" | sort -t. -k1,1n -k2,2n -k3,3n | head -n1)"
+	[ "$old" != "$XRAY_MIN" ]
+}
+# xray_start_wait: start the new binary and wait for the port only if it did not come up. Xray binds
+# without SO_REUSEADDR, so sockets a LAN client left in TIME_WAIT hold the port for about a minute; nothing
+# can force those away, so the wait is short and only paid when the start really failed.
+xray_start_wait() {
+	/etc/init.d/xray start >/dev/null 2>&1 || true
+	pidof xray >/dev/null && return 0
+	i=0
+	while [ "$i" -lt 60 ]; do
+		[ "$i" != 0 ] || say "waiting for the Xray port (sockets from earlier connections)"
+		sleep 1
+		i=$((i + 1))
+		/etc/init.d/xray start >/dev/null 2>&1 || true
+		pidof xray >/dev/null && return 0
+	done
+	return 1
+}
+
+if need_xray; then
 	if [ -f "$KIT/bin/xray" ]; then
 		say "xray from kit/bin/xray"
 		cp "$KIT/bin/xray" /usr/bin/xray
 	else
-		# Xray before v25.6.8 does not imitate the post-handshake records of the target, so active
-		# probing can tell REALITY apart (the Aparecium tool does exactly that). v26.3.27 is the
-		# latest stable release; the 26.9.x line is still marked prerelease.
+		# v26.3.27 is the latest stable release; the 26.9.x line is still marked prerelease.
 		XRAY_VERSION="${XRAY_VERSION:-v26.3.27}"
 		XRAY_SHA256_ARM64="${XRAY_SHA256_ARM64:-4d30283ae614e3057f730f67cd088a42be6fdf91f8639d82cb69e48cde80413c}"
 		say "xray $XRAY_VERSION from GitHub"
@@ -60,11 +87,14 @@ if ! command -v xray >/dev/null; then
 		if [ "$(sha256sum /tmp/xray.zip 2>/dev/null | cut -d ' ' -f1)" = "$XRAY_SHA256_ARM64" ] &&
 			unzip -o -q /tmp/xray.zip xray -d /tmp/xray-new; then
 			# The running Xray holds the old file: stop it, keep a copy that can be put back, replace, start.
+			# The port is waited for first: Xray binds it without SO_REUSEADDR and procd respawns the
+			# service, so a socket a LAN client left in TIME_WAIT would make the new binary fail to start
+			# and the installer would put the old one back for no reason.
 			/etc/init.d/xray stop >/dev/null 2>&1 || true
 			[ -f /usr/bin/xray ] && cp /usr/bin/xray /usr/bin/xray.previous
 			chmod 755 /tmp/xray-new/xray
 			mv /tmp/xray-new/xray /usr/bin/xray
-			/etc/init.d/xray start >/dev/null 2>&1 || /etc/init.d/xray restart >/dev/null 2>&1
+			xray_start_wait
 			# The new binary must run with the config that is on the router. A crash loop here (a busy port,
 			# an option it no longer accepts) leaves the router without VPN and with a loaded control plane,
 			# so the previous binary goes back and the service is started again.
