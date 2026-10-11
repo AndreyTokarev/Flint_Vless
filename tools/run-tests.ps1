@@ -5,7 +5,7 @@
 param(
     [string]$Router = "192.168.8.1",
     [string]$User = "root",
-    [string[]]$Scenarios = @('empty', 'redeploy', 'subscription', 'own-server', 'failover', 'panel')
+    [string[]]$Scenarios = @('empty', 'redeploy', 'subscription', 'own-server', 'failover', 'panel', 'settings')
 )
 $ErrorActionPreference = "Stop"
 $root = if ($PSScriptRoot) { Split-Path $PSScriptRoot -Parent } elseif ($MyInvocation.MyCommand.Path) { Split-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) -Parent } else { (Get-Location).Path }

@@ -1,5 +1,9 @@
 # User state in /etc/xray, one name per line (file or directory): backup saves it to config/,
 # restore takes it from a backup, deploy uploads what config/ has and install.sh puts it in place.
+# This is the list of what a backup carries. What the panel's settings file carries is a different,
+# larger list — /usr/share/flint/settings-files — because it also moves the modes and intervals that
+# a backup keeps anyway. flint.env is here and not there on purpose: the PIN and the network stay
+# with the router they belong to. tests/router/settings.sh checks that the two lists stay in step.
 flint.env
 nodes.conf
 nodes-custom.conf

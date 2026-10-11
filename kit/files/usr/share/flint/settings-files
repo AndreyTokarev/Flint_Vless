@@ -1,0 +1,29 @@
+# User settings in /etc/xray, one name per line (a file or a directory): what the panel's settings
+# file carries between routers (flint-settings export/import). Read once here instead of being copied
+# into the scripts. Journal files (sub-status, sub-checked, watchdog-last) are deliberately absent:
+# they describe what happened, not what the user chose.
+#
+# flint.env is deliberately absent: it holds the PIN and the network, which do not travel to another
+# router (see state-files, where it is present for backups).
+subscriptions
+nodes.d
+nodes.conf
+nodes-custom.conf
+current-node
+routing-mode
+vpn-state
+custom-sites
+sub-interval
+watchdog
+adblock
+adblock-lists
+adblock-rules
+adblock-exclude
+adblock-interval
+dns-mode
+dns-doh
+dns-dnscrypt
+dns-udp
+dns-hosts
+direct-devices
+tgproxy

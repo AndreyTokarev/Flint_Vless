@@ -139,11 +139,10 @@ cron_apply() {
 	/etc/init.d/cron restart >/dev/null 2>&1 || true
 }
 
-lock() {
-	# Cron, the watchdog and the panel must not change the list at the same time.
-	find /tmp -maxdepth 1 -name flint-sub.lock -mmin +10 -exec rm -rf {} + 2>/dev/null
-	mkdir /tmp/flint-sub.lock 2>/dev/null || fail "$(t "Обновление уже идёт" "An update is already running")"
-	trap 'rm -rf /tmp/flint-sub.lock "$TMP"' EXIT
+# lock comes from lib.sh: the pid inside the directory tells a live lock from one left by a killed
+# process (an age-based cleanup could remove the lock of a slow but running update).
+sub_lock() {
+	lock /tmp/flint-sub.lock "$TMP"
 	rm -rf "$TMP"; mkdir -p "$TMP"
 }
 
@@ -219,7 +218,7 @@ case "$1" in
 		;;
 	add)
 		check_url "$2"
-		lock
+		sub_lock
 		id="s$(( $(subs | cut -f1 | sed 's/^s//' | grep -E '^[0-9]+$' | sort -n | tail -n1) + 1 ))"
 		fetch "$2" "$TMP/$id.tsv" || fail "$(t "Подписка не добавлена" "Subscription not added"): $(fetch_error $?)"
 		name="$(clean_name "$3")"
@@ -237,7 +236,7 @@ case "$1" in
 		[ -n "$old" ] || fail "$(t "Нет такой подписки" "No such subscription")"
 		check_url "$3" "$2"
 		name="$(clean_name "$4")"; [ -n "$name" ] || name="$(field "$2" 3)"
-		lock
+		sub_lock
 		if [ "$3" != "$old" ]; then
 			fetch "$3" "$TMP/$2.tsv" || fail "$(t "Ссылка не изменена" "Link not changed"): $(fetch_error $?)"
 		fi
@@ -251,7 +250,7 @@ case "$1" in
 	del)
 		name="$(field "$2" 3)"
 		[ -n "$(field "$2" 1)" ] || fail "$(t "Нет такой подписки" "No such subscription")"
-		lock
+		sub_lock
 		subs | awk -F '\t' -v i="$2" '$1 != i' > "$SUBS.new"
 		(umask 077; cp "$SUBS.new" "$SUBS"); rm -f "$SUBS.new"
 		prune
@@ -262,7 +261,7 @@ case "$1" in
 		;;
 	"")
 		[ -n "$(subs)" ] || fail "$(t "Подписок нет: добавьте её на вкладке «Подписки»" "No subscriptions: add one on the Subscriptions tab")"
-		lock
+		sub_lock
 		good=0; bad=""; err=""
 		while IFS="$TAB" read -r id url name; do
 			if fetch "$url" "$TMP/$id.tsv"; then

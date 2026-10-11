@@ -36,7 +36,10 @@ for host in $servers; do
 	else ips="$(nslookup "$host" 127.0.0.1 2>/dev/null | awk '/^Address/ && !/#/ {print $NF}' | grep -E '^[0-9]+(\.[0-9]+){3}$')"; fi
 	for ip in $ips; do append nat XRAY -d "$ip" -j RETURN; done
 done
-iptables -t nat -A XRAY -p tcp -j REDIRECT --to-ports 12345
+# The transparent port comes from the Xray template: it is defined in one place and the rule follows it.
+TRANSPARENT_PORT="$(sed -n 's/.*"tag": "transparent".*"port": \([0-9]*\).*/\1/p' /etc/xray/template.json 2>/dev/null | head -n1)"
+[ -n "$TRANSPARENT_PORT" ] || TRANSPARENT_PORT=12345
+iptables -t nat -A XRAY -p tcp -j REDIRECT --to-ports "$TRANSPARENT_PORT"
 
 # Only TCP goes through Xray; dropping QUIC makes browsers fall back to TCP.
 iptables -N FLINT_QUIC 2>/dev/null || iptables -F FLINT_QUIC

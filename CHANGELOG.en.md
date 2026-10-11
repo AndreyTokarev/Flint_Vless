@@ -4,6 +4,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 Versions before 1.0.0 were assigned afterwards from the commit history.
 
+## [1.12.0] — 2026-10-11
+
+### Added
+- **One list of user settings** — `/usr/share/flint/settings-files`. The list of files the settings file carries used to be written inside `flint-settings`, while a second list (`kit/state-files`) lived next to it for backups, and the two were never compared: a new state file was easy to add to one and forget in the other, and the setting silently stopped travelling. `flint-settings` reads the shared list now, and the `tests/router/settings.sh` scenario checks that both lists agree and that no file in `/etc/xray` is left out of both.
+- **Locking by a live process** (`lock` in `lib.sh`): the lock directory holds a pid. Locks used to expire by age (`find -mmin +10`), so a slow subscription update could lose its lock and a second run would start in parallel. The test scenarios use the same rule: a `/tmp/flint-test.lock` left by an interrupted run is now removed instead of blocking every check for good.
+- **The Xray transparent port is read from the template**: `firewall.user` and `install.sh` take it from `/etc/xray/template.json` instead of repeating the number. It used to be written in three places, and changing one broke traffic interception.
+
+### Changed
+- The installer waits for the previous Xray to release its ports (transparent, 1087, 1080) before applying a node: a race on a redeploy reported "Config did not come up" on a healthy router and failed the install.
+- The `/etc/xray` snapshot in test scenarios is more visible: when it is missing, the scenario says outright that the router may be left with test settings.
+
+### Fixed
+- The `failover` scenario no longer demands one exact "first" server: it checks that the fake server is gone and that the current server is in the list (with the choice by latency the order differs, and the old check failed on a healthy router).
+
 ## [1.11.0] — 2026-10-11
 
 ### Added
@@ -334,7 +348,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.8.1...v1.9.0

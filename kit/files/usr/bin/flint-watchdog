@@ -42,9 +42,8 @@ tunnel_ok && exit 0
 # The internet itself is down: switching nodes would not help.
 online || exit 0
 
-find /tmp -maxdepth 1 -name flint-watchdog.lock -mmin +30 -exec rm -rf {} + 2>/dev/null
-mkdir "$LOCK" 2>/dev/null || exit 0
-trap 'rm -rf "$LOCK"' EXIT
+# lock comes from lib.sh: the pid inside the directory says whether another check is really running.
+lock "$LOCK"
 
 cur="$(flint-node current)"
 was="$(name "$cur")"; was="${was:-$cur}"

@@ -52,6 +52,25 @@ nodes_tsv() {
 	done
 }
 host_of() { echo "$1" | sed -e 's|^[a-zA-Z]*://||' -e 's|[/:?#].*||'; }
+# lock <dir> [scratch]: one process at a time. The pid inside the directory says whether the lock is
+# alive: a lock left by a killed process is removed, a lock held by a running one is respected. Age is
+# not used: a slow subscription download can take longer than any timeout, and an age-based cleanup
+# would hand the same work to a second process.
+lock() {
+	lock_dir="$1"
+	scratch="${2:-}"
+	if ! mkdir "$lock_dir" 2>/dev/null; then
+		old="$(cat "$lock_dir/pid" 2>/dev/null)"
+		if [ -n "$old" ] && kill -0 "$old" 2>/dev/null && [ "$old" != "$$" ]; then
+			fail "$(t "Уже выполняется другим процессом ($old)" "Already running in another process ($old)")"
+		fi
+		rm -rf "$lock_dir"
+		mkdir "$lock_dir" 2>/dev/null ||
+			fail "$(t "Не удалось создать блокировку $lock_dir" "Cannot create the lock $lock_dir")"
+	fi
+	echo $$ > "$lock_dir/pid"
+	trap 'rm -rf "$lock_dir" ${scratch:+"$scratch"}' EXIT
+}
 lan_ip() { ip="$(uci -q get network.lan.ipaddr)"; echo "${ip%%/*}" | grep -E '^[0-9.]+$' || echo 192.168.8.1; }
 # mac <text>: the MAC in lower case with colons, nothing when it is not a MAC.
 mac() { echo "$1" | tr 'A-F-' 'a-f:' | grep -E '^([0-9a-f]{2}:){5}[0-9a-f]{2}$'; }

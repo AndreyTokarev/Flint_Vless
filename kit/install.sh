@@ -97,7 +97,7 @@ migrate_legacy_files
 say "files"
 mkdir -p /etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /www/flint/cgi-bin /usr/share/flint
 cp "$KIT/files/etc/xray/template.json" /etc/xray/
-cp "$KIT/files/usr/share/flint/vless.awk" "$KIT/files/usr/share/flint/lib.sh" /usr/share/flint/
+cp "$KIT/files/usr/share/flint/vless.awk" "$KIT/files/usr/share/flint/lib.sh" "$KIT/files/usr/share/flint/settings-files" /usr/share/flint/
 echo "$VERSION" > /usr/share/flint/version
 cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/flint-ui" "$KIT/files/etc/init.d/flint-doh" \
 	"$KIT/files/etc/init.d/flint-adblock" "$KIT/files/etc/init.d/flint-tgproxy" /etc/init.d/
@@ -215,6 +215,22 @@ else
 	/etc/init.d/flint-adblock disable 2>/dev/null || true
 fi
 /etc/init.d/xray enable
+# The Xray that is running holds its listen ports (the transparent one and the local HTTP/SOCKS inputs).
+# Starting a new one before they are free makes it fail with "address already in use", and the check in
+# flint-node then reports a config that "did not come up" — on a router where everything is fine. So the
+# service is stopped and the ports are waited for, then the node is applied on a clean start.
+/etc/init.d/xray stop >/dev/null 2>&1 || true
+i=0
+while [ "$i" -lt 10 ]; do
+	busy=0
+	for p in $(sed -n 's/.*"tag": "transparent".*"port": \([0-9]*\).*/\1/p' /etc/xray/template.json 2>/dev/null | head -n1) 1087 1080; do
+		netstat -lnt 2>/dev/null | grep -q ":$p " && busy=1
+	done
+	[ "$busy" = 0 ] && break
+	sleep 1
+	i=$((i + 1))
+done
+[ "$i" -gt 0 ] && say "waited $i s for the Xray ports to become free"
 # No servers yet but SUB_URL is set: fetch them now.
 [ -n "$(flint-node codes)" ] || flint-sub-update >/dev/null 2>&1 || true
 flint-node use "$DEFAULT_NODE" 2>/dev/null || flint-node apply

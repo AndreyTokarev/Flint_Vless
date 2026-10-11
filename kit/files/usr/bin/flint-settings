@@ -15,9 +15,10 @@ help() {
 }
 . /usr/share/flint/lib.sh
 . /etc/xray/flint.env 2>/dev/null || true
-ENTRIES="subscriptions nodes.d nodes.conf nodes-custom.conf current-node routing-mode vpn-state custom-sites
-sub-interval watchdog adblock adblock-lists adblock-rules adblock-exclude adblock-interval dns-mode dns-doh dns-dnscrypt dns-udp dns-hosts direct-devices
-tgproxy"
+# The list of user settings lives in one place, /usr/share/flint/settings-files, and is shared with the
+# tests that check it against the backup list (kit/state-files).
+ENTRIES="$(grep -v -E '^[[:space:]]*(#|$)' /usr/share/flint/settings-files 2>/dev/null | tr '\n' ' ')"
+[ -n "${ENTRIES% }" ] || fail "flint-settings: /usr/share/flint/settings-files is missing or empty"
 TMP=/tmp/flint-import
 PREV=/tmp/flint-settings-prev.txt
 

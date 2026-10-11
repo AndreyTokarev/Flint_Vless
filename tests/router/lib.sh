@@ -8,10 +8,22 @@ PASS=0
 FAIL=0
 
 # One scenario at a time, and only with a good snapshot: restore_state replaces /etc/xray with it.
+# The lock holds the pid of the scenario that took it: a lock left behind by a killed run (the wrapper
+# was interrupted, the router was rebooted in the middle) is removed instead of blocking every scenario
+# for good — that is exactly how a stale /tmp/flint-test.lock made whole runs report "skipped".
 save_state() {
-	mkdir "$LOCK" 2>/dev/null || { echo "  another test is running on the router ($LOCK), scenario skipped"; exit 1; }
+	if ! mkdir "$LOCK" 2>/dev/null; then
+		old="$(cat "$LOCK/pid" 2>/dev/null)"
+		if [ -n "$old" ] && [ "$old" != "$$" ] && kill -0 "$old" 2>/dev/null; then
+			echo "  another test is running on the router ($LOCK, pid $old), scenario skipped"; exit 1
+		fi
+		echo "  removing a lock left by a killed run ($LOCK${old:+, pid $old})"
+		rm -rf "$LOCK"
+		mkdir "$LOCK" 2>/dev/null || { echo "  cannot take $LOCK, scenario skipped"; exit 1; }
+	fi
+	echo $$ > "$LOCK/pid"
 	if ! { [ -s /etc/xray/flint.env ] && tar -C /etc -czf "$STATE" xray; }; then
-		rmdir "$LOCK"; echo "  cannot snapshot /etc/xray, scenario skipped"; exit 1
+		rm -rf "$LOCK"; echo "  cannot snapshot /etc/xray, scenario skipped"; exit 1
 	fi
 	keep_state
 	trap restore_state EXIT
@@ -25,8 +37,13 @@ keep_state() {
 }
 restore_state() {
 	trap - EXIT
-	if [ -s "$STATE" ]; then rm -rf /etc/xray && tar -C /etc -xzf "$STATE" && rm -f "$STATE"
-	else echo "  snapshot $STATE is gone, /etc/xray left as is"; fi
+	if [ -s "$STATE" ]; then
+		rm -rf /etc/xray && tar -C /etc -xzf "$STATE" && rm -f "$STATE"
+	else
+		# The snapshot is the only copy of the settings the router had: without it the scenario must say
+		# so loudly, because the router may be left with the test's own servers and modes.
+		echo "  !! snapshot $STATE is gone: /etc/xray left as the scenario made it (check the panel)"
+	fi
 	rmdir "$LOCK" 2>/dev/null
 	flint-sub-update interval "$(cat /etc/xray/sub-interval 2>/dev/null || echo 24h)" >/dev/null
 	flint-node apply >/dev/null 2>&1
