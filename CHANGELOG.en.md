@@ -25,6 +25,12 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 ### Note
 - **The improvement plan is closed**: all sixteen items of `docs/improvement-plan-1.10.md` are done or deliberately left with the reason written down. The tunnel DNS mode stays off and marked experimental: some servers do not answer through the tunnel, and the router then returns to the previous mode.
 
+## [Unreleased]
+
+### Changed
+- **The documentation is split into pages.** The README was a single 778-line file where installation, the panel, DNS, ad blocking, the Telegram proxy, backups, commands and troubleshooting followed one another, and reading it whole was unpleasant. The README is now a short entry point (about 140 lines): what it is, features, quick start, screenshots, the diagram and a table of links to eight pages in `docs/en/`: [Installation](docs/en/install.md), [Web panel](docs/en/panel.md), [Servers and subscriptions](docs/en/servers.md), [DNS and ad blocking](docs/en/dns-adblock.md), [Telegram proxy](docs/en/telegram-proxy.md), [Maintenance](docs/en/maintenance.md), [Troubleshooting](docs/en/troubleshooting.md) and [How it works](docs/en/internals.md). Every page has a table of contents linking to its own sections and links to its neighbours; all of them were checked by a script for missing files and anchors. The Russian documentation is split the same way (`docs/`), with no text lost.
+- "Troubleshooting" was rewritten: the symptom table is fuller (`n/a` on the Status tab, the proxy on a busy port), and there are separate sections on slow server switches caused by `TIME_WAIT`, a forgotten PIN, devices that bypass the router, and the limitations — including the note that changing VPN settings drops connections for a few seconds.
+
 ## [1.15.0] — 2026-10-11
 
 ### Fixed
