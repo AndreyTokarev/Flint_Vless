@@ -246,7 +246,12 @@ n="$(flint-node codes | wc -l)"
 panel "export=1" > /tmp/flint-test-settings.txt
 check "export downloads a settings file" grep -q '^# Flint VPN settings' /tmp/flint-test-settings.txt
 check "export has no flint.env" fails grep -q '^\[flint.env\]' /tmp/flint-test-settings.txt
+# A site added after the export must be gone after importing the file back. The delete first matters: an
+# earlier run can leave this site behind, and then the export already contains it and the check below
+# would fail on the test's own leftover rather than on the panel.
+flint-node site del zz-import-test.example >/dev/null 2>&1
 flint-node site add proxy zz-import-test.example >/dev/null 2>&1
+check "the site to be restored is in place" sh -c "flint-node site list | grep -q zz-import-test"
 curl -s -m 120 -F "file=@/tmp/flint-test-settings.txt;type=text/plain" \
 	"http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=settings&import=1" > /tmp/flint-test-page
 check "import through the panel reports success" grep -q 'Настройки загружены' /tmp/flint-test-page

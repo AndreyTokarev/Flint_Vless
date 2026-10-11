@@ -4,6 +4,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 Versions before 1.0.0 were assigned afterwards from the commit history.
 
+## [1.13.0] — 2026-10-11
+
+### Changed
+- **The web panel is split into parts.** `panel.cgi` used to be a single 763-line file mixing the markup, the handling of some thirty actions and all nine tabs. `panel.cgi` is now a 250-line entry point, next to it live `ui.sh` (markup, language switch, the PIN gate, the settings export) and one file per tab: `status.sh`, `subs.sh`, `servers.sh`, `own.sh`, `dns.sh`, `routing.sh`, `adblock.sh`, `telegram.sh`, `settings.sh`. They live in `/usr/share/flint/panel/` and are sourced rather than run: they are fragments, and the syntax check skips them. Behaviour and markup did not change: the `panel` scenario still gives 130 checks, every tab answers with 200, and the PIN gate, the PIN change, the export and the import work.
+
+### Fixed
+- **An exported settings file is accepted by the import again.** While splitting, the `Content-Type: text/plain` line ended up inside the export block, so the file began with it and `flint-settings import` refused to read it ("This is not a Flint VPN settings file"). The entry point sends the headers now, and the export sets a flag that keeps the HTML headers from following it.
+- **The panel parts no longer end the whole request**: inside the sourced files `exit 0` became `return 0`, otherwise the first return (the login form) cut the whole response short and the browser got an empty page.
+- **The `panel` scenario no longer depends on traces of an earlier run**: the test site is removed before the import check, otherwise it ended up in the exported file and the "the site is gone after the import" check failed on the test's own leftover rather than on the panel.
+- The `failover` scenario prints the state of the interception rules after a server switch, so the line shows whether the config brought the firewall rules back.
+
 ## [Unreleased]
 
 ### Added
@@ -355,7 +366,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.13.0...HEAD
+[1.13.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.9.0...v1.10.0

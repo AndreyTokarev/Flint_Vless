@@ -98,6 +98,10 @@ say "files"
 mkdir -p /etc/xray /etc/dnscrypt-proxy2 /etc/dnsmasq.d /www/flint/cgi-bin /usr/share/flint
 cp "$KIT/files/etc/xray/template.json" /etc/xray/
 cp "$KIT/files/usr/share/flint/vless.awk" "$KIT/files/usr/share/flint/lib.sh" "$KIT/files/usr/share/flint/settings-files" /usr/share/flint/
+# The panel is split: panel.cgi is the entry point, the markup helpers and one file per tab live in
+# /usr/share/flint/panel. They are shell fragments sourced by panel.cgi, not scripts.
+mkdir -p /usr/share/flint/panel
+cp "$KIT/files/usr/share/flint/panel/"*.sh /usr/share/flint/panel/
 echo "$VERSION" > /usr/share/flint/version
 cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/flint-ui" "$KIT/files/etc/init.d/flint-doh" \
 	"$KIT/files/etc/init.d/flint-adblock" "$KIT/files/etc/init.d/flint-tgproxy" /etc/init.d/

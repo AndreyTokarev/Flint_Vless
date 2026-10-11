@@ -26,7 +26,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
           # The kit is POSIX shell for busybox. The OpenWrt init scripts set procd variables (START, STOP,
-          # USE_PROCD) that shellcheck reads as unused, so warnings are reported but only errors fail the
-          # build; the patterns and exclusions follow .trunk/configs/.shellcheckrc.
+          # USE_PROCD) that shellcheck reads as unused, and the panel uses "return" at the top level of the
+          # files that panel.cgi sources (SC2109), so warnings are reported but only errors fail the build.
           find kit tests -type f \( -name '*.sh' -o -name 'flint-*' -o -name 'panel.cgi' \) -print0 |
-            xargs -0 shellcheck -s sh -S error -e SC2154,SC1090,SC1091,SC3043,SC2034,SC1094
+            xargs -0 shellcheck -s sh -S error -e SC2154,SC1090,SC1091,SC3043,SC2034,SC1094,SC2109

@@ -14,12 +14,11 @@ say() { echo "== $*"; }
 note() { echo "!! $*" >&2; fail=1; }
 
 # 1. Every script in the kit parses. sh -n is POSIX and catches what busybox catches (misspellings of
-#    keywords, unbalanced quotes), except for the busybox specifics themselves.
+#    keywords, unbalanced quotes), except for the busybox specifics themselves. The panel parts are
+#    skipped: they are fragments sourced by panel.cgi, not scripts, and inside a "case" they only parse
+#    as part of it. panel.cgi itself is checked.
 say "shell syntax"
-for f in $(find kit -type f \( -name '*.sh' -o -name 'flint-*' -o -name 'panel.cgi' -o -name 'firewall.user' -o -name '*.awk' \) | sort); do
-	case "$f" in
-		*.awk) continue ;;
-	esac
+for f in $(find kit -type f \( -name '*.sh' -o -name 'flint-*' -o -name 'panel.cgi' -o -name 'firewall.user' \) ! -path 'kit/files/usr/share/flint/panel/*' | sort); do
 	sh -n "$f" 2>/tmp/flint-check-syntax ||
 		{ note "$f does not parse:"; cat /tmp/flint-check-syntax >&2; }
 done

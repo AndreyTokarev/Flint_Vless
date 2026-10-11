@@ -2,7 +2,8 @@
 # SPDX-FileCopyrightText: 2026 Andrey Tokarev
 # SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
 # The Flint VPN panel: one CGI page per tab, Russian or English, rendered on the router.
-export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+# Shared markup is in /usr/share/flint/panel/ui.sh, each tab in its own file next to it.
+
 qs="$QUERY_STRING"
 raw() { echo "$qs" | tr '&' '\n' | sed -n "s/^$1=//p" | head -n1; }
 get() { raw "$1" | tr -cd 'A-Za-z0-9_-'; }
@@ -39,20 +40,24 @@ case "$lang" in
 esac
 export FLINT_LANG="$L"
 T() { if [ "$L" = en ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
-
 pass="$(get pass)"; tab="$(get tab)"
 if [ -n "$UI_PIN" ] && [ "$pass" = "$UI_PIN" ] && [ -n "$(get export)" ]; then
-  echo "Content-Type: text/plain; charset=utf-8"
-  echo "Content-Disposition: attachment; filename=flint-settings-$(date +%Y%m%d-%H%M).txt"
-  echo ""
+  # The settings file: its own HTTP headers, then the content. The HTML headers below do not follow it.
+  printf 'Content-Type: text/plain; charset=utf-8\nContent-Disposition: attachment; filename=flint-settings-%s.txt\n\n' "$(date +%Y%m%d-%H%M)"
   flint-settings export
-  exit 0
+  exported=1
+  return 0
 fi
 
+# Shared markup, the language switch, the login gate and the tab data.
+. /usr/share/flint/panel/ui.sh
+
+# Send the HTML headers unless the export above already answered.
+if [ -z "$exported" ]; then
 echo "Content-Type: text/html; charset=utf-8"
 [ "$lang" = "$L" ] && echo "Set-Cookie: lang=$L; Path=/; Max-Age=31536000; SameSite=Lax"
 echo ""
-
+fi
 case "$tab" in status|servers|own|subs|routing|adblock|dns|telegram|settings) ;; *) tab=status ;; esac
 # Ready-made lists from AdGuard's registry of DNS blocklists: id:name.
 PRESET_URL=https://adguardteam.github.io/HostlistsRegistry/assets/filter_
@@ -100,7 +105,6 @@ $(top "" "$(langs "?")")<main>$(logo big)<div class="card login"><div class=lock
 HTML
   exit 0
 fi
-
 # The action is the first non-empty parameter from this list; every form sends exactly one of them.
 ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsmode dnsurl dnscrypt dnsstamp dnsudp dnsip hostadd hostdel directadd directdel tg tgroute tgcf tgremote tgaddr tgmask tgport tgsecret tgsecretset tgcheck tgdc tgcfd tgworker tgcftls tgpool tglog tgupdate probemode "
 a="$(echo "$qs" | tr '&' '\n' | awk -F = -v l="$ACTIONS" '$2 != "" && index(l, " " $1 " ") { print $1; exit }')"
@@ -159,7 +163,7 @@ EOF
   import)
     # The settings file comes as the "file" part of a multipart POST (the form keeps pass/tab in the URL).
     if [ "$REQUEST_METHOD" = POST ] && [ "${CONTENT_LENGTH:-0}" -gt 0 ] && [ "${CONTENT_LENGTH:-0}" -le 1048576 ]; then
-      b="--$(echo "$CONTENT_TYPE" | sed -n 's/.*boundary=//p' | tr -d '"')"
+      b="--$(printf '%s' "$CONTENT_TYPE" | sed -n 's/.*boundary=//p' | tr -d '"')"
       msg="$(head -c "$CONTENT_LENGTH" | awk -v b="$b" '
         { sub(/\r$/, "") }
         index($0, b) == 1 { if (body) exit; hdr = 0; next }
@@ -212,7 +216,6 @@ EOF
   tglog) msg="$(flint-tg log "$(get tglog)" 2>&1)" ;;
   tgupdate) msg="$(flint-tg latest 2>&1)" ;;
 esac
-
 CUR="$(flint-node current)"
 MODE="$(flint-node routing)"
 VPN="$(flint-node vpn)"
@@ -229,6 +232,7 @@ NEVER="$(T "ещё не было" "never")"
 ADD_SERVERS="<div class=cta><a class='btn on' href='?pass=$pass&amp;tab=subs'>🔗 $(T "Добавить подписку" "Add a subscription")</a><a class=btn href='?pass=$pass&amp;tab=own'>⭐ $(T "Добавить свой сервер" "Add an own server")</a></div>"
 
 top "$(logo)" "$(langs "?pass=$pass&amp;tab=$tab&amp;")<a href='?' class=logout>$(T "Выйти" "Sign out")</a>"
+
 echo "<div class=layout><nav>"
 for t in "status:🏠 $(T "Статус" "Status")" "subs:🔗 $(T "Подписки" "Subscriptions")" "servers:🌍 $(T "Серверы" "Servers")" \
   "own:⭐ $(T "Свои серверы" "Own servers")" "dns:📡 DNS" "routing:🔀 $(T "Маршрутизация" "Routing")" \
@@ -240,524 +244,14 @@ echo "</nav><div class=content>"
 [ -n "$msg" ] && echo "<div class=card><pre class=ok>$(echo "$msg" | esc)</pre></div>"
 
 case "$tab" in
-status)
-  echo "<div class=card>"
-  if [ -z "$NAMES" ]; then
-    IP="$(curl -s -m 8 https://ifconfig.me 2>/dev/null || echo n/a)"
-    echo "<b class=err>$(T "Серверов пока нет" "No servers yet")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>$(T "IP провайдера" "Provider IP"): <b>$IP</b>$ADD_SERVERS"
-  elif [ "$VPN" = off ]; then
-    IP="$(curl -s -m 8 https://ifconfig.me 2>/dev/null || echo n/a)"
-    echo "<b class=err>$(T "VPN выключен" "VPN is off")</b> — $(T "устройства ходят в интернет напрямую" "devices go online directly")<br>$(T "IP провайдера" "Provider IP"): <b>$IP</b>"
-    btn vpn on " class=on" "$(T "Включить VPN" "Turn VPN on")"
-  else
-    # The router's own traffic bypasses Xray, so a plain request shows the provider's IP; both run at once.
-    curl -s -m 8 https://ifconfig.me > /tmp/flint-ip.$$ 2>/dev/null &
-    IP="$(curl -s -m 8 -x http://127.0.0.1:1087 https://ifconfig.me 2>/dev/null || echo n/a)"
-    wait
-    DIRECT_IP="$(head -c 64 /tmp/flint-ip.$$ | esc)"; rm -f /tmp/flint-ip.$$
-    echo "VPN: <b class=ok>$(T "включён" "on")</b><br>$(T "Сервер" "Server"): <b class=ok>${CUR_NAME:-$CUR}</b>"
-    echo "<br>$(T "IP через VPN" "IP via VPN"): <b>$IP</b><br>$(T "IP провайдера (до VPN)" "Provider IP (before VPN)"): <b>${DIRECT_IP:-n/a}</b>"
-    btn vpn off " class=off" "$(T "Выключить VPN" "Turn VPN off")"
-  fi
-  echo "</div>"
-  [ "$MODE" = ru ] && geo="<b class=ok>$(T "включён" "on")</b>" || geo="<b class=err>$(T "выключен" "off")</b>"
-  total="$(echo "$NAMES" | grep -c .)"; own="$(flint-custom list | grep -c .)"
-  ndirect="$(echo "$SITES" | grep -c '^direct')"; nproxy="$(echo "$SITES" | grep -c '^proxy')"
-  CHECKED="$(flint-sub-update status | esc)"
-  WLAST="$(flint-watchdog last | esc)"
-  [ "$(flint-watchdog state)" = on ] && wds="$ON" || wds="$OFF"
-  echo "<div class=card>"
-  echo "<div class=stat><span>$(T "Гео-фильтр РФ" "Russia geo filter")</span><span>$geo</span></div>"
-  echo "<div class=stat><span>$(T "Свои сайты" "Own sites")</span><a href='?pass=$pass&amp;tab=routing'>$(T "$ndirect напрямую, $nproxy через VPN" "$ndirect direct, $nproxy via VPN")</a></div>"
-  echo "<div class=stat><span>$(T "Серверов" "Servers")</span><a href='?pass=$pass&amp;tab=servers'>$(T "$total, из них своих $own" "$total, $own of them own")</a></div>"
-  echo "<div class=stat><span>$(T "Проверка подписок" "Subscription check")</span><a href='?pass=$pass&amp;tab=subs'>${CHECKED:-$NEVER}</a></div>"
-  echo "<div class=stat><span>$(T "Автопереключение при сбое" "Failover")</span><a href='?pass=$pass&amp;tab=servers'>$wds</a></div>"
-  [ "$(flint-adblock state)" = on ] && abs="$ON" || abs="$OFF"
-  echo "<div class=stat><span>$(T "Блокировка рекламы" "Ad blocking")</span><a href='?pass=$pass&amp;tab=adblock'>$abs</a></div>"
-  echo "<div class=stat><span>DNS</span><a href='?pass=$pass&amp;tab=dns'>$(flint-dns title | esc)</a></div>"
-  [ "$(flint-tg state)" = on ] && tgs="$ON" || tgs="$OFF"
-  echo "<div class=stat><span>$(T "Прокси для Telegram" "Telegram proxy")</span><a href='?pass=$pass&amp;tab=telegram'>$tgs</a></div>"
-  [ -n "$WLAST" ] && echo "<div class=stat><span>$(T "Последний сбой" "Last failure")</span><span>$WLAST</span></div>"
-  echo "</div>"
-  ;;
-servers)
-  # grid <ip|domain> [group]: server buttons; group "-" = manual servers in nodes.conf.
-  grid() {
-    echo "$NAMES" | awk -F "$TAB" -v k="$1" -v g="$2" \
-      '$3 == k && (g == "" || $4 == g) { print $1 "\t" $2 }' |
-    while IFS="$TAB" read -r code name; do
-      on=""; [ "$code" = "$CUR" ] && on=" on"
-      echo "<form method=get>$(hidden)<input type=hidden name=node value='$code'><button class='$on'>$name</button></form>"
-    done
-  }
-  card() { [ -n "$2" ] && echo "<div class=card><h2>$1</h2><div class=grid>$2</div></div>"; }
-  SERVERS="$(T "Серверы" "Servers")"
-  [ -n "$NAMES" ] || echo "<div class=card><h2>$SERVERS</h2>$(T "Серверов пока нет: устройства ходят в интернет напрямую." "No servers yet: devices go online directly.")$ADD_SERVERS</div>"
-  if [ "$(echo "$SUBLIST" | grep -c .)" -gt 1 ]; then
-    echo "$SUBLIST" | while IFS="$TAB" read -r id sname host st info; do card "$sname" "$(grid domain "$id")"; done
-  elif [ -n "$SUBLIST" ]; then
-    card "$SERVERS" "$(grid domain "$(echo "$SUBLIST" | cut -f1)")"
-  fi
-  [ -n "$SUBLIST" ] && manual="$(T "Заданные вручную" "Manual")" || manual="$SERVERS"
-  card "$manual" "$(grid domain "-")"
-  card "$(T "Свои серверы" "Own servers")" "$(grid domain own)"
-  WL="$(grid ip)"
-  if [ -n "$WL" ]; then
-    open=""; echo "$NAMES" | awk -F "$TAB" -v c="$CUR" '$1 == c && $3 == "ip" { f = 1 } END { exit !f }' && open=" open"
-    echo "<details class=card$open><summary><b>$(T "Белые списки" "White lists")</b> <small>— $(T "серверы по IP-адресу, для сетей, где открыт только белый список" "servers by IP address, for networks where only a white list is open")</small></summary>"
-    echo "<div class=grid style='margin-top:10px'>$WL</div></details>"
-  fi
-  echo "<div class=card><h2>$(T "Автопереключение при сбое" "Failover")</h2>"
-  if [ "$(flint-watchdog state)" = on ]; then
-    echo "$ON — $(T "каждые 2 минуты роутер проверяет VPN. Если сервер не отвечает, а интернет есть, он обновляет подписку и при необходимости переходит на первый рабочий сервер." \
-      "every 2 minutes the router checks the VPN. If the server does not respond while the internet works, it refreshes the subscription and, if needed, switches to the first working server.")"
-    btn wd off "" "$(T "Выключить автопереключение" "Turn failover off")"
-  else
-    echo "$OFF — $(T "при сбое сервера интернет пропадёт, пока не выберете другой сервер вручную." "if the server fails, the internet stays down until you pick another server manually.")"
-    btn wd on " class=on" "$(T "Включить автопереключение" "Turn failover on")"
-  fi
-  WLAST="$(flint-watchdog last | esc)"
-  echo "<small>$(T "Последнее срабатывание" "Last triggered"): ${WLAST:-$NEVER}</small>"
-  # Which server to switch to: the first in the list or the one that answers soonest.
-  if [ "$(flint-node probe-mode)" = fastest ]; then
-    echo "<p>$(T "Замена при сбое" "Replacement on failure"): <b class=ok>$(T "самый быстрый" "the fastest")</b> — $(
-      T "роутер проверяет задержку до серверов и переходит на тот, что отвечает быстрее всех." \
-        "the router measures the time to each server and switches to the one that answers soonest.")</p>"
-    btn probemode first "" "$(T "Переключаться на первый из списка" "Switch to the first in the list")"
-  else
-    echo "<p>$(T "Замена при сбое" "Replacement on failure"): <b>$(T "первый в списке" "the first in the list")</b></p>"
-    btn probemode fastest " class=on" "$(T "Переключаться на самый быстрый" "Switch to the fastest")"
-  fi
-  echo "</div>"
-  ;;
-own)
-  if [ -n "$form" ]; then
-    [ "$form" = new ] && title="$(T "Новый сервер" "New server")" || title="$(T "Изменить сервер" "Edit server")"
-    echo "<div class=card><h2>$title</h2><small>$(T "Поддерживаются VLESS + REALITY поверх TCP (xtls-rprx-vision) или gRPC." "Supported: VLESS + REALITY over TCP (xtls-rprx-vision) or gRPC.")</small>"
-    echo "<form method=get>$(hidden)<input type=hidden name=save value='$form'>"
-    field "$(T "Название" "Name")" n "$f_name" " maxlength=60"
-    field "$(T "Адрес сервера" "Server address")" h "$f_addr" " required"
-    field "$(T "Порт" "Port")" p "$f_port" " required inputmode=numeric"
-    field "UUID" u "$f_uuid" " required"
-    field "SNI (serverName)" s "$f_sni" " required"
-    field "Public key (pbk)" k "$f_pbk" " required"
-    field "Short ID (sid)" i "$f_sid" ""
-    [ "$f_net" = grpc ] && g_sel=" selected" || g_sel=""
-    echo "<label>$(T "Транспорт" "Transport")<select name=t style='width:100%;margin-top:4px'><option value=tcp>TCP (xtls-rprx-vision)</option><option value=grpc$g_sel>gRPC</option></select></label>"
-    field "gRPC serviceName ($(T "только для gRPC" "gRPC only"))" g "$f_svc" ""
-    echo "<button class=on style='margin-top:12px'>$(T "Сохранить" "Save")</button></form>"
-    echo "<form method=get class=act>$(hidden)<button>$(T "Отмена" "Cancel")</button></form></div>"
-  fi
-  echo "<div class=card><h2>$(T "Свои серверы" "Own servers")</h2><small>$(T "Не из подписки: автообновление их не трогает. Выбираются на вкладке «Серверы»." "Not from the subscription: auto-update leaves them alone. Pick them on the Servers tab.")</small>"
-  OWN="$(flint-custom list | esc)"
-  [ -n "$OWN" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
-  DEL="$(T "Удалить" "Delete")"; EDIT="$(T "Изменить" "Edit")"
-  echo "$OWN" | while IFS="$TAB" read -r code name; do
-    [ -n "$code" ] || continue
-    echo "<div class=item><span>$name</span>"
-    echo "<form method=get>$(hidden)<input type=hidden name=edit value='$code'><button>$EDIT</button></form>"
-    echo "<form method=get>$(hidden)<input type=hidden name=ndel value='$code'><button title='$DEL'>✕</button></form></div>"
-  done
-  echo "</div><div class=card><h2>$(T "Добавить" "Add")</h2>"
-  echo "<form method=get class=row>$(hidden)<input type=text name=link placeholder='vless://...' required><button>$(T "Добавить по ссылке" "Add by link")</button></form>"
-  if [ -n "$NAMES" ]; then
-    echo "<form method=get class=row>$(hidden)<select name=copy>"
-    echo "$NAMES" | while IFS="$TAB" read -r code name kind group; do [ -n "$code" ] && echo "<option value='$code'>$name</option>"; done
-    echo "</select><button>$(T "Скопировать и изменить" "Copy and edit")</button></form>"
-  fi
-  btn newnode 1 "" "$(T "Ввести вручную" "Enter manually")"
-  echo "</div>"
-  ;;
-subs)
-  if [ -n "$subedit" ]; then
-    IFS="$TAB" read -r s_id s_name s_host s_st s_info <<EOF
-$(flint-sub-update list | awk -F "$TAB" -v i="$subedit" '$1 == i')
-EOF
-    if [ -n "$s_id" ]; then
-      s_url="$(flint-sub-update url "$s_id")"
-      # After a failed save keep what was typed.
-      [ -n "$subsave" ] && { s_url="$(param subu)"; s_name="$(param subn)"; }
-      echo "<div class=card><h2>$(T "Изменить подписку" "Edit subscription")</h2>"
-      echo "<form method=get>$(hidden)<input type=hidden name=subsave value='$s_id'>"
-      field "$(T "Ссылка" "Link")" subu "$s_url" " required"
-      field "$(T "Название" "Name")" subn "$s_name" " maxlength=60"
-      echo "<button class=on style='margin-top:12px'>$(T "Сохранить" "Save")</button></form>"
-      echo "<form method=get class=act>$(hidden)<button>$(T "Отмена" "Cancel")</button></form></div>"
-    fi
-  fi
-  DEL="$(T "Удалить" "Delete")"; EDIT="$(T "Изменить" "Edit")"
-  ASK="$(T "Удалить подписку и её серверы?" "Delete the subscription and its servers?")"
-  echo "<div class=card><h2>$(T "Подписки" "Subscriptions")</h2><small>$(T "Ссылки на подписки любых VPN-провайдеров в формате v2rayN / Happ / Hiddify: список vless://, обычный или в base64. Серверы всех подписок появятся на вкладке «Серверы»." \
-    "Subscription links from any VPN providers in the v2rayN / Happ / Hiddify format: a list of vless:// links, plain or base64. Servers from all subscriptions appear on the Servers tab.")</small>"
-  [ -n "$SUBLIST" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
-  echo "$SUBLIST" | while IFS="$TAB" read -r id sname host st info; do
-    [ -n "$id" ] || continue
-    [ "$st" = - ] && st="$(T "ещё не обновлялась" "not updated yet")"
-    [ "$info" = - ] && info="" || info="<br><small>$info</small>"
-    echo "<div class=item><span>$sname<br><small>$host · $st</small>$info</span>"
-    echo "<form method=get>$(hidden)<input type=hidden name=subedit value='$id'><button>$EDIT</button></form>"
-    echo "<form method=get onsubmit=\"return confirm('$ASK')\">$(hidden)<input type=hidden name=subdel value='$id'><button title='$DEL'>✕</button></form></div>"
-  done
-  echo "<form method=get class=row>$(hidden)<input type=text name=subadd placeholder='https://provider.example/sub/...' required>"
-  echo "<input type=text name=subname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить подписку" "Add subscription")</button></form></div>"
-  echo "<div class=card><h2>$(T "Обновление" "Updates")</h2>"
-  btn sub 1 "" "$(T "Обновить все подписки сейчас" "Update all subscriptions now")"
-  CHECKED="$(flint-sub-update status | esc)"
-  echo "<small>$(T "Последняя проверка" "Last check"): ${CHECKED:-$NEVER}</small>"
-  SI="$(flint-sub-update interval)"
-  echo "<form method=get class=row>$(hidden)<select name=subint>"
-  for v in "off:$(T "Автообновление выключено" "Auto-update off")" "30m:$(T "Обновлять каждые 30 минут" "Update every 30 minutes")" \
-    "1h:$(T "Обновлять каждый час" "Update every hour")" "3h:$(T "Обновлять каждые 3 часа" "Update every 3 hours")" \
-    "6h:$(T "Обновлять каждые 6 часов" "Update every 6 hours")" "12h:$(T "Обновлять каждые 12 часов" "Update every 12 hours")" \
-    "24h:$(T "Обновлять раз в сутки" "Update once a day")"; do
-    sel=""; [ "${v%%:*}" = "$SI" ] && sel=" selected"
-    echo "<option value='${v%%:*}'$sel>${v#*:}</option>"
-  done
-  echo "</select><button>$(T "Сохранить" "Save")</button></form>"
-  echo "<small>$(T "Если подписка не скачалась, её серверы остаются прежними." "If a subscription fails to download, its servers stay as they were.")</small></div>"
-  ;;
-routing)
-  echo "<div class=card><h2>$(T "Гео-фильтр РФ" "Russia geo filter")</h2>"
-  if [ "$MODE" = ru ]; then
-    echo "<b class=ok>$(T "включён" "on")</b> — $(T "российские сайты и IP идут напрямую, остальное через VPN" "Russian sites and IPs go direct, everything else via VPN")"
-    btn routing global "" "$(T "Выключить гео-фильтр (всё через VPN)" "Turn the geo filter off (everything via VPN)")"
-  else
-    echo "<b class=err>$(T "выключен" "off")</b> — $(T "весь трафик идёт через VPN" "all traffic goes via VPN")"
-    btn routing ru " class=on" "$(T "Включить гео-фильтр" "Turn the geo filter on")"
-  fi
-  echo "</div>"
-  DEL="$(T "Удалить" "Delete")"
-  echo "<div class=card><h2>$(T "Устройства без VPN" "Devices without VPN")</h2><small>$(T "Эти устройства всегда ходят в интернет напрямую, мимо VPN, — например, телевизор или консоль. Устройство узнаётся по MAC-адресу. Уже открытые соединения доработают как были, новые пойдут напрямую." \
-    "These devices always go online directly, bypassing the VPN — a TV or a game console, for example. A device is recognised by its MAC address. Open connections finish as they were; new ones go direct.")</small>"
-  echo "<br><small>$(T "Telegram на таких устройствах может работать через прокси роутера — вкладка «Telegram»." "Telegram on these devices can work through the router's proxy — the Telegram tab.")</small>"
-  DIRECTS="$(flint-node direct | esc)"
-  [ -n "$DIRECTS" ] || echo "<p><small>$(T "нет — все устройства через VPN" "none — every device goes via VPN")</small></p>"
-  echo "$DIRECTS" | while IFS="$TAB" read -r m name; do
-    [ -n "$m" ] || continue
-    echo "<form method=get class=item>$(hidden)<input type=hidden name=directdel value='$m'><span>$name<br><small>$m</small></span><button title='$DEL'>✕</button></form>"
-  done
-  DEVS="$(flint-adblock devices | esc | awk -F '\t' -v ex="$(flint-node direct | cut -f1 | tr '\n' ' ')" 'index(" " ex, " " $1 " ") == 0')"
-  if [ -n "$DEVS" ]; then
-    echo "<form method=get class=row>$(hidden)<select name=directadd>"
-    echo "$DEVS" | while IFS="$TAB" read -r m ip name; do echo "<option value='$m'>${name:-$m} — $ip</option>"; done
-    echo "</select><button>$(T "Без VPN" "Without VPN")</button></form>"
-  fi
-  echo "<form method=get class=row>$(hidden)<input type=text name=directadd placeholder='aa:bb:cc:dd:ee:ff' required>"
-  echo "<input type=text name=directname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить по MAC" "Add by MAC")</button></form></div>"
-  echo "<div class=card><h2>$(T "Свои сайты" "Own sites")</h2><small>$(T "Важнее гео-фильтра. Домен действует вместе с поддоменами; можно вставить ссылку, IP или подсеть." "Override the geo filter. A domain covers its subdomains; you can paste a link, an IP or a subnet.")</small>"
-  echo "<form method=get class=row>$(hidden)<input type=text name=add placeholder='example.com' required>"
-  echo "<select name=to><option value=direct>$(T "Напрямую" "Direct")</option><option value=proxy>$(T "Через VPN" "Via VPN")</option></select><button>$(T "Добавить" "Add")</button></form>"
-  for list in direct proxy; do
-    [ "$list" = direct ] && title="$(T "Всегда напрямую (мимо VPN)" "Always direct (bypass VPN)")" || title="$(T "Всегда через VPN" "Always via VPN")"
-    items="$(echo "$SITES" | awk -F "$TAB" -v l="$list" '$1 == l {print $2}')"
-    echo "<p><b>$title</b></p>"
-    [ -n "$items" ] || echo "<small>$(T "пусто" "empty")</small>"
-    for s in $items; do
-      echo "<form method=get class=item>$(hidden)<input type=hidden name=del value='$s'><span>$s</span><button title='$DEL'>✕</button></form>"
-    done
-  done
-  echo "</div>"
-  ;;
-adblock)
-  echo "<div class=card><h2>$(T "Блокировка рекламы" "Ad blocking")</h2>"
-  if [ "$(flint-adblock state)" = on ]; then
-    echo "$ON — $(T "реклама, трекеры и вредоносные сайты блокируются для всех устройств сети на уровне DNS." \
-      "ads, trackers and malicious sites are blocked for every device on the network at the DNS level.")"
-    set -- $(flint-adblock stats 2>/dev/null)
-    if [ -n "$1" ]; then
-      pct="$(awk -v q="$1" -v b="$2" 'BEGIN { printf "%.1f", q ? b * 100 / q : 0 }')"
-      echo "<br><small>$(T "За сутки: запросов $1, заблокировано $2 ($pct%)" "Last 24 hours: $1 queries, $2 blocked ($pct%)")</small>"
-    fi
-    echo "<br><small>$(T "Реклама, которая идёт с того же сайта, что и контент (ВКонтакте, YouTube), останется — её убирает только блокировщик в браузере, например uBlock Origin. Устройства с «Частным DNS», DoH в браузере или VPN-клиентом (Happ и т. п.) обходят блокировку." \
-      "Ads served from the same site as the content (VK, YouTube) stay — only a browser blocker such as uBlock Origin removes them. Devices with Private DNS, browser DoH or a VPN client (Happ, etc.) bypass the blocking.")</small>"
-    btn adblock off "" "$(T "Выключить блокировку" "Turn ad blocking off")"
-  else
-    echo "$OFF — $(T "устройства видят рекламу как обычно." "devices see ads as usual.")"
-    btn adblock on " class=on" "$(T "Включить блокировку" "Turn ad blocking on")"
-  fi
-  [ -x /usr/bin/AdGuardHome ] || echo "<p class=err>$(T "AdGuard Home не найден: нужна прошивка GL 4.x или пакет adguardhome." "AdGuard Home not found: needs GL firmware 4.x or the adguardhome package.")</p>"
-  echo "</div>"
-  DEL="$(T "Удалить" "Delete")"
-  echo "<div class=card><h2>$(T "Устройства без блокировки" "Devices without blocking")</h2><small>$(T "Блокировка действует на все устройства сети, кроме этих. Устройство узнаётся по MAC-адресу." \
-    "Blocking applies to every device on the network except these. A device is recognised by its MAC address.")</small>"
-  EXCL="$(flint-adblock exclude | esc)"
-  [ -n "$EXCL" ] || echo "<p><small>$(T "нет — блокировка для всех" "none — blocking for everyone")</small></p>"
-  echo "$EXCL" | while IFS="$TAB" read -r m name; do
-    [ -n "$m" ] || continue
-    echo "<div class=item><span>$name<br><small>$m</small></span>"
-    echo "<form method=get>$(hidden)<input type=hidden name=abxdel value='$m'><button title='$DEL'>✕</button></form></div>"
-  done
-  DEVS="$(flint-adblock devices | esc | awk -F '\t' -v ex="$(flint-adblock exclude | cut -f1 | tr '\n' ' ')" 'index(" " ex, " " $1 " ") == 0')"
-  if [ -n "$DEVS" ]; then
-    echo "<form method=get class=row>$(hidden)<select name=abxadd>"
-    echo "$DEVS" | while IFS="$TAB" read -r m ip name; do echo "<option value='$m'>${name:-$m} — $ip</option>"; done
-    echo "</select><button>$(T "Не блокировать" "Don't block")</button></form>"
-  fi
-  echo "<form method=get class=row>$(hidden)<input type=text name=abxadd placeholder='aa:bb:cc:dd:ee:ff' required>"
-  echo "<input type=text name=abxname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить по MAC" "Add by MAC")</button></form></div>"
-  # Allow rules for a plain domain (@@||domain^) are shown here; every other rule under "Own rules".
-  RULES="$(flint-adblock rule | esc)"
-  ALLOWED="$(echo "$RULES" | grep -E '^@@\|\|[a-z0-9.-]+\^$')"
-  echo "<div class=card><h2>$(T "Сайты без блокировки" "Sites without blocking")</h2><small>$(T "Сайт и его поддомены не блокируются — если блокировка сломала нужный сайт. Рекламу с чужих доменов на этом сайте блокировка всё равно убирает: по DNS-запросу не видно, с какой страницы он пришёл." \
-    "The site and its subdomains are not blocked — for when blocking breaks a site you need. Ads from other domains on that site are still blocked: a DNS query does not tell which page it came from.")</small>"
-  [ -n "$ALLOWED" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
-  echo "$ALLOWED" | while IFS= read -r r; do
-    [ -n "$r" ] || continue
-    d="${r#@@||}"
-    echo "<form method=get class=item>$(hidden)<input type=hidden name=abrdel value='$r'><span>${d%^}</span><button title='$DEL'>✕</button></form>"
-  done
-  echo "<form method=get class=row>$(hidden)<input type=text name=aballow placeholder='example.com' required><button>$(T "Не блокировать" "Don't block")</button></form>"
-  BLOCKED="$(flint-adblock blocked 2>/dev/null | esc)"
-  if [ -n "$BLOCKED" ]; then
-    echo "<details style='margin-top:10px'><summary><b>$(T "Недавно заблокировано" "Recently blocked")</b> <small>— $(T "если сайт перестал работать, разрешите домен, который ему нужен" "if a site stopped working, allow the domain it needs")</small></summary>"
-    echo "$BLOCKED" | while IFS="$TAB" read -r d dev; do
-      echo "<form method=get class=item>$(hidden)<input type=hidden name=aballow value='$d'><span>$d<br><small>$dev</small></span><button>$(T "Разрешить" "Allow")</button></form>"
-    done
-    echo "</details>"
-  fi
-  echo "</div>"
-  echo "<div class=card><h2>$(T "Списки фильтров" "Filter lists")</h2><small>$(T "Списки в формате AdGuard или hosts. AdGuard DNS filter — DNS-версия фильтров платного AdGuard: Base, Tracking Protection, Mobile Ads, российские рекламные серверы, EasyList, EasyPrivacy." \
-    "Lists in AdGuard or hosts format. AdGuard DNS filter is the DNS version of the filters in paid AdGuard: Base, Tracking Protection, Mobile Ads, Russian ad servers, EasyList, EasyPrivacy.")</small>"
-  LISTS="$(flint-adblock list | esc)"
-  [ -n "$LISTS" ] || echo "<p><small>$(T "пусто" "empty")</small></p>"
-  echo "$LISTS" | while IFS="$TAB" read -r url name rc up; do
-    [ -n "$url" ] || continue
-    info="$url"; [ "$rc" != - ] && info="$(T "правил" "rules"): $rc · $(T "обновлён" "updated") $up"
-    echo "<div class=item><span>$name<br><small>$info</small></span>"
-    echo "<form method=get>$(hidden)<input type=hidden name=abldel value='$url'><button title='$DEL'>✕</button></form></div>"
-  done
-  OPTS="$(echo "$PRESETS" | while IFS=: read -r id pname; do
-    echo "$LISTS" | cut -f1 | grep -qxF "$PRESET_URL$id.txt" || echo "<option value=$id>$pname</option>"
-  done)"
-  [ -n "$OPTS" ] && echo "<form method=get class=row>$(hidden)<select name=abpreset>$OPTS</select><button>$(T "Добавить" "Add")</button></form>"
-  echo "<form method=get class=row>$(hidden)<input type=text name=ablist placeholder='https://example.com/list.txt' required>"
-  echo "<input type=text name=abname placeholder='$(T "Название (необязательно)" "Name (optional)")'><button>$(T "Добавить по ссылке" "Add by link")</button></form></div>"
-  echo "<div class=card><h2>$(T "Обновление списков" "List updates")</h2>"
-  btn abref 1 "" "$(T "Обновить списки сейчас" "Update the lists now")"
-  AI="$(flint-adblock interval)"
-  echo "<form method=get class=row>$(hidden)<select name=abint>"
-  for v in "off:$(T "Автообновление выключено" "Auto-update off")" "1:$(T "Обновлять каждый час" "Update every hour")" \
-    "12:$(T "Обновлять каждые 12 часов" "Update every 12 hours")" "24:$(T "Обновлять раз в сутки" "Update once a day")" \
-    "72:$(T "Обновлять раз в 3 дня" "Update every 3 days")" "168:$(T "Обновлять раз в неделю" "Update once a week")"; do
-    sel=""; [ "${v%%:*}" = "$AI" ] && sel=" selected"
-    echo "<option value='${v%%:*}'$sel>${v#*:}</option>"
-  done
-  echo "</select><button>$(T "Сохранить" "Save")</button></form></div>"
-  echo "<div class=card><h2>$(T "Свои правила" "Own rules")</h2><small>$(T "Домен или ссылка блокируются вместе с поддоменами. «Разрешить» с шаблоном — исключение сложнее, чем сайт целиком. Шаблоны пишутся в синтаксисе AdGuard: ||ads.*^, /regex/, @@||site.ru^." \
-    "A domain or link is blocked with its subdomains. \"Allow\" with a pattern makes a narrower exception than a whole site. Patterns use AdGuard syntax: ||ads.*^, /regex/, @@||site.com^.")</small>"
-  echo "<form method=get class=row>$(hidden)<input type=text name=abrule placeholder='ads.example.com' required>"
-  echo "<select name=abto><option value=block>$(T "Блокировать" "Block")</option><option value=allow>$(T "Разрешить" "Allow")</option></select><button>$(T "Добавить" "Add")</button></form>"
-  OWNRULES="$(echo "$RULES" | grep -vE '^@@\|\|[a-z0-9.-]+\^$')"
-  [ -n "$OWNRULES" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
-  echo "$OWNRULES" | while IFS= read -r r; do
-    [ -n "$r" ] || continue
-    echo "<form method=get class=item>$(hidden)<input type=hidden name=abrdel value='$r'><span>$r</span><button title='$DEL'>✕</button></form>"
-  done
-  echo "</div>"
-  ;;
-dns)
-  DOH="$(flint-dns doh)"; DNSCRYPT="$(flint-dns dnscrypt)"; UDP="$(flint-dns udp)"; DNSMODE="$(flint-dns mode)"
-  # dns_card <mode> <title> <hint>: a card per mode; the one in use is marked.
-  dns_card() {
-    used=""; [ "$1" = "$DNSMODE" ] && used=" <small class=ok>· $(T "используется" "in use")</small>"
-    echo "<div class=card><h2>$2$used</h2><small>$3</small>"
-  }
-  # dns_select <action> doh|dnscrypt|udp <current> <button>: a preset list that sends <action>=<name>.
-  dns_select() {
-    echo "<form method=get class=row>$(hidden)<select name=$1>"
-    flint-dns presets "$2" | esc | while IFS="$TAB" read -r n title; do
-      sel=""; [ "$n" = "$3" ] && sel=" selected"
-      case "$2:$n" in doh:cloudflare|dnscrypt:adguard-unfiltered) title="$title — $(T "по умолчанию" "default")" ;; esac
-      echo "<option value=$n$sel>$title</option>"
-    done
-    echo "</select><button>$4</button></form>"
-  }
-  echo "<div class=card><h2>DNS</h2><small>$(T "Через этот DNS роутер узнаёт адреса сайтов для всех устройств сети. Если выбранный сервер не ответит, останется прежний." \
-    "The router looks up site addresses for every device on the network through this DNS. If the chosen server does not answer, the previous one stays.")</small>"
-  echo "<p>$(T "Сейчас" "Now"): <b class=ok>$(flint-dns title | esc)</b></p></div>"
-  dns_card doh "$(T "DoH — зашифрованный" "DoH — encrypted")" "$(T "Запросы идут по HTTPS: провайдер не видит, какие сайты открываются, и не может подменить ответ." \
-    "Queries go over HTTPS: the provider does not see which sites are opened and cannot spoof the answers.")"
-  dns_select dns doh "$DOH" "$(T "Использовать DoH" "Use DoH")"
-  url=""; case "$DOH" in https://*) url="$(echo "$DOH" | esc)" ;; esac
-  echo "<form method=get class=row>$(hidden)<input type=text name=dnsurl value='$url' placeholder='https://dns.example.com/dns-query' required>"
-  echo "<button>$(T "Свой DoH-сервер" "Own DoH server")</button></form></div>"
-  dns_card dnscrypt "$(T "DNSCrypt — зашифрованный" "DNSCrypt — encrypted")" "$(T "Отдельный протокол шифрования DNS. Пригодится, если DoH в сети блокируют. Свой сервер задаётся stamp'ом sdns:// из списка dnscrypt.info." \
-    "A separate DNS encryption protocol. Useful when DoH is blocked on the network. An own server is set with an sdns:// stamp from the dnscrypt.info list.")"
-  dns_select dnscrypt dnscrypt "$DNSCRYPT" "$(T "Использовать DNSCrypt" "Use DNSCrypt")"
-  stamps=""; case "$DNSCRYPT" in sdns://*) stamps="$(echo "$DNSCRYPT" | esc)" ;; esac
-  echo "<form method=get class=row>$(hidden)<input type=text name=dnsstamp value='$stamps' placeholder='sdns://...' required>"
-  echo "<button>$(T "Свой DNSCrypt-сервер" "Own DNSCrypt server")</button></form></div>"
-  dns_card udp "$(T "Обычный DNS (UDP)" "Plain DNS (UDP)")" "$(T "Запросы идут открыто: провайдер их видит и может подменить. Пригодится, если шифрованный DNS в вашей сети не работает или нужен DNS основного роутера." \
-    "Queries go in the clear: the provider sees them and can spoof them. Useful when encrypted DNS does not work on your network or you need the main router's DNS.")"
-  dns_select dnsudp udp "$UDP" "$(T "Использовать UDP" "Use UDP")"
-  ips=""; echo "$UDP" | grep -qE '^[0-9. ]+$' && ips="$UDP"
-  echo "<form method=get class=row>$(hidden)<input type=text name=dnsip value='$ips' placeholder='1.1.1.1 8.8.8.8' required>"
-  echo "<button>$(T "Свои DNS-серверы" "Own DNS servers")</button></form></div>"
-  # Tunnel: the router's own DNS goes through the VPN, so blocking the resolver by name does not matter.
-  dns_card tunnel "$(T "Через туннель" "Through the tunnel")" "$(T "Запросы уходят через VPN на выбранный сервер, поэтому провайдер не видит ни имена, ни сам резолвер. Помогает, когда DoH и DNSCrypt перестали отвечать из-за блокировки по имени сервера. Не работает при выключенном VPN или без серверов." \
-    "Queries go through the VPN to the server, so the provider sees neither the names nor the resolver. Helps when DoH and DNSCrypt stopped answering because the resolver name is blocked. Needs a working VPN: it does not work with the VPN off.")"
-  if [ "$DNSMODE" = tunnel ]; then
-    echo "$ON — $(T "адреса сайтов роутер узнаёт через VPN, переключение обратно вернёт прежний режим." "the router looks up site addresses through the VPN; switching back restores the previous mode.")"
-    btn dnsmode doh "" "$(T "Вернуться к DoH" "Back to DoH")"
-  else
-    btn dnsmode tunnel " class=on" "$(T "Использовать туннель" "Use the tunnel")"
-  fi
-  echo "</div>"
-  DEL="$(T "Удалить" "Delete")"
-  echo "<div class=card><h2>$(T "Локальные имена" "Local names")</h2><small>$(T "Устройство в сети открывается по имени вместо IP: nas01, nas01.lan и nas01.local. Имя с точкой, например nas.home, работает как есть. Повторное добавление имени меняет его адрес. Закрепите за устройством постоянный IP на роутере, который его выдаёт, иначе имя может перестать работать после перезагрузки." \
-    "A device on the network opens by name instead of IP: nas01, nas01.lan and nas01.local. A name with a dot, such as nas.home, works as is. Adding a name again changes its address. Give the device a fixed IP on the router that hands it out, or the name may stop working after a reboot.")</small>"
-  HOSTS="$(flint-dns hosts | esc)"
-  [ -n "$HOSTS" ] || echo "<p><small>$(T "пока нет" "none yet")</small></p>"
-  echo "$HOSTS" | while IFS="$TAB" read -r n ip; do
-    [ -n "$n" ] || continue
-    echo "<form method=get class=item>$(hidden)<input type=hidden name=hostdel value='$n'><span>$n<br><small>$ip</small></span><button title='$DEL'>✕</button></form>"
-  done
-  echo "<form method=get class=row>$(hidden)<input type=text name=hostadd placeholder='nas01' required>"
-  echo "<input type=text name=hostip placeholder='192.168.0.145' list=lan-devices required><button>$(T "Добавить имя" "Add a name")</button></form>"
-  echo "<datalist id=lan-devices>"
-  flint-adblock devices | esc | while IFS="$TAB" read -r m ip name; do echo "<option value='$ip'>${name:-$m}</option>"; done
-  echo "</datalist></div>"
-  ;;
-telegram)
-  TGPORT="$(flint-tg port)"; TGROUTE="$(flint-tg route)"; TGMASK="$(flint-tg mask | esc)"
-  # tg_link <lan|upstream|remote> <title>: a button that adds the proxy to Telegram, and its fields for manual entry.
-  tg_link() {
-    l="$(flint-tg link "$1" 2>/dev/null)" || return 0
-    q="${l#tg://proxy?}"
-    srv="$(echo "$q" | sed 's/^server=\([^&]*\).*/\1/' | esc)"; sec="$(echo "$q" | sed 's/.*secret=//' | esc)"
-    q="$(echo "$q" | esc)"
-    echo "<p><b>$2</b></p><div class=cta><a class='btn on' href='tg://proxy?$q'>✈️ $(T "Добавить в Telegram" "Add to Telegram")</a><a class=btn href='https://t.me/proxy?$q'>t.me</a></div>"
-    echo "<div class=stat><span>$(T "Сервер" "Server")</span><code>$srv</code></div><div class=stat><span>$(T "Порт" "Port")</span><code>$TGPORT</code></div>"
-    echo "<div class=stat><span>$(T "Секрет" "Secret")</span><code>$sec</code></div>"
-  }
-  echo "<div class=card><h2>$(T "Прокси для Telegram" "Telegram proxy")</h2>"
-  if [ "$(flint-tg state)" = on ]; then
-    if pidof tg-ws-proxy >/dev/null; then
-      echo "$ON — $(T "приложения Telegram в сети могут работать через роутер без VPN. Роутер ходит к Telegram через его веб-серверы, как Telegram Web." \
-        "Telegram apps on the network can work through the router without a VPN. The router reaches Telegram through its web servers, like Telegram Web.")"
-    else
-      echo "<b class=err>$(T "включён, но не запущен" "on, but not running")</b> — $(T "выключите и включите прокси снова." "turn the proxy off and on again.")"
-    fi
-    echo "<br><small>$(T "Откройте кнопку на устройстве с Telegram — он предложит подключить прокси. Или вручную: Настройки → Данные и память → Прокси → Добавить прокси → MTProto." \
-      "Tap the button on a device with Telegram and it offers to connect the proxy. Or by hand: Settings → Data and Storage → Proxy → Add Proxy → MTProto.")</small>"
-    tg_link lan "$(T "В сети Flint" "On the Flint network")"
-    [ -n "$UPSTREAM_NET" ] && tg_link upstream "$(T "В сети основного роутера" "On the main router's network")"
-    [ "$(flint-tg remote)" = on ] && tg_link remote "$(T "Из интернета" "From the internet")"
-    btn tgcheck 1 "" "$(T "Проверить прокси" "Check the proxy")"
-    btn tg off " class=off" "$(T "Выключить прокси" "Turn the proxy off")"
-  else
-    echo "$OFF — $(T "прокси на роутере для приложений Telegram. Он работает без VPN: на устройствах без VPN, при выключенном VPN и не тратя трафик подписки. Подключается в самом Telegram, ссылки появятся здесь." \
-      "a proxy on the router for Telegram apps. It works without the VPN: on devices without VPN, while the VPN is off, and without spending subscription traffic. It is set up in Telegram itself; the links appear here.")"
-    btn tg on " class=on" "$(T "Включить прокси" "Turn the proxy on")"
-  fi
-  echo "</div>"
-  echo "<div class=card><h2>$(T "Путь к Telegram" "Route to Telegram")</h2><small>$(T "Напрямую — мимо VPN: работает при выключенном VPN и не тратит трафик подписки. Через VPN — если провайдер мешает и веб-серверам Telegram; пока VPN выключен, прокси всё равно ходит напрямую." \
-    "Directly — bypassing the VPN: works while the VPN is off and spends no subscription traffic. Via VPN — when the provider blocks Telegram's web servers too; while the VPN is off, the proxy still goes directly.")</small>"
-  echo "<form method=get class=row>$(hidden)<select name=tgroute>"
-  for v in "direct:$(T "Напрямую, мимо VPN" "Directly, bypassing the VPN")" "vpn:$(T "Через VPN" "Via VPN")"; do
-    sel=""; [ "${v%%:*}" = "$TGROUTE" ] && sel=" selected"
-    echo "<option value='${v%%:*}'$sel>${v#*:}</option>"
-  done
-  echo "</select><button>$(T "Сохранить" "Save")</button></form>"
-  if [ "$TGROUTE" = vpn ] && { [ "$VPN" = off ] || [ -z "$NAMES" ]; }; then
-    echo "<p><small class=err>$(T "Сейчас VPN не работает — прокси ходит напрямую." "The VPN is not working now — the proxy goes directly.")</small></p>"
-  fi
-  TGDC="$(flint-tg dc | sed 's/,/, /g' | esc)"
-  echo "<p>$(T "Адреса дата-центров" "Data center addresses"): <b>${TGDC:-$(T "по умолчанию" "default")}</b><br><small>$(T "Номер дата-центра и IP, к которому прокси подключается напрямую; через запятую. Пусто — встроенные адреса прокси (DC2 и DC4)." \
-    "Data center number and the IP the proxy connects to directly, comma-separated. Empty: the proxy's built-in addresses (DC2 and DC4).")</small></p>"
-  echo "<form method=get class=row>$(hidden)<input type=text name=tgdc value='$TGDC' placeholder='2:149.154.167.220, 4:149.154.167.220' required><button>$(T "Сохранить" "Save")</button></form>"
-  [ -n "$TGDC" ] && btn tgdc default "" "$(T "Адреса по умолчанию" "Default addresses")"
-  echo "</div>"
-  echo "<div class=card><h2>Cloudflare</h2><small>$(T "Резервный путь, если серверы Telegram недоступны напрямую: прокси идёт к ним через Cloudflare. Порядок: свои домены, общий список, затем Worker." \
-    "A fallback when Telegram's servers are not reachable directly: the proxy goes to them through Cloudflare. Order: own domains, the shared list, then the Worker.")</small>"
-  if [ "$(flint-tg cf)" = on ]; then
-    echo "<p>$(T "Общий список доменов" "Shared domain list"): $ON<br><small>$(T "Домены проекта tg-ws-proxy, свой Cloudflare не нужен." "The tg-ws-proxy project's domains, no Cloudflare account needed.")</small></p>"
-    btn tgcf off "" "$(T "Выключить общий список" "Turn the shared list off")"
-  else
-    echo "<p>$(T "Общий список доменов" "Shared domain list"): $OFF</p>"
-    btn tgcf on " class=on" "$(T "Включить общий список" "Turn the shared list on")"
-  fi
-  TGCFD="$(flint-tg cfdomain | sed 's/,/, /g' | esc)"; TGWK="$(flint-tg worker | sed 's/,/, /g' | esc)"
-  echo "<p>$(T "Свои домены (CF-прокси)" "Own domains (CF proxy)")<br><small>$(T "Домены на вашем Cloudflare, настроенные по инструкции tg-ws-proxy; через запятую." "Domains on your Cloudflare set up per the tg-ws-proxy guide, comma-separated.")</small></p>"
-  echo "<form method=get class=row>$(hidden)<input type=text name=tgcfd value='$TGCFD' placeholder='proxy.example.com' required><button>$(T "Сохранить" "Save")</button></form>"
-  [ -n "$TGCFD" ] && btn tgcfd off "" "$(T "Убрать свои домены" "Remove own domains")"
-  echo "<p>Cloudflare Worker<br><small>$(T "Домены вашего Worker (*.workers.dev) — последний резерв, TCP-туннель до Telegram; через запятую." "Your Worker domains (*.workers.dev): the last fallback, a TCP tunnel to Telegram; comma-separated.")</small></p>"
-  echo "<form method=get class=row>$(hidden)<input type=text name=tgworker value='$TGWK' placeholder='name.user.workers.dev' required><button>$(T "Сохранить" "Save")</button></form>"
-  [ -n "$TGWK" ] && btn tgworker off "" "$(T "Убрать Worker" "Remove the Worker")"
-  if [ "$(flint-tg cftls)" = on ]; then
-    echo "<p>$(T "TLS к Cloudflare" "TLS to Cloudflare"): $ON</p>"
-    btn tgcftls off "" "$(T "Выключить TLS (ws:// на порт 80)" "Turn TLS off (ws:// on port 80)")"
-  else
-    echo "<p>$(T "TLS к Cloudflare" "TLS to Cloudflare"): $OFF<br><small>$(T "Соединения с Cloudflare идут без шифрования на порт 80 — только если провайдер режет TLS к Cloudflare. Переписка всё равно зашифрована Telegram." \
-      "Connections to Cloudflare go unencrypted to port 80 — only for providers that cut TLS to Cloudflare. Messages stay encrypted by Telegram.")</small></p>"
-    btn tgcftls on " class=on" "$(T "Включить TLS" "Turn TLS on")"
-  fi
-  echo "</div>"
-  echo "<div class=card><h2>$(T "Доступ из интернета" "Access from the internet")</h2>"
-  if [ "$(flint-tg remote)" = on ]; then
-    UPIP="$(flint-tg link upstream 2>/dev/null | sed -n 's/.*server=\([^&]*\).*/\1/p' | esc)"
-    echo "$ON — $(T "Telegram на телефоне работает через домашний роутер и вне дома." "Telegram on a phone works through the home router away from home too.")"
-    echo "<br><small>$(T "На основном роутере пробросьте TCP-порт $TGPORT на ${UPIP:-Flint} — адрес Flint в его сети. Ссылка «Из интернета» на первой карточке использует внешний IP провайдера; если он «серый» (CGNAT), доступ извне не заработает, а если меняется — укажите свой домен (DDNS). Для мобильного интернета включите маскировку ниже." \
-      "On the main router forward TCP port $TGPORT to ${UPIP:-Flint}, Flint's address on its network. The \"From the internet\" link on the first card uses the provider's public IP; behind CGNAT access from outside will not work, and if the IP changes, set your own domain (DDNS). For mobile internet turn on masking below.")</small>"
-    echo "<form method=get class=row>$(hidden)<input type=text name=tgaddr value='$(flint-tg addr | esc)' placeholder='$(T "IP провайдера (авто) или свой домен" "Provider IP (auto) or own domain")' required>"
-    echo "<button>$(T "Сохранить адрес" "Save the address")</button></form>"
-    [ -n "$(flint-tg addr)" ] && btn tgaddr auto "" "$(T "Адрес — IP провайдера" "Address — the provider IP")"
-    btn tgremote off " class=off" "$(T "Закрыть доступ из интернета" "Close access from the internet")"
-  else
-    echo "$OFF — $(T "прокси доступен только в сети Flint и в сети основного роутера." "the proxy is reachable only on the Flint network and the main router's network.")"
-    echo "<br><small>$(T "Включите, чтобы Telegram на телефоне работал через домашний роутер и вне дома. Понадобится проброс порта на основном роутере и «белый» IP у провайдера." \
-      "Turn on to use the home router for Telegram on a phone away from home. Needs a port forward on the main router and a public IP from the provider.")</small>"
-    btn tgremote on "" "$(T "Открыть доступ из интернета" "Open access from the internet")"
-  fi
-  echo "</div>"
-  echo "<div class=card><h2>$(T "Настройки прокси" "Proxy settings")</h2>"
-  echo "<form method=get class=row>$(hidden)<input type=text name=tgport value='$TGPORT' inputmode=numeric required><button>$(T "Сменить порт" "Change the port")</button></form>"
-  echo "<p><small>$(T "Маскировка (FakeTLS): соединение с прокси выглядит как HTTPS к указанному сайту. Нужна, когда прокси открыт из интернета. После смены порта, маскировки или секрета добавьте прокси в Telegram заново." \
-    "Masking (FakeTLS): connections to the proxy look like HTTPS to the given site. Needed when the proxy is open to the internet. After changing the port, masking or secret, add the proxy to Telegram again.")</small></p>"
-  echo "<form method=get class=row>$(hidden)<input type=text name=tgmask value='$TGMASK' placeholder='www.google.com' required><button>$(T "Маскировать" "Mask")</button></form>"
-  [ -n "$TGMASK" ] && btn tgmask off "" "$(T "Выключить маскировку" "Turn masking off")"
-  echo "<p><small>$(T "Свой секрет: 32 шестнадцатеричных символа, например из другого прокси, чтобы не менять его в Telegram (подойдёт и секрет с dd или ee в начале)." \
-    "Own secret: 32 hex characters, e.g. from another proxy so Telegram keeps it (a secret with dd or ee in front works too).")</small></p>"
-  echo "<form method=get class=row>$(hidden)<input type=text name=tgsecretset placeholder='$(T "32 hex-символа" "32 hex characters")' autocomplete=off required><button>$(T "Сохранить секрет" "Save the secret")</button></form>"
-  ASK="$(T "Сделать новый секрет? Старые ссылки перестанут работать." "Make a new secret? The old links stop working.")"
-  echo "<form method=get class=act onsubmit=\"return confirm('$ASK')\">$(hidden)<input type=hidden name=tgsecret value=1><button>$(T "Новый секрет" "New secret")</button></form></div>"
-  TGLOG="$(flint-tg log)"
-  echo "<div class=card><h2>$(T "Журнал и обслуживание" "Log and maintenance")</h2>"
-  echo "<p>$(T "Пул WebSocket-соединений" "WebSocket pool"): <b>$(flint-tg pool)</b><br><small>$(T "Сколько соединений с каждым дата-центром держать открытыми заранее (по умолчанию 4). Больше — быстрее открываются чаты и загрузки, но больше соединений." \
-    "How many connections to each data center to keep open in advance (4 by default). More: chats and downloads open faster, at the cost of more connections.")</small></p>"
-  echo "<form method=get class=row>$(hidden)<input type=text name=tgpool value='$(flint-tg pool)' inputmode=numeric required><button>$(T "Сохранить" "Save")</button></form>"
-  echo "<p>$(T "Журнал прокси" "Proxy log")<br><small>$(T "Пишется в системный журнал роутера (в памяти, флеш не изнашивается): logread -e tg-ws-proxy. Подробный — для поиска проблем." \
-    "Goes to the router's system log (in RAM, no flash wear): logread -e tg-ws-proxy. Verbose is for troubleshooting.")</small></p>"
-  echo "<form method=get class=row>$(hidden)<select name=tglog>"
-  for v in "off:$(T "Выключен" "Off")" "on:$(T "Включён" "On")" "verbose:$(T "Подробный" "Verbose")"; do
-    sel=""; [ "${v%%:*}" = "$TGLOG" ] && sel=" selected"
-    echo "<option value='${v%%:*}'$sel>${v#*:}</option>"
-  done
-  echo "</select><button>$(T "Сохранить" "Save")</button></form>"
-  if [ "$TGLOG" != off ]; then
-    LOGS="$(flint-tg logs 30 | sed -E 's/^[A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]+ ([0-9:]+) [0-9]{4} [a-z]+\.[a-z]+ [^:]+: /\1 /' | esc)"
-    echo "<p><small>$(T "Последние строки" "Last lines"):</small></p><pre class=log>${LOGS:-$(T "пока пусто" "empty so far")}</pre>"
-  fi
-  echo "<p>$(T "Версия прокси" "Proxy version"): <b>$(flint-tg version | esc)</b></p>"
-  btn tgupdate 1 "" "$(T "Проверить обновления" "Check for updates")"
-  echo "</div>"
-  ;;
-settings)
-  echo "<div class=card><h2>$(T "Сменить PIN" "Change PIN")</h2><small>$(T "Только буквы и цифры. PIN хранится в flint.env на роутере; при деплое с компьютера снова подставится PIN из config/flint.env." \
-    "Letters and digits only. The PIN is stored in flint.env on the router; a deploy from the computer will put back the PIN from config/flint.env.")</small>"
-  echo "<form method=get class=row>$(hidden)<input type=hidden name=pin value=1>"
-  echo "<input type=password name=pinold placeholder='$(T "текущий PIN" "current PIN")' autocomplete=current-password required>"
-  echo "<input type=password name=pinnew placeholder='$(T "новый PIN" "new PIN")' autocomplete=new-password required>"
-  echo "<input type=password name=pinok placeholder='$(T "ещё раз новый PIN" "new PIN again")' autocomplete=new-password required>"
-  echo "<button>$(T "Сменить PIN" "Change PIN")</button></form></div>"
-  echo "<div class=card><h2>$(T "Экспорт настроек" "Export settings")</h2><small>$(T "Подписки, свои и ручные серверы, сайты, устройства без VPN, блокировка рекламы, DNS-сервер, локальные имена, прокси для Telegram, режимы и интервалы. PIN и сеть (flint.env) в файл не входят, поэтому его можно загрузить и на другой Flint. В файле ссылки подписок, данные серверов и секрет прокси — храните его как пароль." \
-    "Subscriptions, own and manual servers, sites, devices without VPN, ad blocking, DNS server, local names, Telegram proxy, modes and intervals. The PIN and network (flint.env) are not included, so the file also fits another Flint. It holds subscription links, server data and the proxy secret — keep it like a password.")</small>"
-  echo "<div class=cta><a class='btn on' href='?pass=$pass&amp;export=1'>⬇️ $(T "Скачать файл настроек" "Download the settings file")</a></div></div>"
-  ASK="$(T "Заменить текущие настройки настройками из файла?" "Replace the current settings with the ones from the file?")"
-  echo "<div class=card><h2>$(T "Импорт настроек" "Import settings")</h2><small>$(T "Все настройки из списка выше заменятся настройками из файла и сразу применятся. Прежние сохраняются на роутере в /tmp/flint-settings-prev.txt до перезагрузки." \
-    "All the settings listed above are replaced with the ones from the file and applied at once. The previous ones stay on the router in /tmp/flint-settings-prev.txt until a reboot.")</small>"
-  echo "<form method=post enctype=multipart/form-data action='?pass=$pass&amp;tab=settings&amp;import=1' class=row onsubmit=\"return confirm('$ASK')\">"
-  echo "<input type=file name=file accept='.txt,text/plain' required><button>$(T "Загрузить настройки" "Upload settings")</button></form></div>"
-  ;;
+  status) . /usr/share/flint/panel/status.sh ;;
+  servers) . /usr/share/flint/panel/servers.sh ;;
+  own) . /usr/share/flint/panel/own.sh ;;
+  subs) . /usr/share/flint/panel/subs.sh ;;
+  routing) . /usr/share/flint/panel/routing.sh ;;
+  adblock) . /usr/share/flint/panel/adblock.sh ;;
+  dns) . /usr/share/flint/panel/dns.sh ;;
+  telegram) . /usr/share/flint/panel/telegram.sh ;;
+  settings) . /usr/share/flint/panel/settings.sh ;;
 esac
 echo "</div></div>$FOOTER$VER</body></html>"

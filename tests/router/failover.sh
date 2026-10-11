@@ -19,6 +19,9 @@ check "update reports the switch" grep -q 'больше нет\|is gone' /tmp/fl
 echo "  (current после обновления: [$(flint-node current)], zzgone в списке: $(flint-node codes | grep -c zzgone))"
 check "the fake server is no longer current" fails current_is zzgone
 check "the router is on a server from the list" sh -c 'flint-node codes | grep -qx "$(flint-node current)"'
+# Diagnostics for the two rules that a switch has to bring back: without them the LAN falls back to
+# going online directly even though the tunnel is up.
+echo "  (firewall: redirect=$(iptables -t nat -S PREROUTING 2>/dev/null | grep -c -- '--to-ports') quic=$(iptables -S FORWARD 2>/dev/null | grep -c 'FLINT_QUIC') xray=$(pidof xray | wc -w))"
 vpn_mode
 rm -f /tmp/flint-test-case.log
 finish

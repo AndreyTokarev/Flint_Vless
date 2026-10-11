@@ -653,6 +653,33 @@ If you run it on another device, please report the result in [Issues](https://gi
 - The panel listens on port 81. The firewall lets in only the Flint LAN and the main router's network (`UPSTREAM_NET`); any other traffic to the router from outside is closed.
 - The Telegram proxy (port 1443) is likewise reachable only from those two networks; the port is opened to the internet only while "Access from the internet" is on. Without the secret the proxy cannot be used.
 
+## Project layout
+
+| Path | What it is |
+|---|---|
+| `kit/install.sh` | the installer, runs on the router; safe to run again |
+| `kit/state-files` | the list of user files in `/etc/xray` that a backup, a restore and a deploy carry |
+| `kit/files/usr/share/flint/settings-files` | the list of files the panel's settings file carries; the `settings` scenario checks it against `state-files` |
+| `kit/files/usr/share/flint/panel/` | the parts of the web panel: `ui.sh` (markup, language switch, the PIN gate, the settings export) and one file per tab (`status.sh`, `subs.sh`, `servers.sh`, `own.sh`, `dns.sh`, `routing.sh`, `adblock.sh`, `telegram.sh`, `settings.sh`). `panel.cgi` sources them; they are fragments rather than scripts, so the syntax check skips them |
+| `tests/` | the scenarios that run on a router (`empty`, `redeploy`, `subscription`, `own-server`, `failover`, `panel`, `settings`, `adblock`): `tests/run.ps1` / `tests/run.sh` uploads the working copy and the install and the scenarios run in the background on the router, so a dropped connection does not interrupt them. Running the same code with the same scenarios again does not start over but reads the run that is already going or finished (`-Force` / `--force` starts it again). A scenario keeps a copy of `/etc/xray` and puts it back at the end (most of them delete every server on the way); only one runs at a time |
+| `kit/migrate.sh` | migrates from older kit versions; `install.sh` calls it |
+| `kit/files/` | the files for the router: the Xray template, init scripts, firewall, the `flint-*` commands (server, subscriptions, own servers, failover, ad blocking, DNS, Telegram, settings), the web panel |
+| `kit/bin/` | the Telegram proxy archive (tg-ws-proxy-rs for aarch64) and its licence: a deploy installs the proxy from here instead of downloading it |
+| `config/*.example` | sample settings |
+| `config/flint.env`, `config/nodes.conf` | **your** settings and secrets — never in git |
+| `config/nodes-custom.conf`, `config/custom-sites`, `config/subscriptions`, `config/adblock-*` | own servers, sites, subscriptions, ad blocking lists and rules from the panel; they appear after a backup |
+| `deploy.ps1` / `deploy.sh` | upload the kit to the router and install it |
+| `backup.ps1` / `backup.sh` | back the router up into `backup/` |
+| `restore.ps1` / `restore.sh` | restore from `backup/` |
+| `uninstall.ps1` / `uninstall.sh` | remove Flint VPN from the router (on the router use `kit/uninstall.sh`) |
+| `fix.ps1` | one command that repairs: check the router, put DNS back on a working mode, deploy the kit and run the tests |
+| `tools/run-tests.ps1` | upload the kit and run every scenario on the router, showing the output (independent of the working directory and of temporary variables) |
+| `tools/check-secrets.sh` | refuse to commit a subscription link, the panel PIN, a Wi-Fi password or a private key |
+| `tools/check-scripts.sh` | the checks that need no router: shell syntax, CRLF, the Xray template |
+| `kit/VERSION` | the version number |
+| `CHANGELOG.md` | the change history |
+| `docs/` | screenshots and the logo; finished audits and plans are in `docs/archive/` |
+
 ## Versions
 
 Versions follow [SemVer](https://semver.org): `1.2.3` is major (incompatible changes), minor (new features), patch (fixes). The number is in `kit/VERSION`, every version has a `vX.Y.Z` git tag, and the changes are in [CHANGELOG.en.md](CHANGELOG.en.md).
