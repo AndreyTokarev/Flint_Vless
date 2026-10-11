@@ -10,3 +10,7 @@ config/adblock-exclude
 backup/
 __pycache__/
 tmp
+# artefacts of the router test run (tools/run-tests.ps1)
+tools/flint-run.tar
+tools/last-run.log
+tools/.stage/
