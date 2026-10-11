@@ -27,3 +27,4 @@ dns-udp
 dns-hosts
 direct-devices
 tgproxy
+xray-opts

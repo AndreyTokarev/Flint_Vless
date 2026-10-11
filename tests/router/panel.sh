@@ -254,6 +254,8 @@ flint-node site add proxy zz-import-test.example >/dev/null 2>&1
 check "the site to be restored is in place" sh -c "flint-node site list | grep -q zz-import-test"
 curl -s -m 120 -F "file=@/tmp/flint-test-settings.txt;type=text/plain" \
 	"http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=settings&import=1" > /tmp/flint-test-page
+# The message the panel printed, so a failure shows what the import said instead of only that it failed.
+echo "  (import: $(grep -oE '<pre class=ok>[^<]*' /tmp/flint-test-page | head -n 1 | cut -c1-120))"
 check "import through the panel reports success" grep -q 'Настройки загружены' /tmp/flint-test-page
 check "import brings back the exported sites" fails sh -c "flint-node site list | grep -q zz-import-test"
 check "import keeps the servers" [ "$(flint-node codes | wc -l)" = "$n" ]

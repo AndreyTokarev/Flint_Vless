@@ -298,6 +298,8 @@ You can have several subscriptions from different providers: add, change and del
 
 **Which server to take on failure.** By default the first one in the list. On the Servers tab you can turn on "Switch to the fastest": the router then measures the connection time to every server (`flint-node probe`, using the same SNI as the working tunnel) and on failure walks the list from the quickest to the slowest, stopping at the first one that really answers. The measurement only changes the order — servers that did not answer are still tried, last. The rule is also a command: `flint-node probe-mode fastest` or `first`.
 
+**TLS fingerprint and connection multiplexing (mux).** Both are on the Servers tab and in the commands `flint-node fingerprint` and `flint-node mux`. The fingerprint (`firefox` by default) is the browser the router claims to be to the REALITY server: if your provider has started to be picky about the connection, trying `chrome`, `safari` or `edge` is worth it. Mux is **off by default** and is worth turning on deliberately: according to the [Xray documentation](https://xtls.github.io/config/outbound.html) it reduces the number of handshakes but does not raise the speed, and usually lowers it for video and downloads. When you turn it on, the router first checks that traffic goes through the tunnel and turns mux back off by itself if a page does not load. Both live in `/etc/xray/xray-opts` and travel with a backup and with the settings file.
+
 ## Ad blocking
 
 Works at the DNS level for every device on the network, with no apps on the devices. It uses AdGuard Home, which already ships with GL.iNet firmware 4.x (`/usr/bin/AdGuardHome`): the project runs its own instance on `127.0.0.1:5054`. The stock AdGuard Home from the GL admin panel stays off — don't turn both on.
@@ -564,6 +566,10 @@ flint-node direct add aa:bb:cc:dd:ee:ff TV   # a device without VPN; list: flint
 flint-node probe                 # connection time to every server: code, ms ("-" for no answer)
 flint-node fastest               # the quickest server among those that answered
 flint-node probe-mode fastest    # on failure switch to the quickest (first — to the first in the list)
+flint-node opts                  # the TLS fingerprint and multiplexing: what is on now
+flint-node fingerprint chrome    # the browser to claim to the server: chrome, firefox, safari, edge, random
+flint-node mux on                # multiplexing (off by default; it turns itself off if the tunnel stops working)
+flint-node mux off               # turn multiplexing off
 flint-custom link 'vless://...'  # add an own server by link
 flint-sub-update                 # update all subscriptions
 flint-sub-update list            # subscriptions: id, name, host, last update, expiry and traffic

@@ -49,3 +49,24 @@
     btn probemode fastest " class=on" "$(T "Переключаться на самый быстрый" "Switch to the fastest")"
   fi
   echo "</div>"
+  # Xray options: what REALITY looks like from outside, and multiplexing. Both are advanced and both are
+  # documented as such: a fingerprint has to match the browser it claims to be, and multiplexing trades
+  # speed for fewer handshakes — the note under it says so before the button is pressed.
+  OPT_FP="$(flint-node opts | sed -n 's/^fingerprint=//p')"
+  OPT_MUX="$(flint-node opts | sed -n 's/^mux=//p')"
+  echo "<div class=card>"
+  echo "<p>$(T "Отпечаток TLS" "TLS fingerprint"): <b>${OPT_FP:-firefox}</b> — $(T "каким браузером роутер представляется серверу. Меняйте, только если знаете, что у вашего провайдера этот отпечаток работает: chrome, firefox, safari, edge или случайный." "the browser the router claims to be to the server. Change it only if you know this fingerprint works with your provider: chrome, firefox, safari, edge or random.")</p>"
+  echo "<form method=get class=row>$(hidden)<select name=fingerprint>"
+  for fp in chrome firefox safari edge random; do
+    sel=""; [ "$fp" = "$OPT_FP" ] && sel=" selected"
+    echo "<option value=$fp$sel>$fp</option>"
+  done
+  echo "</select><button>$(T "Сохранить отпечаток" "Save the fingerprint")</button></form>"
+  if [ "$OPT_MUX" = on ]; then
+    echo "<p>$(T "Объединение соединений (mux)" "Connection multiplexing (mux)"): <b class=ok>$(T "включено" "on")</b> — $(T "меньше рукопожатий, но видео и скачивание обычно медленнее. Если трафик через туннель перестанет идти, роутер выключит mux сам." "fewer handshakes, but video and downloads are usually slower. If traffic stops going through the tunnel, the router turns mux off by itself.")</p>"
+    btn mux off "" "$(T "Выключить mux" "Turn mux off")"
+  else
+    echo "<p>$(T "Объединение соединений (mux)" "Connection multiplexing (mux)"): <b>$OFF</b> — $(T "уменьшает число рукопожатий, но не повышает скорость: при просмотре видео и скачивании обычно становится медленнее. Оставьте выключенным, если не уверены." "it reduces the number of handshakes but does not raise the speed: video and downloads usually get slower. Leave it off unless you are sure.")</p>"
+    btn mux on "" "$(T "Включить mux (проверю туннель и выключу, если сломается)" "Turn mux on (I will test the tunnel and turn it off if it breaks)")"
+  fi
+  echo "</div>"

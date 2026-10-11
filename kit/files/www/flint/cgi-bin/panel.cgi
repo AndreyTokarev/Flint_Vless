@@ -106,7 +106,7 @@ HTML
   exit 0
 fi
 # The action is the first non-empty parameter from this list; every form sends exactly one of them.
-ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsmode dnsurl dnscrypt dnsstamp dnsudp dnsip hostadd hostdel directadd directdel tg tgroute tgcf tgremote tgaddr tgmask tgport tgsecret tgsecretset tgcheck tgdc tgcfd tgworker tgcftls tgpool tglog tgupdate probemode "
+ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsmode dnsurl dnscrypt dnsstamp dnsudp dnsip hostadd hostdel directadd directdel tg tgroute tgcf tgremote tgaddr tgmask tgport tgsecret tgsecretset tgcheck tgdc tgcfd tgworker tgcftls tgpool tglog tgupdate probemode fingerprint mux "
 a="$(echo "$qs" | tr '&' '\n' | awk -F = -v l="$ACTIONS" '$2 != "" && index(l, " " $1 " ") { print $1; exit }')"
 msg=""; form=""; subedit=""; subsave=""
 case "$a" in
@@ -215,6 +215,10 @@ EOF
   tgpool) msg="$(flint-tg pool "$(get tgpool)" 2>&1)" ;;
   tglog) msg="$(flint-tg log "$(get tglog)" 2>&1)" ;;
   tgupdate) msg="$(flint-tg latest 2>&1)" ;;
+  # Xray options: the fingerprint REALITY shows, and multiplexing (off by default, it slows video down and
+  # with some servers stops the tunnel; flint-node turns it back off by itself when that happens).
+  fingerprint) case "$(get fingerprint)" in chrome|firefox|safari|edge|random) msg="$(flint-node fingerprint "$(get fingerprint)" 2>&1)" ;; esac ;;
+  mux) case "$(get mux)" in on|off) msg="$(flint-node mux "$(get mux)" 2>&1)" ;; esac ;;
 esac
 CUR="$(flint-node current)"
 MODE="$(flint-node routing)"

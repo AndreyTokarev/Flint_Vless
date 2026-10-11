@@ -34,10 +34,16 @@ subs() {
 	[ -f "$SUBS" ] && grep -v '^$' "$SUBS"
 }
 field() { subs | awk -F '\t' -v i="$1" -v f="$2" '$1 == i { print $f; exit }'; }
-set_sub() {
-	subs | awk -F '\t' -v OFS='\t' -v i="$1" -v u="$2" -v n="$3" '$1 == i { $2 = u; $3 = n } { print }' > "$SUBS.new"
-	(umask 077; cp "$SUBS.new" "$SUBS"); rm -f "$SUBS.new"
+# subs_edit <awk program>: rewrite the subscription list. The file holds the links, so every write goes
+# through here and keeps the 0600 permissions the list is created with.
+subs_edit() {
+	subs | awk -F '\t' -v OFS='\t' "$@" > "$SUBS.new"
+	(umask 077; cp "$SUBS.new" "$SUBS")
+	rm -f "$SUBS.new"
 }
+add_sub() { (umask 077; printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$SUBS"); }
+set_sub() { subs_edit -v i="$1" -v u="$2" -v n="$3" '$1 == i { $2 = u; $3 = n } { print }'; }
+drop_sub() { subs_edit -v i="$1" '$1 != i'; }
 clean_name() { printf '%s' "$1" | tr -d '\000-\037' | cut -c1-60; }
 check_url() {
 	echo "$1" | grep -qE '^https?://[^[:space:]]+$' || fail "$(t "Это не ссылка на подписку: $1" "Not a subscription link: $1")"
@@ -52,6 +58,32 @@ set_sub_status() {
 	{ [ -f "$SUB_STATUS" ] && awk -F '\t' -v i="$1" '$1 != i' "$SUB_STATUS"
 	  [ -n "$2" ] && printf '%s\t%s — %s\t%s\n' "$1" "$(date '+%Y-%m-%d %H:%M')" "$2" "$info"; } > "$SUB_STATUS.new"
 	mv "$SUB_STATUS.new" "$SUB_STATUS"
+}
+# fetch_one <id> <url> <context>: download into $TMP/<id>.tsv, remember the count, or fail with the reason.
+# $n holds the number of servers afterwards.
+fetch_one() {
+	fetch "$2" "$TMP/$1.tsv" || fail "$3: $(fetch_error $?)"
+	n="$(count "$TMP/$1.tsv")"
+	set_sub_status "$1" "$(t "серверов: $n" "servers: $n")" "$(cat "$TMP/$1.tsv.info")"
+}
+# write_changed <message>: build from the fetched files, write the ones that changed into nodes.d/ and
+# apply the config. The message is the last check line the panel shows; it may contain %s, which becomes
+# the number of servers. Formatting happens inside this function on purpose: build sets $total while it
+# runs, and a message built by the caller would read it before that (an empty count — how this started).
+write_changed() {
+	msg="$1"
+	build
+	if same; then
+		last_check "$(printf "$msg" "$total")"
+		return 0
+	fi
+	mkdir -p "$NODES_D"
+	while read -r id; do
+		(umask 077; cp "$TMP/$id.conf" "$NODES_D/$id.conf")
+	done < "$TMP/changed"
+	prune
+	flint-node apply
+	last_check "$(printf "$msg" "$total")"
 }
 # "used total expire" -> "until 2026-11-03 · 12.3 / 100 GB"
 info_text() {
@@ -111,15 +143,6 @@ prune() {
 		id="${f##*/}"
 		[ -n "$(field "${id%.conf}" 1)" ] || rm -f "$f"
 	done
-}
-# Install changed $TMP/<id>.conf into nodes.d/ and re-apply.
-commit() {
-	mkdir -p "$NODES_D"
-	while read -r id; do
-		(umask 077; cp "$TMP/$id.conf" "$NODES_D/$id.conf")
-	done < "$TMP/changed"
-	prune
-	flint-node apply
 }
 
 cron_apply() {
@@ -220,16 +243,13 @@ case "$1" in
 		check_url "$2"
 		sub_lock
 		id="s$(( $(subs | cut -f1 | sed 's/^s//' | grep -E '^[0-9]+$' | sort -n | tail -n1) + 1 ))"
-		fetch "$2" "$TMP/$id.tsv" || fail "$(t "Подписка не добавлена" "Subscription not added"): $(fetch_error $?)"
+		fetch_one "$id" "$2" "$(t "Подписка не добавлена" "Subscription not added")"
 		name="$(clean_name "$3")"
 		[ -n "$name" ] || name="$(cat "$TMP/$id.tsv.title")"
 		[ -n "$name" ] || name="$(host_of "$2")"
-		n="$(count "$TMP/$id.tsv")"
-		(umask 077; printf '%s\t%s\t%s\n' "$id" "$2" "$name" >> "$SUBS")
-		set_sub_status "$id" "$(t "серверов: $n" "servers: $n")" "$(cat "$TMP/$id.tsv.info")"
+		add_sub "$id" "$2" "$name"
 		cron_apply
-		last_check "$(t "подписка «$name» добавлена, серверов: $n" "subscription \"$name\" added, servers: $n")"
-		build; commit
+		write_changed "$(t "подписка «$name» добавлена, серверов: %s" "subscription \"$name\" added, servers: %s")" "$id"
 		;;
 	set)
 		old="$(field "$2" 2)"
@@ -237,22 +257,20 @@ case "$1" in
 		check_url "$3" "$2"
 		name="$(clean_name "$4")"; [ -n "$name" ] || name="$(field "$2" 3)"
 		sub_lock
-		if [ "$3" != "$old" ]; then
-			fetch "$3" "$TMP/$2.tsv" || fail "$(t "Ссылка не изменена" "Link not changed"): $(fetch_error $?)"
+		if [ "$3" = "$old" ]; then
+			set_sub "$2" "$3" "$name"
+			t "Подписка сохранена: $name" "Subscription saved: $name"
+			exit 0
 		fi
+		fetch_one "$2" "$3" "$(t "Ссылка не изменена" "Link not changed")"
 		set_sub "$2" "$3" "$name"
-		if [ "$3" = "$old" ]; then t "Подписка сохранена: $name" "Subscription saved: $name"; exit 0; fi
-		n="$(count "$TMP/$2.tsv")"
-		set_sub_status "$2" "$(t "серверов: $n" "servers: $n")" "$(cat "$TMP/$2.tsv.info")"
-		last_check "$(t "ссылка подписки «$name» изменена, серверов: $n" "subscription \"$name\" link changed, servers: $n")"
-		build; commit
+		write_changed "$(t "ссылка подписки «$name» изменена, серверов: %s" "subscription \"$name\" link changed, servers: %s")" "$2"
 		;;
 	del)
 		name="$(field "$2" 3)"
 		[ -n "$(field "$2" 1)" ] || fail "$(t "Нет такой подписки" "No such subscription")"
 		sub_lock
-		subs | awk -F '\t' -v i="$2" '$1 != i' > "$SUBS.new"
-		(umask 077; cp "$SUBS.new" "$SUBS"); rm -f "$SUBS.new"
+		drop_sub "$2"
 		prune
 		set_sub_status "$2" ""
 		cron_apply
@@ -278,11 +296,9 @@ case "$1" in
 $(subs)
 EOF
 		[ "$good" -gt 0 ] || { last_check "$(t "ошибка" "error"): $err$([ "$(subs | wc -l)" -gt 1 ] && echo " ($bad)")"; exit 1; }
-		build
 		note=""; [ -z "$bad" ] || note="; $(t "не обновились" "not updated"): $bad"
-		if same; then last_check "$(t "без изменений (серверов: $total)" "no changes ($total servers)")$note"; exit 0; fi
-		last_check "$(t "список обновлён, серверов: $total" "list updated, servers: $total")$note"
-		commit
+		# No id: build turns every fetched list into a file, and write_changed applies the whole set.
+		write_changed "$(t "список обновлён, серверов: %s" "list updated, servers: %s")$note"
 		;;
 	*)
 		help; exit 1

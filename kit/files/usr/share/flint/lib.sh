@@ -82,3 +82,22 @@ devices() {
 	} | awk -F '\t' '!seen[tolower($1)]++ { print tolower($1) "\t" $2 "\t" $3 }'
 }
 direct_devices() { [ -f "$DIRECT" ] && grep -v '^$' "$DIRECT"; }
+# port_timewait <port>: how many sockets are still in TIME_WAIT on that port. Xray's listener is bound
+# without SO_REUSEADDR, so a socket a LAN client left behind makes the next start fail with "address
+# already in use" even though nothing is listening: the restart has to wait for those to go.
+port_timewait() { netstat -tan 2>/dev/null | grep -c ":$1 .*TIME_WAIT"; }
+# port_free_wait <port> [seconds] [what]: wait for the port to be bindable again. Returns 0 when it can be
+# bound, 1 when the wait ran out (the caller decides what to do), and prints how long it waited.
+port_free_wait() {
+	port="$1"; limit="${2:-60}"; what="${3:-Xray}"
+	[ "$(port_timewait "$port")" = 0 ] && return 0
+	echo "$(t "$what: жду освобождения порта $port (сокеты прошлых подключений)" \
+		"$what: waiting for port $port to become free (sockets from earlier connections)")"
+	i=0
+	while [ "$i" -lt "$limit" ]; do
+		sleep 1
+		i=$((i + 1))
+		[ "$(port_timewait "$port")" = 0 ] && return 0
+	done
+	return 1
+}

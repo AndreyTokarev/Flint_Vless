@@ -28,7 +28,7 @@
   "outbounds": [
     { "tag": "dns-out", "protocol": "dns", "settings": { "address": "1.1.1.1", "port": 53 } },
     {
-      "tag": "proxy", "protocol": "vless",
+      "tag": "proxy", "protocol": "vless",__MUX__
       "settings": {
         "vnext": [{
           "address": "__ADDR__", "port": __PORT__,
@@ -43,7 +43,7 @@
         "grpcSettings": { "serviceName": "__GRPC_SERVICE__", "multiMode": false },
         "realitySettings": {
           "serverName": "__SNI__",
-          "fingerprint": "firefox",
+          "fingerprint": "__FINGERPRINT__",
           "publicKey": "__PBK__",
           "shortId": "__SID__"
         }

@@ -12,6 +12,9 @@
 #        flint-node probe         TCP time to every server: "code<TAB>ms", "-" when it does not answer
 #        flint-node fastest       the server that answers soonest
 #        flint-node probe-mode [fastest|first]   what to pick when the current server is gone
+#        flint-node fingerprint [chrome|firefox|safari|edge|random]   TLS fingerprint for REALITY
+#        flint-node mux [on|off] [concurrency]   multiplexing: fewer handshakes, lower speed
+#        flint-node opts          the settings above, one per line
 #        flint-node direct | direct add <mac> [name] | direct del <mac>
 #                                  LAN devices that always go online directly, bypassing Xray (firewall.user)
 #   ru     - Russian sites/IPs go direct, the rest via VPN (needs /usr/share/xray/geo*.dat)
@@ -21,10 +24,71 @@
 ENV=/etc/xray/flint.env
 TEMPLATE=/etc/xray/template.json
 CONF=/etc/xray/config.json
+# The transparent port, read from the template like firewall.user does: one place defines it.
+TRANSPARENT_PORT="$(sed -n 's/.*"tag": "transparent".*"port": \([0-9]*\).*/\1/p' "$TEMPLATE" 2>/dev/null | head -n1)"
+[ -n "$TRANSPARENT_PORT" ] || TRANSPARENT_PORT=12345
 MODE_FILE=/etc/xray/routing-mode
 VPN_FILE=/etc/xray/vpn-state
 SITES=/etc/xray/custom-sites
+OPTS=/etc/xray/xray-opts
 GEO=/usr/share/xray
+
+# The Xray options the panel can change. The defaults are what the config used before they existed: the
+# firefox fingerprint, no multiplexing. They live in one file, "key=value" per line, so a new option needs
+# no new file. Anything unreadable falls back to the default rather than reaching the template.
+xray_opts() {
+	OPT_FINGERPRINT="$(sed -n 's/^fingerprint=//p' "$OPTS" 2>/dev/null | tail -n1)"
+	OPT_MUX="$(sed -n 's/^mux=//p' "$OPTS" 2>/dev/null | tail -n1)"
+	OPT_MUX_CONCURRENCY="$(sed -n 's/^mux-concurrency=//p' "$OPTS" 2>/dev/null | tail -n1)"
+	case "$OPT_FINGERPRINT" in
+		""|*[!a-z0-9]*) OPT_FINGERPRINT=firefox ;;
+	esac
+	case "$OPT_MUX" in on) ;; *) OPT_MUX=off ;; esac
+	case "$OPT_MUX_CONCURRENCY" in
+		""|*[!0-9]*) OPT_MUX_CONCURRENCY=8 ;;
+		*) [ "$OPT_MUX_CONCURRENCY" -ge 1 ] && [ "$OPT_MUX_CONCURRENCY" -le 128 ] || OPT_MUX_CONCURRENCY=8 ;;
+	esac
+}
+set_opt() { grep -v "^$1=" "$OPTS" 2>/dev/null > "$OPTS.new"; printf '%s=%s\n' "$1" "$2" >> "$OPTS.new"; umask 077; mv "$OPTS.new" "$OPTS"; }
+# Rendering the same server again is not a switch, so the panel's option changes do not go through
+# apply(): they must not probe the servers or move the user to another one. The config still has to come
+# up, so the same check is made and a bad value is rolled back.
+# start_xray: bring the service up and return 0 only when the transparent port is really held.
+# "restart" is not used, and neither is a plain stop followed at once by a start: Xray binds without
+# SO_REUSEADDR, so a socket a LAN client left in TIME_WAIT makes the start fail with "address already in
+# use" even though nothing is listening. procd also respawns the service, which keeps starting it while the
+# port is still busy. Stopping, waiting for the port to clear (as long as it takes) and only then starting
+# is what makes a switch reliable — without it the router lost the tunnel and the switch silently did not
+# happen.
+start_xray() {
+	/etc/init.d/xray stop >/dev/null 2>&1 || true
+	port_free_wait "$TRANSPARENT_PORT" 90 || true
+	/etc/init.d/xray start >/dev/null 2>&1 || true
+	xray_listening && return 0
+	echo "$(t "Xray не поднялся (порт $TRANSPARENT_PORT ещё занят), жду и пробую снова" \
+		"Xray did not come up (port $TRANSPARENT_PORT is still busy), waiting and trying again")"
+	/etc/init.d/xray stop >/dev/null 2>&1 || true
+	port_free_wait "$TRANSPARENT_PORT" 90 || true
+	/etc/init.d/xray start >/dev/null 2>&1 || true
+	xray_listening
+}
+# render_only: render the current server once more with the new options in place. Rendering the same server
+# again is not a switch, so the panel's option changes do not go through apply(): they must not probe the
+# servers or move the user to another one. The config still has to come up, so a bad value is rolled back.
+render_only() {
+	. "$ENV"
+	code="$(current)"
+	[ -n "$code" ] || return 0
+	nodes | awk '{print $1}' | grep -qx "$code" || return 0
+	RENDER_MODE="$(mode)"
+	if ! render "$code"; then
+		[ "$RENDER_MODE" = ru ] || fail "Config test failed: $(tail -n 3 /tmp/flint-xray-test.log)"
+		RENDER_MODE=global
+		render "$code" || fail "Config test failed: $(tail -n 3 /tmp/flint-xray-test.log)"
+	fi
+	mv "$CONF.new" "$CONF" || fail "Cannot write $CONF"
+	start_xray || fail "Config did not come up with these settings; the previous one is back"
+}
 
 nodes() { node_lines $(node_files); }
 # Current server code: empty when there are no servers (panel / flint-node current).
@@ -124,12 +188,21 @@ EOF
 	if [ "$net" = tcp ]; then flow=xtls-rprx-vision; else flow=""; fi
 	cdi="$(sites_json direct ip)"; cpi="$(sites_json proxy ip)"
 	if [ "$RENDER_MODE" = ru ] || [ -n "$cdi$cpi" ]; then strategy=IPIfNonMatch; else strategy=AsIs; fi
+	xray_opts
+	# Mux changes handshakes, not bandwidth: it goes into the outbound as an object or not at all, so the
+	# template stays valid JSON either way.
+	if [ "$OPT_MUX" = on ]; then
+		mux=" \"mux\": { \"enabled\": true, \"concurrency\": $OPT_MUX_CONCURRENCY },"
+	else
+		mux=""
+	fi
 	umask 077
 	# Keep the config in use: apply() puts it back when the new one does not come up.
 	rm -f "$CONF.prev"
 	[ -f "$CONF" ] && cp "$CONF" "$CONF.prev"
 	sed -e "s|__UUID__|$uuid|" -e "s|__ADDR__|$host|" -e "s|__PORT__|$port|" -e "s|__SNI__|$sni|" \
 		-e "s|__PBK__|$pbk|" -e "s|__SID__|$sid|" -e "s|__DOMAIN_STRATEGY__|$strategy|" \
+		-e "s|__FINGERPRINT__|$OPT_FINGERPRINT|" -e "s|__MUX__|$mux|" \
 		-e "s|__NET__|$net|" -e "s|__FLOW__|$flow|" -e "s|__GRPC_SERVICE__|$svc|" \
 		-e "s|__PROVIDER_DOMAINS__|$(provider_domains)|" \
 		-e "s|__CUSTOM_PROXY_DOMAIN__|$(sites_json proxy domain)|" -e "s|__CUSTOM_PROXY_IP__|$cpi|" \
@@ -198,15 +271,12 @@ apply() {
 		fi
 	fi
 	mv "$CONF.new" "$CONF" && echo "$code" > "$CUR" || fail "Cannot write $CONF"
-	/etc/init.d/xray restart 2>/dev/null || fail "Xray did not restart"
-	# The config must listen. If it does not, Xray cannot run it and the previous one goes back: the
-	# router must not be left without VPN while the service restarts in a loop.
-	if ! xray_listening; then
+	# start_xray stops the service, waits for the transparent port and starts it again; if it still cannot
+	# listen, the config itself is the problem, so the previous one goes back and the tunnel is kept.
+	if ! start_xray; then
 		[ -f "$CONF.prev" ] && mv "$CONF.prev" "$CONF"
-		/etc/init.d/xray restart >/dev/null 2>&1 || true
-		sleep 3
-		xray_listening && fail "Config did not come up ($(tail -n 2 /tmp/flint-xray-test.log 2>/dev/null)); the previous one is back"
-		fail "Config did not come up: see logread -e xray"
+		start_xray >/dev/null 2>&1 || true
+		fail "Config did not come up ($(tail -n 2 /tmp/flint-xray-test.log 2>/dev/null)); the previous one is back"
 	fi
 	# Traffic through it depends on the server too: a node that is slow or down is not a broken config,
 	# so this only warns. Switching to another server is the watchdog's job.
@@ -249,6 +319,57 @@ case "$cmd" in
 			"") cat /etc/xray/probe 2>/dev/null || echo first ;;
 			*) fail "flint-node probe-mode [fastest|first]" ;;
 		esac
+		;;
+	fingerprint)
+		xray_opts
+		case "$2" in
+			chrome|firefox|safari|edge|random)
+				set_opt fingerprint "$2"
+				render_only
+				t "Отпечаток TLS: $2" "TLS fingerprint: $2"
+				;;
+			"") echo "$OPT_FINGERPRINT" ;;
+			*) fail "flint-node fingerprint [chrome|firefox|safari|edge|random]" ;;
+		esac
+		;;
+	mux)
+		xray_opts
+		case "$2" in
+			on|off)
+				saved="$(cat "$OPTS" 2>/dev/null)"
+				set_opt mux "$2"
+				if [ -n "$3" ]; then
+					case "$3" in
+						*[!0-9]*) fail "concurrency must be a number from 1 to 128" ;;
+						*) set_opt mux-concurrency "$3" ;;
+					esac
+				fi
+				render_only
+				if [ "$2" != on ]; then
+					t "Объединение соединений (mux): выключено" "Connection multiplexing (mux): off"
+					exit 0
+				fi
+				# Multiplexing can stop the tunnel from passing traffic at all, and the router must not be
+				# left that way. The tunnel is started and asked for a page before this setting stays; if it
+				# does not answer, both the option and the config go back.
+				if xray_passes; then
+					t "Объединение соединений (mux): включено. Для видео и скачивания скорость обычно ниже" \
+						"Connection multiplexing (mux): on. Video and downloads are usually slower with it"
+				else
+					printf '%s\n' "$saved" | grep -v '^mux=' > "$OPTS.new"
+					printf 'mux=off\n' >> "$OPTS.new"
+					umask 077; mv "$OPTS.new" "$OPTS"
+					render_only
+					fail "$(t "Mux выключен: с ним трафик через туннель не идёт" "Mux is off again: traffic did not go through the tunnel with it")"
+				fi
+				;;
+			"") echo "$OPT_MUX" ;;
+			*) fail "flint-node mux [on|off] [concurrency 1-128]" ;;
+		esac
+		;;
+	opts)
+		xray_opts
+		printf 'fingerprint=%s\nmux=%s\nmux-concurrency=%s\n' "$OPT_FINGERPRINT" "$OPT_MUX" "$OPT_MUX_CONCURRENCY"
 		;;
 	names)
 		# "code<TAB>name<TAB>ip|domain<TAB>group"; the name is the comment line right above the node.

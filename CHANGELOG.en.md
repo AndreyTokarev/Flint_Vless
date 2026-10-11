@@ -4,6 +4,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 Versions before 1.0.0 were assigned afterwards from the commit history.
 
+## [1.14.0] — 2026-10-11
+
+### Added
+- **The TLS fingerprint is settable from the panel and the console.** `flint-node fingerprint [chrome|firefox|safari|edge|random]` — which browser the router claims to be to the REALITY server. It used to be hard-coded in the template (`firefox`) and changed only by editing a file. The choice is on the Servers tab.
+- **Connection multiplexing (mux) is off by default.** `flint-node mux [on|off] [concurrency]` and a button on the same tab. To be honest about it: the Xray documentation says mux reduces the number of handshakes but does **not** raise the speed, and usually lowers it for video and downloads; on a test against the user's server traffic did not go through the tunnel with mux at all. Turning it on therefore tests the tunnel first and **turns mux back off by itself** when a page does not load: the router is not left without a VPN.
+- The options live in `/etc/xray/xray-opts` (`key=value`) and are part of a backup and of the panel's settings file; the `settings` scenario checks that the file is not missing from either list.
+
+### Fixed
+- **The main cause of failures when switching a server, and during installs: port 12345 held by TIME_WAIT sockets.** Xray binds the port without `SO_REUSEADDR`, and procd respawns the service. A restart therefore failed with "address already in use" although nothing was listening: an install reported "Config did not come up" on a healthy router, and a server switch silently did not happen. Xray is now stopped first, the port is waited for (up to 90 seconds, with a message in the log) and only then is the service started; if the config still does not come up, the previous one is restored. Three switches in a row were verified: about 16 seconds each, all successful.
+- **`flint-sub-update` no longer repeats the same code in three commands.** Adding a subscription, changing its link and updating all of them did the same things: download, remember the server count, rebuild the files, apply the config. These are shared steps now (`fetch_one`, `write_changed`, editing the list through `subs_edit`), so each command says what it does. A bug surfaced on the way: the "servers: N" message had an empty count, because the number was computed in a subshell while the message was built before that.
+- The `failover` scenario prints how many sockets are in TIME_WAIT on the port, and the `panel` scenario prints what the panel answered to the settings import: these lines show the cause, not only the fact of a failure.
+
 ## [1.13.0] — 2026-10-11
 
 ### Changed
@@ -366,8 +378,9 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.13.0...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.14.0...HEAD
 [1.13.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.12.0...v1.13.0
+[1.14.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.13.0...v1.14.0
 [1.12.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.9.0...v1.10.0
