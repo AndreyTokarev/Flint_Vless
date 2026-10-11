@@ -4,6 +4,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 Versions before 1.0.0 were assigned afterwards from the commit history.
 
+## [1.15.0] — 2026-10-11
+
+### Fixed
+- **The panel served the settings file without a PIN.** While splitting the panel, the settings export lost its condition line and ran on **every** request: the answer was the file with subscriptions and servers — without a password, to anyone — and the login form was never shown. That was a leak, not cosmetics. The export now lives in `ui.sh` behind the check "the PIN is right **and** the request really asks for the export", and the entry point ends the request when the PIN is wrong (`return` in a sourced file ends only that file).
+- **The panel page was rendered twice** — the PIN form appeared one after another. The page header and the login form were left in both `panel.cgi` and `ui.sh`; the markup is now in `ui.sh` only, and `panel.cgi` sends the HTTP headers **before** sourcing it (a CGI response whose first line is not a header is rejected by the server — that was the 502).
+- **The installer did not upgrade an old Xray.** A reflash (or `opkg install xray-core`) brings back the GL.iNet build 1.8.7, and REALITY before v25.6.8 does not imitate the target's post-handshake records, so active probing can tell such a router apart. The installer replaced Xray only when it was **missing**; it now compares the version and replaces anything older than 25.6.8.
+- **Needless Xray restarts.** The service was restarted on every apply, even when the config was byte for byte the one already running. A restart is not free: it drops every LAN connection, and Xray binds the transparent port without `SO_REUSEADDR`, so the sockets the LAN left in TIME_WAIT (about a minute each) keep the new process from taking the port — a server switch took 80–110 seconds. The running config is remembered in `config.json.running` (the file is in both lists) and a match leaves the service alone.
+- **Loading settings through the panel broke the connection.** The import ran inside the CGI request and ended with an Xray restart, so uhttpd dropped the request: the browser showed a broken page although the import had worked. The panel now takes the file, answers at once and starts the import separately with `start-stop-daemon` (the firmware has neither `setsid` nor `nohup`, and a plain `( … ) &` is killed with the CGI). Without `-b`: that option closes the output and the status file stayed empty.
+
+### Added
+- The `panel` scenario checks what was missing: no export without a PIN, with a wrong PIN or with a right PIN alone; with the right PIN and `export=1` it happens and is not a page; the login page and an open page each render **once** (one `DOCTYPE`, one PIN form, one `layout`); the settings upload answers at once and its result is checked in the status file.
+
+### Note
+- Operations that really change the config (choosing a server, switching the routing mode, importing settings) still need a new Xray process and therefore briefly interrupt the LAN while the port is held by sockets from earlier connections. Left as is by decision; the way to remove this entirely — keeping the transparent port held across a restart — is written down in the plan.
+
 ## [1.14.0] — 2026-10-11
 
 ### Added
@@ -378,9 +393,10 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.15.0...HEAD
 [1.13.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.12.0...v1.13.0
 [1.14.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.13.0...v1.14.0
+[1.15.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.14.0...v1.15.0
 [1.12.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.9.0...v1.10.0
