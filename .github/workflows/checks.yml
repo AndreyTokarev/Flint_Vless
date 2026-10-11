@@ -1,0 +1,30 @@
+# Checks that need no router: shell syntax, line endings, the Xray template, and the secret check.
+# A scenario that runs on a router is not part of CI: it needs the hardware. See tests/router/*.sh.
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Shell syntax, line endings and the Xray template
+        run: sh tools/check-scripts.sh
+
+      - name: No secrets in the tree
+        run: sh tools/check-secrets.sh
+
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          # The kit is POSIX shell for busybox: the project's shellcheck settings live in .trunk/configs.
+          find kit tests -type f \( -name '*.sh' -o -name 'flint-*' -o -name 'panel.cgi' \) -print0 |
+            xargs -0 shellcheck -s sh -e SC2154,SC1090,SC1091,SC3043

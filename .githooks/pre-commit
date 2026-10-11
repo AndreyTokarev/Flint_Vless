@@ -1,0 +1,11 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
+# Pre-commit hook: refuses a commit that would add a secret (a subscription link, the panel PIN, a Wi-Fi
+# password or a private key). Enable it once per checkout:
+#   git config core.hooksPath .githooks
+# The same check runs in CI (see .github/workflows/checks.yml).
+sh "$(git rev-parse --show-toplevel)/tools/check-secrets.sh" --staged || {
+	echo "commit refused: fix the secrets above or use 'git commit --no-verify' deliberately" >&2
+	exit 1
+}

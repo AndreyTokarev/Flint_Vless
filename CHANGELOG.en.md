@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 Versions before 1.0.0 were assigned afterwards from the commit history.
 
+## [Unreleased]
+
+### Added
+- A pre-commit secret check (`tools/check-secrets.sh`, hook `.githooks/pre-commit`): it refuses to commit a subscription link, the panel PIN, a Wi-Fi password or a private key. It also checks that the files a user fills in (`config/flint.env`, `config/subscriptions` and the rest of `kit/state-files`) are not in the index and that the values from this machine do not appear in other files; documentation and `*.example` are skipped because they show the formats on purpose. Enable it once: `git config core.hooksPath .githooks`.
+- Router-free checks (`tools/check-scripts.sh`) and CI (`.github/workflows/checks.yml`): the syntax of every kit script, the absence of CRLF (busybox ash does not parse such a file), the Xray template being valid JSON with placeholders filled by type, the required inbounds and outbounds still being there, a warning about a placeholder nobody substitutes, and `shellcheck`.
+
 ## [1.12.0] — 2026-10-11
 
 ### Added
