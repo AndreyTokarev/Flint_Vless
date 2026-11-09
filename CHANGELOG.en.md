@@ -4,6 +4,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 Versions before 1.0.0 were assigned afterwards from the commit history.
 
+## [1.16.1] — 2026-11-09
+
+### Changed
+- **The documentation is split into pages.** The README was a single 778-line file where installation, the panel, DNS, ad blocking, the Telegram proxy, backups, commands and troubleshooting followed one another, and reading it whole was unpleasant. The README is now a short entry point (about 140 lines): what it is, features, quick start, screenshots, the diagram and a table of links to eight pages in `docs/en/`: [Installation](docs/en/install.md), [Web panel](docs/en/panel.md), [Servers and subscriptions](docs/en/servers.md), [DNS and ad blocking](docs/en/dns-adblock.md), [Telegram proxy](docs/en/telegram-proxy.md), [Maintenance](docs/en/maintenance.md), [Troubleshooting](docs/en/troubleshooting.md) and [How it works](docs/en/internals.md). Every page has a table of contents linking to its own sections and links to its neighbours; all of them were checked by a script for missing files and anchors. The Russian documentation is split the same way (`docs/`), with no text lost.
+- "Troubleshooting" was rewritten: the symptom table is fuller (`n/a` on the Status tab, the proxy on a busy port), and there are separate sections on slow server switches caused by `TIME_WAIT`, a forgotten PIN, devices that bypass the router, and the limitations — including the note that changing VPN settings drops connections for a few seconds.
+- The `flint-*` usage text no longer depends on line numbers: it is taken from the `# Usage:` block in the comment above the code (it used to be `sed -n '8,15p'`). `flint-adblock` and `flint-sub-update` now print their usage in full instead of losing the last line.
+- Line endings in `kit/` are LF again, as `.gitattributes` declares: on Windows the working copy used to get CRLF, so git showed whole files as changed and `sh -n` on the router refused to parse them (only the `sed` in `deploy.ps1` saved the day).
+
+### Fixed
+- **The subscription update broke on a provider that answers Happ with a config instead of links.** GruVPN started replying to `User-Agent: Happ/1.0` (the one the updater sent) with a whole Xray config in JSON, 523 KB, and not a list of links. The parser found no `vless://` at all, so every attempt ended with "no supported servers in the subscription" — while the same subscription returned 65 links, 62 of them usable, to any other client. The profile name and the limits still come from the Happ answer; when that answer is a config rather than a list, the script asks again as a plain client. Checked on the live subscription: the list went from 29 to 41 servers and the error is gone.
+- **The Status tab waited up to 8 seconds for the exit address.** The address is fetched through the VPN, so while the tunnel did not answer the tab opened exactly at the timeout — which looked like a hung panel. The last answer is now cached for two minutes (a working tunnel refreshes it, a broken one shows the previous address or `n/a` at once) and the timeout is down to 4 seconds. Measured: 8.5 s on every request before, 0.5 s now, 1.0 s in the worst case.
+- **A server that does not answer is no longer chosen on failover.** Almost every provider name is a DNS balancer with several addresses, some of them dead: Xray resolves the name per connection and lands on a dead address about a third of the time. That is where "sometimes it works, sometimes it does not" came from. For checking there is now `tools/switch-server.sh`: it switches the server on the router, verifies that traffic really passes, and puts the previous server back by itself when it does not (it runs detached through `start-stop-daemon`, so a dropped connection on the computer cannot leave the router on a dead server).
+- **The GitHub releases lagged behind the tags.** A tag was pushed but no release was written: the Releases page still showed `1.10.0` as the latest while tags had reached `v1.16.0` (versions 1.11–1.16 existed as tags only and were invisible in the release list). Releases for those six versions have been published from the CHANGELOG sections, and `.github/workflows/release.yml` closes the gap for good: pushing a `vX.Y.Z` tag makes it take that version's section from `CHANGELOG.md` and publish the release, and with no such section it **fails** rather than leave a release without notes. The workflow is described in [CONTRIBUTING.md](CONTRIBUTING.md).
+- Tests no longer leave the Telegram proxy switched off: a scenario remembers what ran before the run and puts it back (`tests/router/lib.sh`).
+- The test wrappers (`tests/run.ps1`, `tests/run.sh`) now finish when the router briefly disappears: the deadline is checked before talking to the router, not after, so an unreachable router no longer parks the wrapper until it is killed by hand.
+- `tests/router/job.sh` keeps its log and run id: without them the wrappers never saw the "run finished" marker and could not pick up a finished run (the scenarios themselves passed).
+- Two checks in the panel scenario no longer depend on the router's state: the proxy switch is compared with the current state, and "a busy port" accepts a range refusal too (the router's only candidate is port 443, where Xray listens). The scenario now has 129 checks.
+
+### Added
+- The license explained in plain language: an "In short" block at the top of [LICENSE](LICENSE), [LICENSE.ru.md](LICENSE.ru.md) and [LICENSE.en.md](LICENSE.en.md), a short terms notice at the top of both READMEs, a section index in `LICENSE`, and a pointer from it to the summaries.
+- Crediting the original is mandatory when reusing a part of the code, not only for a full fork: the "Notices" section of `LICENSE`, "Name and logo" and "Mandatory condition" in the summaries were made explicit. Forks and builds that use the project's code must say so honestly.
+- Machine-readable license tags `SPDX-FileCopyrightText` and `SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0` in the scripts, init scripts and the panel: a company's license scanner sees the noncommercial terms automatically.
+- The README now says it plainly: the source is open, but the license is noncommercial (source-available, not OSI).
+
+### Documentation
+- `docs/code-review-1.10.md` — review of the project at 1.10.0: three findings about blocking circumvention (outdated Xray 1.8.7 and the pinned `v1.8.24`, both older than the REALITY fix in v25.6.8; the DoH mode that does not help when the resolver name is blocked; the parallel-TLS profile of a transparent gateway), plus state file lists, command usage text, line endings, panel size and the test wrapper.
+- `docs/improvement-plan-1.10.md` — improvement plan with code sketches, checks, effort and risks for every finding; stages 1.11.0 (Xray and DNS), 1.12.0 (structure), 1.13.0 (tooling).
+- `docs/research-bypass-2026.md` — research on circumvention transports (Xray/REALITY, XHTTP, FinalMask, alternatives; what the Russian DPI does in 2025–2026; conclusions grouped as works today / add next / watch / dead end) with source links and confidence tags.
+
 ## [1.16.0] — 2026-10-11
 
 ### Fixed
@@ -24,18 +53,6 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 
 ### Note
 - **The improvement plan is closed**: all sixteen items of `docs/improvement-plan-1.10.md` are done or deliberately left with the reason written down. The tunnel DNS mode stays off and marked experimental: some servers do not answer through the tunnel, and the router then returns to the previous mode.
-
-## [Unreleased]
-
-### Changed
-- **The documentation is split into pages.** The README was a single 778-line file where installation, the panel, DNS, ad blocking, the Telegram proxy, backups, commands and troubleshooting followed one another, and reading it whole was unpleasant. The README is now a short entry point (about 140 lines): what it is, features, quick start, screenshots, the diagram and a table of links to eight pages in `docs/en/`: [Installation](docs/en/install.md), [Web panel](docs/en/panel.md), [Servers and subscriptions](docs/en/servers.md), [DNS and ad blocking](docs/en/dns-adblock.md), [Telegram proxy](docs/en/telegram-proxy.md), [Maintenance](docs/en/maintenance.md), [Troubleshooting](docs/en/troubleshooting.md) and [How it works](docs/en/internals.md). Every page has a table of contents linking to its own sections and links to its neighbours; all of them were checked by a script for missing files and anchors. The Russian documentation is split the same way (`docs/`), with no text lost.
-- "Troubleshooting" was rewritten: the symptom table is fuller (`n/a` on the Status tab, the proxy on a busy port), and there are separate sections on slow server switches caused by `TIME_WAIT`, a forgotten PIN, devices that bypass the router, and the limitations — including the note that changing VPN settings drops connections for a few seconds.
-
-### Fixed
-- **The subscription update broke on a provider that answers Happ with a config instead of links.** GruVPN started replying to `User-Agent: Happ/1.0` (the one the updater sent) with a whole Xray config in JSON, 523 KB, and not a list of links. The parser found no `vless://` at all, so every attempt ended with "no supported servers in the subscription" — while the same subscription returned 65 links, 62 of them usable, to any other client. The profile name and the limits still come from the Happ answer; when that answer is a config rather than a list, the script asks again as a plain client. Checked on the live subscription: the list went from 29 to 41 servers and the error is gone.
-- **The Status tab waited up to 8 seconds for the exit address.** The address is fetched through the VPN, so while the tunnel did not answer the tab opened exactly at the timeout — which looked like a hung panel. The last answer is now cached for two minutes (a working tunnel refreshes it, a broken one shows the previous address or `n/a` at once) and the timeout is down to 4 seconds. Measured: 8.5 s on every request before, 0.5 s now, 1.0 s in the worst case.
-- **A server that does not answer is no longer chosen on failover.** Almost every provider name is a DNS balancer with several addresses, some of them dead: Xray resolves the name per connection and lands on a dead address about a third of the time. That is where "sometimes it works, sometimes it does not" came from. For checking there is now `tools/switch-server.sh`: it switches the server on the router, verifies that traffic really passes, and puts the previous server back by itself when it does not (it runs detached through `start-stop-daemon`, so a dropped connection on the computer cannot leave the router on a dead server).
-- **The GitHub releases lagged behind the tags.** A tag was pushed but no release was written: the Releases page still showed `1.10.0` as the latest while tags had reached `v1.16.0` (versions 1.11–1.16 existed as tags only and were invisible in the release list). Releases for those six versions have been published from the CHANGELOG sections, and `.github/workflows/release.yml` closes the gap for good: pushing a `vX.Y.Z` tag makes it take that version's section from `CHANGELOG.md` and publish the release, and with no such section it **fails** rather than leave a release without notes. The workflow is described in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## [1.15.0] — 2026-10-11
 
@@ -111,29 +128,6 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - The `subscription` and `failover` scenarios wrote their output to `/tmp/flint-test.log` — the same file the test wrapper writes — and deleted it at the end, so results went missing. They have their own file now.
 - `tests/run.ps1`: `$PSScriptRoot` is empty when started through `powershell -File`, so the path comes from the invocation; a lock now prevents two runs from one machine.
 - The `failover` scenario demanded one exact "first" server code; it now checks that the fake server is gone and that the current server is in the list.
-
-## [Unreleased]
-
-### Added
-- The license explained in plain language: an "In short" block at the top of [LICENSE](LICENSE), [LICENSE.ru.md](LICENSE.ru.md) and [LICENSE.en.md](LICENSE.en.md), a short terms notice at the top of both READMEs, a section index in `LICENSE`, and a pointer from it to the summaries.
-- Crediting the original is mandatory when reusing a part of the code, not only for a full fork: the "Notices" section of `LICENSE`, "Name and logo" and "Mandatory condition" in the summaries were made explicit. Forks and builds that use the project's code must say so honestly.
-- Machine-readable license tags `SPDX-FileCopyrightText` and `SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0` in the scripts, init scripts and the panel: a company's license scanner sees the noncommercial terms automatically.
-- The README now says it plainly: the source is open, but the license is noncommercial (source-available, not OSI).
-
-### Changed
-- The `flint-*` usage text no longer depends on line numbers: it is taken from the `# Usage:` block in the comment above the code (it used to be `sed -n '8,15p'`). `flint-adblock` and `flint-sub-update` now print their usage in full instead of losing the last line.
-- Line endings in `kit/` are LF again, as `.gitattributes` declares: on Windows the working copy used to get CRLF, so git showed whole files as changed and `sh -n` on the router refused to parse them (only the `sed` in `deploy.ps1` saved the day).
-
-### Fixed
-- Tests no longer leave the Telegram proxy switched off: a scenario remembers what ran before the run and puts it back (`tests/router/lib.sh`).
-- The test wrappers (`tests/run.ps1`, `tests/run.sh`) now finish when the router briefly disappears: the deadline is checked before talking to the router, not after, so an unreachable router no longer parks the wrapper until it is killed by hand.
-- `tests/router/job.sh` keeps its log and run id: without them the wrappers never saw the "run finished" marker and could not pick up a finished run (the scenarios themselves passed).
-- Two checks in the panel scenario no longer depend on the router's state: the proxy switch is compared with the current state, and "a busy port" accepts a range refusal too (the router's only candidate is port 443, where Xray listens). The scenario now has 129 checks.
-
-### Documentation
-- `docs/code-review-1.10.md` — review of the project at 1.10.0: three findings about blocking circumvention (outdated Xray 1.8.7 and the pinned `v1.8.24`, both older than the REALITY fix in v25.6.8; the DoH mode that does not help when the resolver name is blocked; the parallel-TLS profile of a transparent gateway), plus state file lists, command usage text, line endings, panel size and the test wrapper.
-- `docs/improvement-plan-1.10.md` — improvement plan with code sketches, checks, effort and risks for every finding; stages 1.11.0 (Xray and DNS), 1.12.0 (structure), 1.13.0 (tooling).
-- `docs/research-bypass-2026.md` — research on circumvention transports (Xray/REALITY, XHTTP, FinalMask, alternatives; what the Russian DPI does in 2025–2026; conclusions grouped as works today / add next / watch / dead end) with source links and confidence tags.
 
 ## [1.10.0] — 2026-10-07
 
@@ -419,7 +413,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.16.0...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.16.1...HEAD
+[1.16.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.15.0...v1.16.0
 [1.13.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.12.0...v1.13.0
 [1.14.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.13.0...v1.14.0
