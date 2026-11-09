@@ -13,10 +13,30 @@
     # The router's own traffic bypasses Xray, so a plain request shows the provider's IP; both run at once.
     # The address comes from $IP_LOOKUP (lib.sh, overridable in flint.env): a demo or a test points it at a
     # local answer, so a published screenshot never carries the real address of whoever ran the demo.
-    curl -s -m 8 "$IP_LOOKUP" > /tmp/flint-ip.$$ 2>/dev/null &
-    IP="$(curl -s -m 8 -x http://127.0.0.1:1087 "$IP_LOOKUP" 2>/dev/null || echo n/a)"
-    wait
-    DIRECT_IP="$(head -c 64 /tmp/flint-ip.$$ | esc)"; rm -f /tmp/flint-ip.$$
+    #
+    # Asking on every page load made the whole tab wait for the request to the VPN exit, and when the tunnel
+    # was down that was the complete timeout (8 s of a blank page — it looked like a hung panel). The last
+    # answer is therefore kept for two minutes: a working tunnel refreshes it as before, a broken one shows
+    # the previous address (or n/a) at once instead of stalling. The timeout is 4 s for the same reason.
+    CACHE=/tmp/flint-ip.cache
+    now="$(date +%s)"
+    c_ts=0; c_vpn=""; c_dir=""
+    if [ -s "$CACHE" ]; then
+      { read -r c_ts; read -r c_vpn; read -r c_dir; } < "$CACHE"
+    fi
+    case "$c_ts" in ''|*[!0-9]*) c_ts=0 ;; esac
+    if [ $((now - c_ts)) -lt 120 ] && [ -n "$c_vpn" ]; then
+      IP="$(printf '%s' "$c_vpn" | esc)"; DIRECT_IP="$(printf '%s' "$c_dir" | esc)"
+    else
+      curl -s -m 4 "$IP_LOOKUP" > /tmp/flint-ip.$$ 2>/dev/null &
+      IP="$(curl -s -m 4 -x http://127.0.0.1:1087 "$IP_LOOKUP" 2>/dev/null)"
+      wait
+      DIRECT_IP="$(head -c 64 /tmp/flint-ip.$$)"; rm -f /tmp/flint-ip.$$
+      [ -n "$IP" ] || IP=n/a
+      [ -n "$DIRECT_IP" ] || DIRECT_IP=n/a
+      printf '%s\n%s\n%s\n' "$now" "$IP" "$DIRECT_IP" > "$CACHE" 2>/dev/null
+      IP="$(printf '%s' "$IP" | esc)"; DIRECT_IP="$(printf '%s' "$DIRECT_IP" | esc)"
+    fi
     echo "VPN: <b class=ok>$(T "включён" "on")</b><br>$(T "Сервер" "Server"): <b class=ok>${CUR_NAME:-$CUR}</b>"
     echo "<br>$(T "IP через VPN" "IP via VPN"): <b>$IP</b><br>$(T "IP провайдера (до VPN)" "Provider IP (before VPN)"): <b>${DIRECT_IP:-n/a}</b>"
     btn vpn off " class=off" "$(T "Выключить VPN" "Turn VPN off")"

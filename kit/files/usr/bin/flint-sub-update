@@ -187,7 +187,12 @@ header() {
 	tr -d '\r' < "$TMP/hdr" | awk -v h="$1" '{ i = index($0, ":"); if (i && tolower(substr($0, 1, i - 1)) == h) v = substr($0, i + 1) }
 		END { sub(/^[[:space:]]*/, "", v); print v }'
 }
-download() { curl -fsL -m 25 -A "Happ/1.0" -D "$TMP/hdr" -o "$TMP/raw" "$@"; }
+# Happ is asked first because many providers send profile-title and subscription-userinfo only to it. A few
+# providers, though, answer that user agent with a whole Xray config instead of a link list (see fetch), and
+# then the plain-client user agent has to be asked as well — hence UA.
+download() { curl -fsL -m 25 -A "${UA:-Happ/1.0}" -D "$TMP/hdr" -o "$TMP/raw" "$@"; }
+# A whole Xray config (JSON) rather than a list of links.
+is_config() { tr -d ' \r\n\t' < "$1" 2>/dev/null | head -c 1 | grep -q '^[\[{]'; }
 # fetch <url> <file>: the supported servers as "base host sni pbk sid uuid port net service name" (TAB);
 # base is the flag code or the first label of the host. Returns 1 if not downloaded, 2 if nothing supported.
 # <file>.title gets the provider's profile name, <file>.info "used total expire" (Happ headers).
@@ -200,6 +205,15 @@ fetch() {
 	clean_name "$title" > "$2.title"
 	header subscription-userinfo | tr ';' '\n' | awk -F '=' '{ gsub(/[[:space:]]/, ""); v[$1] = $2 + 0 }
 		END { if ("total" in v || "expire" in v) print v["upload"] + v["download"], v["total"] + 0, v["expire"] + 0 }' > "$2.info"
+	# The name and the limits above came from the Happ answer, which is kept. If that answer is an Xray config
+	# and not a link list — GruVPN started doing exactly that — ask again as a plain client, because links are
+	# what is parsed below. Without this the whole update reported "no supported servers" while the same
+	# subscription returned 65 usable links to any other client.
+	if is_config "$TMP/raw"; then
+		# A plain assignment, not "UA=... download": with a function call the prefix form is unspecified in POSIX.
+		UA="v2rayN/6.31"
+		download "$1" || download -x http://127.0.0.1:1087 "$1" || return 1
+	fi
 	if grep -q 'vless://' "$TMP/raw"; then
 		cp "$TMP/raw" "$TMP/links"
 	else

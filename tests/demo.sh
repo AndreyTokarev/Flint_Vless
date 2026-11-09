@@ -107,6 +107,9 @@ done
 grep -v '^IP_LOOKUP=' /etc/xray/flint.env > /tmp/flint-env.tmp 2>/dev/null
 printf 'IP_LOOKUP=http://127.0.0.1:%s/\n' "$DEMO_PORT" >> /tmp/flint-env.tmp
 (umask 077; cp /tmp/flint-env.tmp /etc/xray/flint.env); rm -f /tmp/flint-env.tmp
+# The status tab keeps its last answer for two minutes, and the answer it may be holding is the real external
+# address of whoever runs the demo — exactly what must not reach a published screenshot.
+rm -f /tmp/flint-ip.cache
 if [ "$(curl -s -m 3 "http://127.0.0.1:$DEMO_PORT/")" != "$DEMO_IP" ]; then
 	echo "  warning: the demo IP server did not answer, the status page will show n/a"
 fi

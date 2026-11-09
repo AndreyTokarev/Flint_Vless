@@ -30,6 +30,9 @@ check "status shows the provider IP" panel_has status 'IP провайдера'
 # defines the value itself: without it the variable was empty, curl was asked for an empty URL and both
 # addresses showed "n/a" — while the page still rendered, so nothing else noticed. The checks look at the
 # values, not at the page text: the address of the service is not printed anywhere in the HTML.
+# The tab caches its answer for two minutes so that a dead tunnel cannot stall the page, and a scenario that
+# just turned the VPN off and on would otherwise be judged by the cached "n/a": drop the cache first.
+rm -f /tmp/flint-ip.cache
 check "the provider address is not n/a" fails sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=status' | grep -q 'IP провайдера (до VPN): <b>n/a'"
 check "the provider address looks like an address" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=status' | grep -qE 'IP провайдера \(до VPN\): <b>[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'"
 check "the panel defines the IP service itself" sh -c "grep -q 'IP_LOOKUP=' /usr/share/flint/panel/ui.sh"
