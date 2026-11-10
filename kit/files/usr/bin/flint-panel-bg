@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
+# Runs one slow panel action away from the HTTP request.
+#
+# Why it exists: an action that changes the VPN ends with flint-node apply, which restarts Xray and waits for
+# the transparent port to be free of TIME_WAIT sockets — up to four minutes. uhttpd kills a CGI long before
+# that, so the browser was left on a page that never arrived (it looked like a panel that hangs on a button).
+# The panel starts THIS file with start-stop-daemon, answers at once and reloads itself until the result is
+# in /tmp/flint-action.status.
+#
+# It is a separate file rather than "start-stop-daemon -x /bin/sh -- -c ...": start-stop-daemon refuses to
+# start /bin/sh ("/bin/sh is already running") and cannot pass an environment, and this way the panel never
+# builds a shell command out of the request.
+BG=1
+export BG
+exec /www/flint/cgi-bin/panel.cgi

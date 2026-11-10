@@ -4,7 +4,11 @@
 # The Flint VPN panel: one CGI page per tab, Russian or English, rendered on the router.
 # Shared markup is in /usr/share/flint/panel/ui.sh, each tab in its own file next to it.
 
-qs="$QUERY_STRING"
+# BG=1 is the detached copy of a slow action (see the dispatch below): it has no CGI environment, so it takes
+# the query it must run from the file the foreground request wrote. Nothing from the request is ever parsed
+# by a shell, which is why the file is used instead of passing the query as an argument.
+BG="${BG:-0}"
+if [ "$BG" = 1 ] && [ -s /tmp/flint-action.qs ]; then qs="$(cat /tmp/flint-action.qs)"; else qs="$QUERY_STRING"; fi
 raw() { echo "$qs" | tr '&' '\n' | sed -n "s/^$1=//p" | head -n1; }
 get() { raw "$1" | tr -cd 'A-Za-z0-9_-'; }
 # URL-decoded value (%XX -> \0ooo -> printf %b); raw backslashes are dropped so only %XX can make bytes.
@@ -76,6 +80,45 @@ case "$tab" in status|servers|own|subs|routing|adblock|dns|telegram|settings) ;;
 ACTIONS=" node routing vpn sub subint subadd subsave subdel subedit wd adblock abpreset ablist abldel abrule abrdel aballow abint abref abxadd abxdel add del link ndel save edit copy newnode import pin dns dnsmode dnsurl dnscrypt dnsstamp dnsudp dnsip hostadd hostdel directadd directdel tg tgroute tgcf tgremote tgaddr tgmask tgport tgsecret tgsecretset tgcheck tgdc tgcfd tgworker tgcftls tgpool tglog tgupdate probemode fingerprint mux "
 a="$(echo "$qs" | tr '&' '\n' | awk -F = -v l="$ACTIONS" '$2 != "" && index(l, " " $1 " ") { print $1; exit }')"
 msg=""; form=""; subedit=""; subsave=""
+# An action that changes the VPN ends with flint-node apply, and that restarts Xray, which waits for the
+# transparent port to be free of TIME_WAIT sockets — up to four minutes on a busy network. uhttpd kills a
+# CGI long before that, so the browser sat on a page that never arrived and the only way out was the home
+# page by hand. The slow actions therefore run detached and the panel answers at once: the page says the
+# work is going on and reloads itself until the result is in /tmp/flint-action.status.
+# BG=1 marks that detached copy: it reads the query from the file (no shell quoting of user input), runs the
+# same dispatcher below and writes only its message.
+RUN=/tmp/flint-action.run
+STATUS=/tmp/flint-action.status
+QS_FILE=/tmp/flint-action.qs
+SLOW=" node routing vpn sub subadd subdel subsave add del directadd directdel fingerprint mux "
+refresh=""
+action_running() {
+  [ -s "$RUN" ] || return 1
+  ts="$(cat "$RUN" 2>/dev/null)"
+  case "$ts" in ''|*[!0-9]*) return 1 ;; esac
+  if [ $(( $(date +%s) - ts )) -gt 600 ]; then rm -f "$RUN"; return 1; fi
+  return 0
+}
+if [ "$a" != "" ] && [ "$BG" != 1 ] && [ "${SLOW#* $a }" != "$SLOW" ]; then
+  if action_running; then
+    msg="$(T "Уже выполняется другая операция — подождите" "Another operation is already running — please wait")"
+  else
+    printf '%s' "$qs" > "$QS_FILE"; chmod 600 "$QS_FILE" 2>/dev/null
+    rm -f "$STATUS"; date +%s > "$RUN"
+    # start-stop-daemon detaches it (through flint-panel-bg, see that file): this firmware has no setsid or nohup, and
+    # killed together with the CGI. The command string is constant, so nothing from the request is parsed.
+    start-stop-daemon -S -b -x /usr/bin/flint-panel-bg >/dev/null 2>&1 </dev/null
+    msg="$(T "Выполняется… страница обновится сама" "Working… the page refreshes itself")"
+  fi
+  a=""; refresh=1
+elif [ "$a" = "" ] && [ "$BG" != 1 ]; then
+  if action_running; then
+    msg="$(T "Выполняется… страница обновится сама" "Working… the page refreshes itself")"
+    refresh=1
+  elif [ -s "$STATUS" ]; then
+    msg="$(cat "$STATUS")"; rm -f "$STATUS"; rm -f "$QS_FILE"
+  fi
+fi
 case "$a" in
   node) msg="$(flint-node "$(get node)" 2>&1)" ;;
   routing) msg="$(flint-node routing "$(get routing)" 2>&1)" ;;
@@ -145,12 +188,13 @@ EOF
         /^Content-Disposition:/ && /name="file"/ { hdr = 1 }' > /tmp/flint-import.txt
       if [ -s /tmp/flint-import.txt ]; then
         # The import has to survive this CGI: it ends with flint-node apply, which restarts Xray, and that
-        # restart waits for the transparent port to be free of TIME_WAIT sockets. This firmware has no
-        # setsid and no nohup, and a plain "( ... ) &" is killed together with the CGI, which left the status
-        # file empty; start-stop-daemon detaches it properly. It must NOT be given -b: that option closes the
-        # output of the process, and the status file the panel reads stayed empty with it.
-        start-stop-daemon -S -x /usr/bin/flint-settings -- import /tmp/flint-import.txt \
-          > /tmp/flint-import.status 2>&1
+        # restart waits for the transparent port to be free of TIME_WAIT sockets. This firmware has no setsid
+        # and no nohup, and a plain "( ... ) &" is killed together with the CGI; start-stop-daemon detaches it.
+        # -b is what actually returns control here: without it start-stop-daemon runs the program in the
+        # foreground and this request waits for the whole import, which uhttpd cuts off — that is the button
+        # that seemed to load forever. -b also sends the program's own output to /dev/null, so the report the
+        # panel reads is written by flint-import-bg itself.
+        start-stop-daemon -S -b -x /usr/bin/flint-import-bg -- /tmp/flint-import.txt >/dev/null 2>&1 </dev/null
         msg="$(T "Файл принят: настройки загружаются в фоне, панель обновится через минуту" \
           "The file was taken: the settings load in the background, the panel updates in a minute")"
       else
@@ -206,6 +250,13 @@ EOF
   fingerprint) case "$(get fingerprint)" in chrome|firefox|safari|edge|random) msg="$(flint-node fingerprint "$(get fingerprint)" 2>&1)" ;; esac ;;
   mux) case "$(get mux)" in on|off) msg="$(flint-node mux "$(get mux)" 2>&1)" ;; esac ;;
 esac
+# The detached copy runs the action above and stops here: its message goes to the status file the panel shows
+# on the next load. Nothing is rendered for it — its stdout is /dev/null.
+if [ "$BG" = 1 ]; then
+  printf '%s\n' "$msg" > "$STATUS"
+  rm -f "$RUN"
+  exit 0
+fi
 CUR="$(flint-node current)"
 MODE="$(flint-node routing)"
 VPN="$(flint-node vpn)"
@@ -232,6 +283,9 @@ for t in "status:🏠 $(T "Статус" "Status")" "subs:🔗 $(T "Подпис
 done
 echo "</nav><div class=content>"
 [ -n "$msg" ] && echo "<div class=card><pre class=ok>$(echo "$msg" | esc)</pre></div>"
+# While a detached action runs, the page reloads itself without the action in the URL, so the action is not
+# started a second time. The URL carries only the PIN and the tab.
+[ -n "$refresh" ] && echo "<script>setTimeout(function(){location.href='?pass=$pass&tab=$tab'},2500)</script>"
 
 case "$tab" in
   status) . /usr/share/flint/panel/status.sh ;;

@@ -45,7 +45,7 @@ The panel speaks English and Russian. On the first visit the language follows th
 - **Reach a NAS or printer by name** — "DNS → Local names": the name (`nas01`) and the device IP. `nas01`, `nas01.lan` and `nas01.local` all work; a name with a dot (`nas.home`) is used as is. Adding the same name again changes its address.
 - **Telegram without the VPN** (on a device without VPN, with the VPN off, or to save subscription traffic) — "Telegram → Turn the proxy on", then press "Add to Telegram" on the device. More — [Telegram proxy](telegram-proxy.md).
 - **Change the PIN** — "Settings → Change PIN". The new PIN works at once; to keep a redeploy from bringing the old one back, put it in `config/flint.env` or make a backup.
-- **Move the settings** to another Flint or save them before an experiment — "Settings → Download the settings file", then "Upload settings" on the router you need. The PIN and the network (`flint.env`) are not part of the file. An import applies in the background and interrupts the VPN for a few seconds: it ends with an Xray restart.
+- **Move the settings** to another Flint or save them before an experiment — "Settings → Download the settings file", then "Upload settings" on the router you need. The PIN and the network (`flint.env`) are not part of the file. An import, a server change, turning the VPN on, routing and subscription refreshes apply in the background: the panel answers "Working…" at once and reloads itself when the work is done. These actions interrupt the VPN for a few seconds (up to a couple of minutes when the port is busy), because they end with an Xray restart.
 
 ## Devices on the network
 

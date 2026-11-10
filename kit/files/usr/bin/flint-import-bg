@@ -1,0 +1,11 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Andrey Tokarev
+# SPDX-License-Identifier: LicenseRef-Flint-VPN-Noncommercial-1.0
+# Applies an uploaded settings file away from the HTTP request.
+#
+# Why it exists: the import ends with flint-node apply, which restarts Xray and can wait minutes for the
+# transparent port. The panel used to start it with start-stop-daemon WITHOUT -b, which runs the program in
+# the foreground — so the request waited for the whole import and uhttpd dropped it. With -b the start comes
+# back at once, but -b also sends the program's output to /dev/null, which left /tmp/flint-import.status
+# empty. The report is written by this script itself, so both are true at the same time.
+exec /usr/bin/flint-settings import "$1" > /tmp/flint-import.status 2>&1

@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 Versions before 1.0.0 were assigned afterwards from the commit history.
 
+## [1.16.2] — 2026-11-10
+
+### Fixed
+- **Buttons in the panel no longer "load forever".** An action ran inside the HTTP request, and changing a server, turning the VPN on or refreshing a subscription ends with `flint-node apply` — an Xray restart that waits for the transparent port to be free of TIME_WAIT sockets. That is up to four minutes, while uhttpd kills a CGI much earlier, so the page never arrived and only opening the home page by hand helped. The slow actions (server, routing, VPN, subscriptions, own servers and sites, TLS fingerprint, mux) now run in a separate process: the panel answers in half a second, says "Working…" and reloads itself until it can show the result.
+- **Uploading settings hung as well.** `start-stop-daemon` was called without `-b`, and without it the program runs in the foreground, so the request waited for the whole import (measured: 75 s). With `-b` control comes back at once, but `-b` also sends the output to /dev/null, so the report is written by a separate `flint-import-bg` rather than by the command itself.
+- The helpers `flint-panel-bg` and `flint-import-bg` exist because `start-stop-daemon` refuses to start `/bin/sh` ("is already running") and cannot pass an environment, and building a shell command out of request parameters is not acceptable.
 ## [1.16.1] — 2026-11-09
 
 ### Changed
@@ -413,7 +419,8 @@ Versions before 1.0.0 were assigned afterwards from the commit history.
 - Access to the main router's network without the VPN.
 - Packages installed from scratch; deploy and backup for Windows, macOS and Linux.
 
-[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.16.1...HEAD
+[Unreleased]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.16.2...HEAD
+[1.16.2]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.16.1...v1.16.2
 [1.16.1]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.15.0...v1.16.0
 [1.13.0]: https://github.com/AndreyTokarev/Flint_Vless/compare/v1.12.0...v1.13.0

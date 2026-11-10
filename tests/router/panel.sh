@@ -5,6 +5,16 @@ save_state
 pin="$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')"
 # panel <query>: the Russian page for the query (without pass and lang).
 panel() { wget -qO- "http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&$1"; }
+# panel_act <query>: an action that changes the VPN. The panel answers at once and does the work detached
+# (that work restarts Xray, which can wait minutes for the transparent port — uhttpd kills a CGI long before
+# that, and that is exactly why a button in the panel used to hang). So the result is waited for here and the
+# action's message is printed, as the page the browser reloads would show it.
+panel_act() {
+	i=0
+	panel "$1" >/dev/null
+	while [ -s /tmp/flint-action.run ] && [ "$i" -lt 300 ]; do sleep 2; i=$((i + 2)); done
+	if [ -s /tmp/flint-action.status ]; then cat /tmp/flint-action.status; rm -f /tmp/flint-action.status; fi
+}
 page_ok() { panel "$1" | grep -c '</html>'; }
 for t in status servers own subs routing adblock dns telegram settings; do check "tab $t renders" page_ok "tab=$t"; done
 check "no hidden action fields" fails sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&tab=servers' | grep -c 'name=a '"
@@ -52,17 +62,17 @@ wget -qO- "http://127.0.0.1:81/cgi-bin/panel.cgi?pass=zzPinTest9&lang=ru&tab=set
 check "PIN restored after the test" [ "$(sed -n 's/^UI_PIN=//p' /etc/xray/flint.env | tr -d '"')" = "$pin" ]
 rm -f /tmp/flint-test-pin
 
-panel "tab=routing&add=zz-panel-test.example&to=proxy" >/dev/null
+panel_act "tab=routing&add=zz-panel-test.example&to=proxy" >/dev/null
 check "site add" sh -c "flint-node site list | grep -q zz-panel-test.example"
-panel "tab=routing&del=zz-panel-test.example" >/dev/null
+panel_act "tab=routing&del=zz-panel-test.example" >/dev/null
 check "site del" fails sh -c "flint-node site list | grep -q zz-panel-test.example"
-panel "tab=routing&add=zz-bad.example&to=nowhere" >/dev/null
+panel_act "tab=routing&add=zz-bad.example&to=nowhere" >/dev/null
 check "site add with a bad list is ignored" fails sh -c "flint-node site list | grep -q zz-bad.example"
 
 mode="$(flint-node routing)"; other=global; [ "$mode" = global ] && other=ru
-panel "tab=routing&routing=$other" >/dev/null
+panel_act "tab=routing&routing=$other" >/dev/null
 check "routing switch" [ "$(flint-node routing)" = "$other" ]
-panel "tab=routing&routing=$mode" >/dev/null
+panel_act "tab=routing&routing=$mode" >/dev/null
 check "routing switch back" [ "$(flint-node routing)" = "$mode" ]
 # A documentation-range MAC (00:00:5e:00:53:xx): no real device has it.
 tm=00:00:5e:00:53:01
@@ -70,17 +80,17 @@ direct_listed() { flint-node direct | cut -f1 | grep -qx "$tm"; }
 xray_skips() { iptables -t nat -S XRAY | grep -qi -- "--mac-source $tm -j RETURN"; }
 quic_allowed() { iptables -S FLINT_QUIC | grep -qi -- "--mac-source $tm -j RETURN"; }
 check "routing tab shows the devices without VPN form" panel_has routing 'name=directadd'
-panel "tab=routing&directadd=00-00-5E-00-53-01&directname=zz-direct-test" >/dev/null
+panel_act "tab=routing&directadd=00-00-5E-00-53-01&directname=zz-direct-test" >/dev/null
 check "device without VPN added by MAC" direct_listed
 check "device without VPN skips xray" xray_skips
 check "device without VPN keeps QUIC" quic_allowed
 check "QUIC still blocked for the rest" sh -c "iptables -S FLINT_QUIC | tail -n1 | grep -q -- '-j DROP'"
 check "routing tab lists the device without VPN" panel_has routing 'zz-direct-test'
-panel "tab=routing&directadd=$tm" >/tmp/flint-test-page
+panel_act "tab=routing&directadd=$tm" >/tmp/flint-test-page
 check "the same device twice is rejected" [ "$(grep -c 'уже без VPN' /tmp/flint-test-page):$(flint-node direct | grep -c "^$tm")" = 1:1 ]
-panel "tab=routing&directadd=not-a-mac" >/tmp/flint-test-page
+panel_act "tab=routing&directadd=not-a-mac" >/tmp/flint-test-page
 check "a bad MAC is rejected" grep -q 'Это не MAC-адрес' /tmp/flint-test-page
-panel "tab=routing&directdel=$tm" >/dev/null
+panel_act "tab=routing&directdel=$tm" >/dev/null
 check "device without VPN deleted" fails direct_listed
 check "the deleted device goes via xray again" fails xray_skips
 check "the deleted device has QUIC blocked again" fails quic_allowed
@@ -262,9 +272,9 @@ if [ -n "$(flint-node codes)" ]; then
 	code="$(flint-node codes | head -n1)"
 	check "copy opens the form" sh -c "wget -qO- 'http://127.0.0.1:81/cgi-bin/panel.cgi?pass=$pin&lang=ru&tab=own&copy=$code' | grep -c 'name=save value=.new.'"
 	cur="$(flint-node current)"
-	panel "tab=servers&node=$code" >/dev/null
+	panel_act "tab=servers&node=$code" >/dev/null
 	check "server switch" current_is "$code"
-	panel "tab=servers&node=$cur" >/dev/null
+	panel_act "tab=servers&node=$cur" >/dev/null
 fi
 
 # Settings export and import: a round trip brings back what changed after the export.

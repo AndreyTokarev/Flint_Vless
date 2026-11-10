@@ -138,7 +138,8 @@ cp "$KIT/files/etc/init.d/xray" "$KIT/files/etc/init.d/flint-ui" "$KIT/files/etc
 cp "$KIT/files/etc/firewall.user" /etc/firewall.user
 cp "$KIT/files/usr/bin/flint-node" "$KIT/files/usr/bin/flint-geo-update" "$KIT/files/usr/bin/flint-sub-update" \
 	"$KIT/files/usr/bin/flint-custom" "$KIT/files/usr/bin/flint-watchdog" "$KIT/files/usr/bin/flint-adblock" \
-	"$KIT/files/usr/bin/flint-settings" "$KIT/files/usr/bin/flint-dns" "$KIT/files/usr/bin/flint-tg" /usr/bin/
+	"$KIT/files/usr/bin/flint-settings" "$KIT/files/usr/bin/flint-dns" "$KIT/files/usr/bin/flint-tg" \
+	"$KIT/files/usr/bin/flint-panel-bg" "$KIT/files/usr/bin/flint-import-bg" /usr/bin/
 cp "$KIT/files/www/flint/index.html" "$KIT/files/www/flint/logo.svg" "$KIT/files/www/flint/icon.svg" \
 	"$KIT/files/www/flint/panel.css" /www/flint/
 cp "$KIT/files/www/flint/cgi-bin/panel.cgi" /www/flint/cgi-bin/
@@ -146,7 +147,7 @@ mkdir -p /lib/upgrade/keep.d
 cp "$KIT/files/lib/upgrade/keep.d/flint" /lib/upgrade/keep.d/
 chmod 755 /etc/init.d/xray /etc/init.d/flint-ui /etc/init.d/flint-doh /etc/init.d/flint-adblock /etc/init.d/flint-tgproxy \
 	/usr/bin/flint-node /usr/bin/flint-geo-update /usr/bin/flint-sub-update /usr/bin/flint-custom /usr/bin/flint-watchdog \
-	/usr/bin/flint-adblock /usr/bin/flint-settings /usr/bin/flint-dns /usr/bin/flint-tg \
+	/usr/bin/flint-adblock /usr/bin/flint-settings /usr/bin/flint-dns /usr/bin/flint-tg /usr/bin/flint-panel-bg /usr/bin/flint-import-bg \
 	/www/flint/cgi-bin/panel.cgi
 
 # User state from config/ (names in state-files); an entry missing there keeps the router's copy.
